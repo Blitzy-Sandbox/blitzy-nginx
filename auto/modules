@@ -101,6 +101,10 @@ if [ $HTTP = YES ]; then
         HTTP_SRCS="$HTTP_SRCS $HTTP_FILE_CACHE_SRCS"
     fi
 
+    if [ $HTTP_STATUS_VALIDATION = YES ]; then
+        have=NGX_HTTP_STATUS_VALIDATION . auto/have
+    fi
+
 
     if [ $HTTP_V2 = YES -o $HTTP_V3 = YES ]; then
         HTTP_SRCS="$HTTP_SRCS $HTTP_HUFF_SRCS"
