@@ -288,19 +288,41 @@ ngx_http_status_validate(ngx_uint_t status)
  * for backward compatibility. In strict mode (--with-http_status_validation),
  * returns NGX_ERROR for codes outside the RFC 9110 valid range.
  *
+ * Upstream pass-through: When r->upstream is present, validation is bypassed
+ * to allow backend servers to return any status code (including non-standard
+ * ones) unchanged. This preserves backward compatibility with existing proxy
+ * behavior and supports custom upstream protocols.
+ *
  * Parameters:
  *   r      - HTTP request structure containing headers_out
  *   status - HTTP status code to set (should be 100-599)
  *
  * Returns:
  *   NGX_OK    - Status code set successfully
- *   NGX_ERROR - Invalid status code (strict mode only)
+ *   NGX_ERROR - Invalid status code (strict mode only, non-upstream)
  *
  * Performance target: <10 CPU cycles overhead vs direct assignment.
  */
 ngx_int_t
 ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 {
+    /*
+     * Upstream pass-through: bypass validation when r->upstream is present.
+     * Status codes from backend servers pass through unchanged, even if
+     * they are outside the RFC 9110 valid range (100-599). This ensures
+     * backward compatibility with existing proxy configurations and
+     * supports custom upstream protocols that may use non-standard codes.
+     */
+    if (r->upstream != NULL) {
+        r->headers_out.status = status;
+
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "http status set (upstream pass-through): %ui from %V",
+                       status, &r->upstream->peer.name);
+
+        return NGX_OK;
+    }
+
     if (ngx_http_status_validate(status) != NGX_OK) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "http status set: invalid status code %ui", status);
