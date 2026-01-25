@@ -316,9 +316,15 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
     if (r->upstream != NULL) {
         r->headers_out.status = status;
 
-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                       "http status set (upstream pass-through): %ui from %V",
-                       status, &r->upstream->peer.name);
+        if (r->upstream->peer.name) {
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "http status set (upstream pass-through): %ui from %V",
+                           status, r->upstream->peer.name);
+        } else {
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "http status set (upstream pass-through): %ui",
+                           status);
+        }
 
         return NGX_OK;
     }
