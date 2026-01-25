@@ -293,7 +293,7 @@ ngx_http_dav_put_handler(ngx_http_request_t *r)
         r->headers_out.content_length_n = 0;
     }
 
-    r->headers_out.status = status;
+    ngx_http_status_set(r, status);
     r->header_only = 1;
 
     ngx_http_finalize_request(r, ngx_http_send_header(r));
