@@ -327,9 +327,16 @@ ngx_http_v3_header_filter(ngx_http_request_t *r)
     b->last = (u_char *) ngx_http_v3_encode_field_section_prefix(b->last,
                                                                  0, 0, 0);
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0,
-                   "http3 output header: \":status: %03ui\"",
-                   r->headers_out.status);
+    /*
+     * Log status code with reason phrase from centralized registry.
+     * HTTP/3 protocol (RFC 9114) only transmits numeric status codes
+     * in the :status pseudo-header, but including the reason phrase
+     * in debug logging provides better diagnostic output.
+     */
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
+                   "http3 output header: \":status: %03ui (%V)\"",
+                   r->headers_out.status,
+                   ngx_http_status_reason(r->headers_out.status));
 
     if (r->headers_out.status == NGX_HTTP_OK) {
         b->last = (u_char *) ngx_http_v3_encode_field_ri(b->last, 0,
