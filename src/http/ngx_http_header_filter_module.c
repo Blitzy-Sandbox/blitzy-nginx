@@ -64,6 +64,7 @@ static ngx_str_t ngx_http_early_hints_status_line =
  *
  * See RFC 9110 Section 15 for HTTP status code semantics.
  */
+#if 0  /* DEPRECATED - kept for backward compatibility reference */
 static ngx_str_t ngx_http_status_lines[] = {
 
     ngx_string("200 OK"),
@@ -143,6 +144,7 @@ static ngx_str_t ngx_http_status_lines[] = {
 #define NGX_HTTP_LAST_5XX  508
 
 };
+#endif  /* DEPRECATED ngx_http_status_lines */
 
 
 ngx_http_header_out_t  ngx_http_headers_out[] = {
@@ -256,15 +258,19 @@ ngx_http_header_filter(ngx_http_request_t *r)
          * ngx_http_status_reason() provides O(1) lookup and returns
          * NULL for unknown status codes. This replaces the legacy
          * ngx_http_status_lines[] array offset calculations.
+         *
+         * Note: ngx_http_status_reason() returns only the reason phrase
+         * (e.g., "OK", "Not Found"), not the full status line. The status
+         * code must be written separately before the reason phrase.
          */
         status_line = ngx_http_status_reason(status);
 
+        /* Status code takes 3 digits plus 1 space */
+        len += 3 + 1;
+
         if (status_line != NULL && status_line->len > 0) {
+            /* Add reason phrase length */
             len += status_line->len;
-        } else {
-            /* Unknown or unsupported status code - use numeric format */
-            len += NGX_INT_T_LEN + 1 /* SP */;
-            status_line = NULL;
         }
     }
 
@@ -430,12 +436,24 @@ ngx_http_header_filter(ngx_http_request_t *r)
     /* "HTTP/1.x " */
     b->last = ngx_cpymem(b->last, "HTTP/1.1 ", sizeof("HTTP/1.x ") - 1);
 
-    /* status line */
-    if (status_line) {
-        b->last = ngx_copy(b->last, status_line->data, status_line->len);
-
+    /*
+     * Write status line: <status-code> SP <reason-phrase> CRLF
+     * Per RFC 9112 Section 4, the status code is a 3-digit integer.
+     * The reason phrase comes from ngx_http_status_reason() or is omitted
+     * for unknown status codes.
+     */
+    if (r->headers_out.status_line.len) {
+        /* Use custom status line provided by the module */
+        b->last = ngx_copy(b->last, r->headers_out.status_line.data,
+                           r->headers_out.status_line.len);
     } else {
+        /* Write status code (3 digits) + space */
         b->last = ngx_sprintf(b->last, "%03ui ", status);
+
+        /* Write reason phrase if available from registry */
+        if (status_line != NULL && status_line->len > 0) {
+            b->last = ngx_copy(b->last, status_line->data, status_line->len);
+        }
     }
     *b->last++ = CR; *b->last++ = LF;
 
