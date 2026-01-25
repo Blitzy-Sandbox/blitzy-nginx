@@ -153,6 +153,18 @@
 #define NGX_HTTP_COPY_BUFFERED             0x04
 
 
+/*
+ * Status code classification flags for the HTTP status registry.
+ * These flags are used by ngx_http_status_def_t to classify status codes
+ * and enable features like cacheability checking per RFC 9110.
+ */
+
+#define NGX_HTTP_STATUS_CACHEABLE          0x0001  /* response cacheable per RFC 9110 */
+#define NGX_HTTP_STATUS_CLIENT_ERROR       0x0002  /* 4xx status code range */
+#define NGX_HTTP_STATUS_SERVER_ERROR       0x0004  /* 5xx status code range */
+#define NGX_HTTP_STATUS_INFORMATIONAL      0x0008  /* 1xx status code range */
+
+
 typedef enum {
     NGX_HTTP_INITING_REQUEST_STATE = 0,
     NGX_HTTP_READING_REQUEST_STATE,
