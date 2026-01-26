@@ -5,6 +5,50 @@
 <change_log title="nginx">
 
 
+<changes ver="1.29.5" date="2026-01-15">
+
+<change type="feature">
+<para lang="ru">
+реестр кодов состояния HTTP: добавлен централизованный реестр кодов состояния
+HTTP с унифицированным API-слоем, заменяющим разбросанные макросы #define
+по всей HTTP-подсистеме.<br/>
+Новые API-функции:<br/>
+- ngx_http_status_set() для установки кода состояния ответа
+с валидацией RFC 9110 (диапазон 100-599)<br/>
+- ngx_http_status_validate() для проверки допустимости кода состояния<br/>
+- ngx_http_status_reason() для получения фразы-причины кода состояния<br/>
+- ngx_http_status_is_cacheable() для проверки кэшируемости кода состояния
+согласно RFC 9110<br/>
+Переход от прямых присваиваний r->headers_out.status
+к унифицированному API ngx_http_status_set().<br/>
+Опциональный строгий режим валидации RFC 9110
+через флаг --with-http_status_validation при сборке.<br/>
+Полная обратная совместимость с существующими конфигурациями nginx
+и сторонними модулями.
+</para>
+<para lang="en">
+HTTP status code registry: a centralized HTTP status code registry
+with unified API layer replacing scattered #define macros
+throughout the HTTP subsystem.<br/>
+New API functions:<br/>
+- ngx_http_status_set() sets response status code
+with RFC 9110 validation (range 100-599)<br/>
+- ngx_http_status_validate() validates status code range<br/>
+- ngx_http_status_reason() retrieves reason phrase for a status code<br/>
+- ngx_http_status_is_cacheable() checks if status code is cacheable
+per RFC 9110<br/>
+Transformation from direct r->headers_out.status assignments
+to unified ngx_http_status_set() API.<br/>
+Optional strict RFC 9110 compliance validation mode
+via --with-http_status_validation configure flag.<br/>
+Full backward compatibility maintained with existing nginx configurations
+and third-party modules.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.29.4" date="2025-12-09">
 
 <change type="feature">
