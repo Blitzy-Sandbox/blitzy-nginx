@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reverse Proxy &amp; Load Balancing — Executive Summary</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+  <style>
+    /* Scorecard rating colors */
+    .scorecard-red { color: #e74c3c; }
+    .scorecard-yellow { color: #f39c12; }
+    .scorecard-green { color: #27ae60; }
+
+    /* Large metric callout */
+    .metric-highlight {
+      font-size: 2em;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+
+    /* Slide subtitle styling */
+    .slide-subtitle {
+      font-size: 0.7em;
+      color: #7f8c8d;
+    }
+
+    /* Table styling for slides */
+    table {
+      font-size: 0.65em;
+      margin: 0 auto;
+      border-collapse: collapse;
+      max-width: 95%;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px 12px;
+      text-align: left;
+    }
+    th {
+      background-color: #34495e;
+      color: white;
+    }
+    td:first-child {
+      font-weight: 600;
+    }
+
+    /* Mermaid diagram sizing */
+    .mermaid {
+      font-size: 0.8em;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    /* Slide footer styling */
+    .slide-footer {
+      font-size: 0.45em;
+      color: #95a5a6;
+      margin-top: 1.2em;
+      text-align: center;
+    }
+
+    /* Styled callout box */
+    .callout {
+      background-color: #fdf2e9;
+      border-left: 4px solid #e67e22;
+      padding: 10px 16px;
+      margin: 0.8em auto;
+      font-size: 0.6em;
+      text-align: left;
+      max-width: 90%;
+      border-radius: 0 4px 4px 0;
+    }
+    .callout-critical {
+      background-color: #fdedec;
+      border-left-color: #e74c3c;
+    }
+    .callout-info {
+      background-color: #eaf2f8;
+      border-left-color: #2980b9;
+    }
+
+    /* Recommendation cards */
+    .rec-card {
+      background-color: #fafafa;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 0.5em auto;
+      text-align: left;
+      font-size: 0.55em;
+      max-width: 90%;
+    }
+    .rec-card h4 {
+      margin: 0 0 6px 0;
+      font-size: 1.1em;
+    }
+    .rec-card .evidence {
+      font-style: italic;
+      color: #7f8c8d;
+      font-size: 0.9em;
+      margin-top: 4px;
+    }
+    .rec-card code {
+      background-color: #ecf0f1;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 0.95em;
+    }
+
+    /* Identity grid on title slide */
+    .identity-grid {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 4px 24px;
+      font-size: 0.55em;
+      margin: 0 auto;
+      text-align: left;
+      max-width: 600px;
+    }
+    .identity-grid .label {
+      font-weight: bold;
+      color: #34495e;
+      text-align: right;
+    }
+    .identity-grid .value {
+      color: #2c3e50;
+    }
+
+    /* Open questions list */
+    .question-list {
+      text-align: left;
+      font-size: 0.55em;
+      max-width: 90%;
+      margin: 0 auto;
+    }
+    .question-list li {
+      margin-bottom: 0.7em;
+      line-height: 1.5;
+    }
+    .question-list code {
+      background-color: #ecf0f1;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 0.95em;
+    }
+
+    /* Rating cell alignment */
+    td.rating {
+      text-align: center;
+      font-size: 1.2em;
+    }
+
+    /* Evidence summary column width */
+    .scorecard-table td:last-child {
+      font-size: 0.9em;
+      max-width: 380px;
+    }
+
+    /* Highlight key metrics */
+    .key-metrics {
+      font-size: 0.58em;
+      text-align: left;
+      max-width: 90%;
+      margin: 0.5em auto;
+    }
+    .key-metrics p {
+      margin: 0.3em 0;
+    }
+
+    /* Monospace code inline */
+    code {
+      background-color: #ecf0f1;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9em;
+    }
+
+    /* Reveal.js overrides for better presentation */
+    .reveal h1 { font-size: 1.8em; color: #2c3e50; }
+    .reveal h2 { font-size: 1.4em; color: #2c3e50; }
+    .reveal h3 { font-size: 1.0em; color: #34495e; }
+    .reveal section { text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 1: Title Slide                                         -->
+      <!-- ============================================================ -->
+      <section>
+        <h1>Reverse Proxy &amp; Load Balancing</h1>
+        <p class="slide-subtitle">Feature Archaeology &amp; Execution Intelligence</p>
+        <div class="identity-grid">
+          <span class="label">Subsystem:</span>
+          <span class="value">Reverse Proxy &amp; Load Balancing</span>
+          <span class="label">Repository:</span>
+          <span class="value">nginx/nginx</span>
+          <span class="label">Analysis Period:</span>
+          <span class="value">2003-04-14 to 2025-11-30</span>
+          <span class="label">Scope:</span>
+          <span class="value">25 files · 7 components · ~31,573 LOC · 792 commits</span>
+          <span class="label">Contributors:</span>
+          <span class="value">20 total · 11 profiled</span>
+        </div>
+        <p class="slide-footer">Source: Feature Archaeology Report · Methodology Decision Log</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 2: Execution Health Scorecard                          -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Execution Health Scorecard</h2>
+        <table class="scorecard-table">
+          <thead>
+            <tr>
+              <th>Dimension</th>
+              <th>Rating</th>
+              <th>Evidence Summary</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Knowledge Distribution</td>
+              <td class="rating">🔴</td>
+              <td>Original author (Igor Sysoev, 413 commits) inactive since 2011; primary maintainer (Maxim Dounin, 230 commits) inactive since 2024; only 2 active contributors in 2025</td>
+            </tr>
+            <tr>
+              <td>Code Quality</td>
+              <td class="rating">🟡</td>
+              <td>39–48% bug-fix ratios on core files; 14 TODO entries in HEAD; 87 logging points in <code>upstream.c</code></td>
+            </tr>
+            <tr>
+              <td>Delivery Velocity</td>
+              <td class="rating">🟡</td>
+              <td>221 active months; avg 3.6 commits/month; 521-day dormancy gap; declining cadence post-2024</td>
+            </tr>
+            <tr>
+              <td>Technical Debt</td>
+              <td class="rating">🟡</td>
+              <td>14 TODOs (oldest: 2005); duplicated HTTP/Stream implementations; event pipe buffer debt</td>
+            </tr>
+            <tr>
+              <td>Integration Health</td>
+              <td class="rating">🟢</td>
+              <td>9 integration points at Production maturity; clean API contracts; pluggable balancer architecture</td>
+            </tr>
+            <tr>
+              <td>Documentation &amp; Onboarding</td>
+              <td class="rating">🔴</td>
+              <td>Zero in-tree API docs; no subsystem guides; 22 years of design decisions undocumented</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="slide-footer">Details: Archaeology Report §10</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 3: Bus Factor Risk Visualization                       -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Bus Factor Risk</h2>
+        <p class="slide-subtitle">Knowledge Concentration is Critical</p>
+        <div class="mermaid">
+gantt
+    title Contributor Activity Timeline
+    dateFormat YYYY-MM-DD
+    section Igor Sysoev
+    Active (413 commits)      :done, 2003-05-12, 2011-07-30
+    section Maxim Dounin
+    Active (230 commits)      :done, 2011-08-18, 2024-01-30
+    section Ruslan Ermilov
+    Active (99 commits)       :done, 2011-10-07, 2021-12-24
+    section Roman Arutyunyan
+    Active (75 commits)       :active, 2014-05-23, 2025-10-23
+    section Sergey Kandaurov
+    Active (44 commits)       :active, 2013-04-11, 2025-11-25
+        </div>
+        <div class="callout callout-critical">
+          ⚠️ <strong>Critical Risk:</strong> Original author (413 commits) inactive since 2011. Primary maintainer (230 commits) inactive since 2024. Only 2 active contributors remain.
+        </div>
+        <p class="slide-footer">Bus factor thresholds: &gt;80% Sole Owner · &gt;40% Primary · &lt;5 Drive-By</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 4: Delivery Velocity Trend                             -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Delivery Velocity</h2>
+        <p class="slide-subtitle">22 Years of Feature Evolution</p>
+        <div class="mermaid">
+timeline
+    title Feature Delivery Milestones
+    2003 : Event Pipe (data pump)
+    2005 : Core Upstream Framework
+         : HTTP Proxy Module
+    2006 : IP Hash (session persistence)
+    2011 : Keepalive (conn pooling)
+    2012 : Least Connections
+    2014 : Generic Hash
+    2015 : Shared Memory Zones
+         : Stream Proxy (TCP/UDP)
+    2018 : Random + P2C
+    2025 : HTTP/2 Upstream Proxy
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Feature Age</td>
+              <td>~22 years (2003–2025)</td>
+            </tr>
+            <tr>
+              <td>Active Months</td>
+              <td>221</td>
+            </tr>
+            <tr>
+              <td>Avg Commit Cadence</td>
+              <td>3.6 commits/month</td>
+            </tr>
+            <tr>
+              <td>Longest Gap</td>
+              <td>521 days (2022-06 → 2023-11)</td>
+            </tr>
+            <tr>
+              <td>Time to First Integration</td>
+              <td>~2 years (pipe → upstream)</td>
+            </tr>
+            <tr>
+              <td>Total Feature Commits</td>
+              <td>792 of 8,518 (9.3%)</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="slide-footer">Details: Archaeology Report §4</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 5: Quality Signal Summary                              -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Quality Signals</h2>
+        <p class="slide-subtitle">Bug Archaeology &amp; Technical Debt</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Bug-Fix Ratio</th>
+              <th>Bug-Fix Commits</th>
+              <th>Total Commits</th>
+              <th>Risk Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ngx_event_pipe.c</code></td>
+              <td><strong>48%</strong></td>
+              <td>45</td>
+              <td>92</td>
+              <td class="rating">🔴 High</td>
+            </tr>
+            <tr>
+              <td><code>ngx_http_upstream.c</code></td>
+              <td><strong>39%</strong></td>
+              <td>202</td>
+              <td>509</td>
+              <td class="rating">🟡 Medium</td>
+            </tr>
+            <tr>
+              <td><code>ngx_http_proxy_module.c</code></td>
+              <td><strong>39%</strong></td>
+              <td>111</td>
+              <td>283</td>
+              <td class="rating">🟡 Medium</td>
+            </tr>
+            <tr>
+              <td><code>ngx_stream_proxy_module.c</code></td>
+              <td><strong>18%</strong></td>
+              <td>16</td>
+              <td>86</td>
+              <td class="rating">🟢 Low</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="key-metrics">
+          <p>📋 <strong>14 TODO/FIXME entries</strong> in current HEAD (8 in <code>upstream.c</code>, 2 in <code>event_pipe.c</code>)</p>
+          <p>🔁 <strong>3 revert commits</strong> found across feature files</p>
+          <p>📊 <strong>342 total bug-fix commits</strong> across the subsystem</p>
+        </div>
+        <p class="slide-footer">Details: Archaeology Report §8</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 6: Top 3 Recommended Actions                          -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Recommended Actions</h2>
+        <div class="rec-card">
+          <h4>1. 🔴 CRITICAL — Knowledge Continuity</h4>
+          <p>Establish formal knowledge transfer documentation for the upstream state machine (<code>ngx_http_upstream.c</code>, 509 commits, 7,247 LOC). With Igor Sysoev inactive since 2011 and Maxim Dounin since 2024, the 2 remaining active contributors lack documented design rationale.</p>
+          <p class="evidence">Evidence: 8 unresolved TODOs in <code>upstream.c</code>; no in-tree architecture docs</p>
+        </div>
+        <div class="rec-card">
+          <h4>2. 🟡 HIGH — Quality Investment</h4>
+          <p>Prioritize quality improvement for <code>ngx_event_pipe.c</code> (48% bug-fix ratio). This file is critical infrastructure powering all buffered upstream data transfer.</p>
+          <p class="evidence">Evidence: 2 unresolved TODOs at lines 590, 721; 45 of 92 commits are bug-fixes</p>
+        </div>
+        <div class="rec-card">
+          <h4>3. 🟡 MEDIUM — Architectural Debt Reduction</h4>
+          <p>Evaluate consolidation of HTTP and Stream upstream implementations. The parallel architecture doubles the maintenance surface (6 duplicated balancer module pairs).</p>
+          <p class="evidence">Evidence: Stream ported from NGINX+ (2015); future features must be implemented twice</p>
+        </div>
+        <p class="slide-footer">Details: Archaeology Report §11</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 7: Open Questions for Leadership                       -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Open Questions</h2>
+        <p class="slide-subtitle">For Leadership Investigation</p>
+        <ol class="question-list">
+          <li><strong>521-day dormancy</strong> on <code>ngx_http_upstream.c</code> (2022-06 → 2023-11) — Planned stabilization or resource gap? <em>(rationale not recorded in-tree)</em></li>
+          <li><strong>HTTP/Stream code duplication strategy</strong> — Is consolidation planned for the parallel upstream implementations?</li>
+          <li><strong>14 TODO items</strong> — Are these tracked externally? No issue tracker linkage exists in-tree</li>
+          <li><strong>HTTP/2 proxy refactoring motivation</strong> (2025) — Why was <code>ngx_http_proxy_v2_module.c</code> extracted from gRPC?</li>
+          <li><strong>Event pipe production impact</strong> — Is the 48% bug-fix ratio causing incidents?</li>
+        </ol>
+        <div class="callout callout-info">
+          📎 <strong>Full report:</strong> <code>docs/reports/reverse-proxy-archaeology-report.md</code><br>
+          📋 <strong>Decision log:</strong> <code>docs/decision-logs/archaeology-report-decisions.md</code>
+        </div>
+        <p class="slide-footer">Details: Archaeology Report §12</p>
+      </section>
+
+    </div><!-- /.slides -->
+  </div><!-- /.reveal -->
+
+  <!-- reveal.js core library -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <!-- Mermaid diagram rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+  <!-- Initialization -->
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: true,
+      transition: 'slide',
+      plugins: []
+    });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose'
+    });
+  </script>
+</body>
+</html>
