@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reverse Proxy &amp; Load Balancing — Executive Summary</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" integrity="sha384-YgvgKeZJykuztG+iQPoZHNZENTFZvOcOJ/uRzmJTje6GHYN9zAw+y5rx/L8MQKA/" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" integrity="sha384-/TZMdZeq0ZGi4iePTHhOMXOkyv2f72ZcwmhAtOmSZlPkx+5qCOfyc/U1kjd5Su6S" crossorigin="anonymous">
   <style>
     /* Scorecard rating colors */
     .scorecard-red { color: #e74c3c; }
@@ -204,7 +204,7 @@
           <span class="label">Scope:</span>
           <span class="value">25 files · 7 components · ~31,573 LOC · 792 commits</span>
           <span class="label">Contributors:</span>
-          <span class="value">20 total · 11 profiled</span>
+          <span class="value">~30 total · 10 profiled</span>
         </div>
         <p class="slide-footer">Source: Feature Archaeology Report · Methodology Decision Log</p>
       </section>
@@ -214,12 +214,13 @@
       <!-- ============================================================ -->
       <section>
         <h2>Execution Health Scorecard</h2>
-        <table class="scorecard-table">
+        <table class="scorecard-table" aria-label="Execution Health Scorecard ratings">
+          <caption>Six-dimension execution health assessment with traffic-light ratings</caption>
           <thead>
             <tr>
-              <th>Dimension</th>
-              <th>Rating</th>
-              <th>Evidence Summary</th>
+              <th scope="col">Dimension</th>
+              <th scope="col">Rating</th>
+              <th scope="col">Evidence Summary</th>
             </tr>
           </thead>
           <tbody>
@@ -241,7 +242,7 @@
             <tr>
               <td>Technical Debt</td>
               <td class="rating">🟡</td>
-              <td>14 TODOs (oldest: 2005); duplicated HTTP/Stream implementations; event pipe buffer debt</td>
+              <td>14 TODOs (oldest: 2003); duplicated HTTP/Stream implementations; event pipe buffer debt</td>
             </tr>
             <tr>
               <td>Integration Health</td>
@@ -264,7 +265,7 @@
       <section>
         <h2>Bus Factor Risk</h2>
         <p class="slide-subtitle">Knowledge Concentration is Critical</p>
-        <div class="mermaid">
+        <div class="mermaid" aria-label="Gantt chart showing contributor activity timeline from 2003 to 2025">
 gantt
     title Contributor Activity Timeline
     dateFormat YYYY-MM-DD
@@ -291,7 +292,7 @@ gantt
       <section>
         <h2>Delivery Velocity</h2>
         <p class="slide-subtitle">22 Years of Feature Evolution</p>
-        <div class="mermaid">
+        <div class="mermaid" aria-label="Timeline diagram showing feature delivery milestones from 2003 to 2025">
 timeline
     title Feature Delivery Milestones
     2003 : Event Pipe (data pump)
@@ -306,11 +307,12 @@ timeline
     2018 : Random + P2C
     2025 : HTTP/2 Upstream Proxy
         </div>
-        <table>
+        <table aria-label="Delivery velocity metrics for the reverse proxy subsystem">
+          <caption>Six quantitative delivery metrics per Directive 3</caption>
           <thead>
             <tr>
-              <th>Metric</th>
-              <th>Value</th>
+              <th scope="col">Metric</th>
+              <th scope="col">Value</th>
             </tr>
           </thead>
           <tbody>
@@ -335,8 +337,8 @@ timeline
               <td>~2 years (pipe → upstream)</td>
             </tr>
             <tr>
-              <td>Total Feature Commits</td>
-              <td>792 of 8,518 (9.3%)</td>
+              <td>Dormancy Ratio</td>
+              <td>~18% (49 inactive / 271 total months)</td>
             </tr>
           </tbody>
         </table>
@@ -349,14 +351,15 @@ timeline
       <section>
         <h2>Quality Signals</h2>
         <p class="slide-subtitle">Bug Archaeology &amp; Technical Debt</p>
-        <table>
+        <table aria-label="Per-component bug-fix ratios and risk levels">
+          <caption>Bug archaeology metrics for core subsystem files</caption>
           <thead>
             <tr>
-              <th>Component</th>
-              <th>Bug-Fix Ratio</th>
-              <th>Bug-Fix Commits</th>
-              <th>Total Commits</th>
-              <th>Risk Level</th>
+              <th scope="col">Component</th>
+              <th scope="col">Bug-Fix Ratio</th>
+              <th scope="col">Bug-Fix Commits</th>
+              <th scope="col">Total Commits</th>
+              <th scope="col">Risk Level</th>
             </tr>
           </thead>
           <tbody>
@@ -393,7 +396,7 @@ timeline
         <div class="key-metrics">
           <p>📋 <strong>14 TODO/FIXME entries</strong> in current HEAD (8 in <code>upstream.c</code>, 2 in <code>event_pipe.c</code>)</p>
           <p>🔁 <strong>3 revert commits</strong> found across feature files</p>
-          <p>📊 <strong>342 total bug-fix commits</strong> across the subsystem</p>
+          <p>📊 <strong>346 total bug-fix commits</strong> across the subsystem</p>
         </div>
         <p class="slide-footer">Details: Archaeology Report §8</p>
       </section>
@@ -445,9 +448,9 @@ timeline
   </div><!-- /.reveal -->
 
   <!-- reveal.js core library -->
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js" integrity="sha384-M/JtqCVlLcK9lwVnBnMXP0V577CBULkjodKsR/PITOe4MSKNbbwqCemEyluOw0+5" crossorigin="anonymous"></script>
   <!-- Mermaid diagram rendering -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js" integrity="sha384-rbtjAdnIQE/aQJGEgXrVUlMibdfTSa4PQju4HDhN3sR2PmaKFzhEafuePsl9H/9I" crossorigin="anonymous"></script>
   <!-- Initialization -->
   <script>
     Reveal.initialize({
@@ -459,7 +462,13 @@ timeline
     mermaid.initialize({
       startOnLoad: true,
       theme: 'neutral',
-      securityLevel: 'loose'
+      securityLevel: 'strict'
+    });
+    /* Re-render Mermaid diagrams when slides become visible.
+       reveal.js sets inactive slides to display:none, which can prevent
+       Mermaid from measuring SVG dimensions on initial load. */
+    Reveal.on('slidechanged', function() {
+      mermaid.run({ querySelector: '.present .mermaid' });
     });
   </script>
 </body>
