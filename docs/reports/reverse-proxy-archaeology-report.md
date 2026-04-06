@@ -9,7 +9,7 @@
 | **Feature-Related Commits** | 792 (9.3%) |
 | **Feature Manifest** | 25 files across 7 component groups |
 | **Total Feature LOC** | ~31,573 |
-| **Contributors Profiled** | 20 total, 11 with ≥3 commits |
+| **Contributors Profiled** | 20 total, 10 with ≥3 commits |
 | **Companion Artifacts** | [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md), [Executive Presentation](../presentations/reverse-proxy-executive-summary.html) |
 
 This document provides an archaeological analysis of the NGINX reverse proxy and load balancing subsystem — how it was built, who built it, delivery velocity patterns, quality signals, and execution health — for engineering leadership decision-making. All methodology decisions (feature boundary discovery heuristics, commit classification rules, bus factor thresholds, quality metric definitions, and bottleneck classification criteria) are documented with rationale and alternatives in the companion [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md).
@@ -94,7 +94,7 @@ The subsystem boundary was discovered through a multi-signal approach: keyword f
 
 ### Contributor Profiles
 
-Twenty engineers have committed to the feature manifest files. The table below profiles all 11 contributors with ≥3 commits; bus factor role thresholds are defined in the [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md) (>80% = Sole Owner, >40% = Primary, 10–40% = Significant, 5–10% = Regular, <5 commits = Drive-By).
+Twenty engineers have committed to the feature manifest files. The table below profiles all 10 contributors with ≥3 commits; bus factor role thresholds are defined in the [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md) (>80% = Sole Owner, >40% = Primary, 10–40% = Significant, 5–10% = Regular, <5 commits = Drive-By).
 
 | Contributor | Commits | Date Range | Components Touched | Bus Factor Role |
 |-------------|---------|------------|-------------------|----------------|
@@ -108,9 +108,8 @@ Twenty engineers have committed to the feature manifest files. The table below p
 | Piotr Sikora | 12 | varies | Various | Regular Contributor |
 | Zhidao HONG | 6 | varies | Various | Drive-By Contributor |
 | Dmitry Volyntsev | 4 | varies | Various | Drive-By Contributor |
-| Maxim Konovalov | 2 | varies | Various | Drive-By Contributor |
 
-An additional 9 contributors have 1 commit each, classified as Drive-By Contributors.
+An additional 10 contributors have ≤2 commits each, classified as Drive-By Contributors.
 
 ### The Handoff Pattern
 
@@ -183,7 +182,7 @@ gantt
 
 **Design Decision 1: Callback-based State Machine for Upstream Requests**
 
-The upstream request lifecycle is implemented as a callback-driven state machine rather than a coroutine or thread-per-request model. Evidence: `src/http/ngx_http_upstream.c:32-103` declares ~25 static handler functions forming the state chain: `ngx_http_upstream_init_request` → `ngx_http_upstream_resolve_handler` → `ngx_http_upstream_connect` → `ngx_http_upstream_send_request` → `ngx_http_upstream_process_header` → `ngx_http_upstream_send_response` → `ngx_http_upstream_finalize_request`. This design enables the master/worker event-driven architecture described in `README.md` and allows a single worker process to manage thousands of concurrent upstream connections without thread overhead. [inference] This was a foundational decision made by Igor Sysoev in 2005 (`02025fd6b`) that shaped the entire subsystem's architecture for the next two decades.
+The upstream request lifecycle is implemented as a callback-driven state machine rather than a coroutine or thread-per-request model. Evidence: `src/http/ngx_http_upstream.c:32-103` declares ~40 static function declarations forming the state chain: `ngx_http_upstream_init_request` → `ngx_http_upstream_resolve_handler` → `ngx_http_upstream_connect` → `ngx_http_upstream_send_request` → `ngx_http_upstream_process_header` → `ngx_http_upstream_send_response` → `ngx_http_upstream_finalize_request`. This design enables the master/worker event-driven architecture described in `README.md` and allows a single worker process to manage thousands of concurrent upstream connections without thread overhead. [inference] This was a foundational decision made by Igor Sysoev in 2005 (`02025fd6b`) that shaped the entire subsystem's architecture for the next two decades.
 
 **Design Decision 2: Pluggable Balancer Architecture via Function Pointers**
 
@@ -214,7 +213,7 @@ All 14 TODO entries in current HEAD are cataloged below. Eight of 14 concentrate
 | 13 | `src/event/ngx_event_pipe.c:721` | `/* TODO: free buf if p->free_bufs && upstream done */` | Igor Sysoev (`369145cef`) | 2004-05-28 | ~21 years |
 | 14 | `src/event/ngx_event_connect.c:282` | `/* TODO: check in Win32, etc. As workaround... */` | Igor Sysoev (`fe0f5cc6e`) | 2003-10-31 | ~22 years |
 
-**What this tells leadership:** 12 of 14 TODOs were authored by Igor Sysoev (inactive since 2011). The two oldest entries — `ngx_event_pipe.c:590` and `ngx_event_pipe.c:721` — concern buffer memory management in the data transfer pump and have remained unresolved for over 21 years. No issue tracker linkage exists in-tree for any of these items; it is unclear whether they represent planned work or abandoned intentions (rationale not recorded in-tree).
+**What this tells leadership:** 11 of 14 TODOs were authored by Igor Sysoev (inactive since 2011). The two oldest entries — `ngx_event_pipe.c:590` and `ngx_event_pipe.c:721` — concern buffer memory management in the data transfer pump and have remained unresolved for over 21 years. No issue tracker linkage exists in-tree for any of these items; it is unclear whether they represent planned work or abandoned intentions (rationale not recorded in-tree).
 
 ---
 
@@ -222,7 +221,26 @@ All 14 TODO entries in current HEAD are cataloged below. Eight of 14 concentrate
 
 ### Upstream Request State Machine
 
-The central architectural artifact of this subsystem is the upstream request state machine in `src/http/ngx_http_upstream.c`. Introduced by Igor Sysoev in commit `02025fd6b` (2005-01-18), it has evolved over 509 commits from a basic connect→send→receive pipeline to the complex lifecycle shown below.
+The central architectural artifact of this subsystem is the upstream request state machine in `src/http/ngx_http_upstream.c`. Introduced by Igor Sysoev in commit `02025fd6b` (2005-01-18), it has evolved over 509 commits from a basic connect→send→receive pipeline to the complex lifecycle shown below. The before/after diagrams illustrate the ~4× growth in state machine complexity.
+
+#### Before State: Original Pipeline (2005, commit `02025fd6b` — ~10 handlers)
+
+```mermaid
+stateDiagram-v2
+    [*] --> init_request: ngx_http_upstream_init()
+    init_request --> connect: Select peer
+    connect --> send_request: Connected
+    send_request --> process_header: Request sent
+    process_header --> send_response: 2xx response
+    process_header --> next: Error/retry
+    send_response --> pipe_downstream: Buffered via event pipe
+    pipe_downstream --> finalize: Transfer complete
+    next --> connect: Retry
+    next --> finalize: No more peers
+    finalize --> [*]
+```
+
+#### After State: Current HEAD (2025, commit `b8492d9c2` — ~40 handlers)
 
 ```mermaid
 stateDiagram-v2
@@ -260,7 +278,7 @@ The original 2005 state machine (`02025fd6b`) contained approximately 10 handler
 - **Early hints** support (`ngx_http_upstream_process_early_hints`, `src/http/ngx_http_upstream.c:51-52`) handles 103 status responses
 - **Thread-offloaded I/O** (`ngx_http_upstream_thread_handler`, `src/http/ngx_http_upstream.c:83-87`, under `#if NGX_THREADS`) delegates file operations to a thread pool
 
-The current HEAD (`b8492d9c2`, 2025-07-15) has ~25 static handler functions (`src/http/ngx_http_upstream.c:32-103`), representing a 2.5× growth in state machine complexity over 20 years. [inference] This growth was organic and incremental — each new capability added handlers without refactoring the overall lifecycle — which contributes to the high bug-fix ratio (39%) observed on this file.
+The current HEAD (`b8492d9c2`, 2025-07-15) has ~40 static function declarations (`src/http/ngx_http_upstream.c:32-103`), representing a ~4× growth in state machine complexity over 20 years. [inference] This growth was organic and incremental — each new capability added handlers without refactoring the overall lifecycle — which contributes to the high bug-fix ratio (39%) observed on this file.
 
 ---
 
@@ -313,7 +331,8 @@ These logging patterns enable production diagnostics but are not supplemented by
 Three revert commits were identified across feature files, serving as quality signals:
 
 1. `87ee00702` — "revert r3935 and fix stalled cache updating alert" on `ngx_http_upstream.c`
-2. Two additional revert-pattern commits in the broader feature commit set (identified via grep pattern matching)
+2. `f3093695b` — "Cache: prefix-based temporary files" (body states "This change mostly reverts 99639bfdfa2a and 3281de8142f5, restoring the behaviour as of a9138c35120d")
+3. `39892c626` — "SSL: fixed ngx_ssl_recv()" (body states the prior stream module workaround "was reverted")
 
 Reverts indicate areas where initial implementation did not survive production validation, requiring rollback.
 
@@ -403,7 +422,7 @@ This scorecard synthesizes findings from Sections 2–9 into a leadership-facing
 
 ### Recommendation 1: Knowledge Continuity (CRITICAL)
 
-**Establish formal knowledge transfer documentation for the upstream state machine.** `src/http/ngx_http_upstream.c` (509 commits, 7,247 LOC) is the most critical file in the subsystem, and its ~25-handler state machine lifecycle is entirely undocumented. With Igor Sysoev inactive since 2011 (`02025fd6b` era) and Maxim Dounin since 2024-01-30, the 2 remaining active contributors lack documented design rationale for foundational patterns. Deliverable: an architecture decision record (ADR) covering the state machine lifecycle, error recovery strategy, and buffering modes.
+**Establish formal knowledge transfer documentation for the upstream state machine.** `src/http/ngx_http_upstream.c` (509 commits, 7,247 LOC) is the most critical file in the subsystem, and its ~40-handler state machine lifecycle is entirely undocumented. With Igor Sysoev inactive since 2011 (`02025fd6b` era) and Maxim Dounin since 2024-01-30, the 2 remaining active contributors lack documented design rationale for foundational patterns. Deliverable: an architecture decision record (ADR) covering the state machine lifecycle, error recovery strategy, and buffering modes.
 
 - *Evidence:* 8 unresolved TODOs in `upstream.c`; no in-tree architecture docs; no comments explaining the state machine lifecycle (`src/http/ngx_http_upstream.c:32-103`)
 
