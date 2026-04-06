@@ -18,7 +18,7 @@ This document provides an archaeological analysis of the NGINX reverse proxy and
 
 ## 1. Executive Summary
 
-The NGINX reverse proxy and load balancing subsystem is a 22-year-old, ~31,573 LOC codebase spanning 25 files across 7 component groups, representing 9.3% of all repository activity (792 of 8,518 commits). It was architected almost entirely by a single engineer — Igor Sysoev (413 commits, first: `9e4920b81` 2003-04-14) — and has since transitioned through two primary maintainers: Maxim Dounin (230 commits, 2011–2024) and currently Roman Arutyunyan and Sergey Kandaurov (active as of 2025). The subsystem's **critical risk is knowledge concentration**: both the original author and his successor are now inactive, leaving foundational design rationale undocumented and only two active contributors maintaining 31,573 lines of production-critical infrastructure. Quality signals are mixed — core files exhibit 39–48% bug-fix commit ratios (`src/http/ngx_http_upstream.c` at 39%, `src/event/ngx_event_pipe.c` at 48%), with 14 unresolved TODO entries in HEAD (oldest dating to 2003-10-31, commit `fe0f5cc6e`). Integration health is strong, with 9 consumer modules all at Production maturity. **What this tells leadership about execution: the team has built a remarkably durable subsystem over two decades, but knowledge continuity is now the single highest-priority risk requiring immediate intervention.**
+The NGINX reverse proxy and load balancing subsystem is a 22-year-old, ~31,573 LOC codebase spanning 25 files across 7 component groups, representing 9.3% of all repository activity (792 of 8,518 commits). It was architected almost entirely by a single engineer — Igor Sysoev (420 commits, first: `9e4920b81` 2003-04-14) — and has since transitioned through two primary maintainers: Maxim Dounin (239 commits, 2011–2024) and currently Roman Arutyunyan and Sergey Kandaurov (active as of 2025). The subsystem's **critical risk is knowledge concentration**: both the original author and his successor are now inactive, leaving foundational design rationale undocumented and only two active contributors maintaining 31,573 lines of production-critical infrastructure. Quality signals are mixed — core files exhibit 39–48% bug-fix commit ratios (`src/http/ngx_http_upstream.c` at 39%, `src/event/ngx_event_pipe.c` at 48%), with 14 unresolved TODO entries in HEAD (oldest dating to 2003-10-31, commit `fe0f5cc6e`). Integration health is strong, with 9 consumer modules all at Production maturity. **What this tells leadership about execution: the team has built a remarkably durable subsystem over two decades, but knowledge continuity is now the single highest-priority risk requiring immediate intervention.**
 
 ---
 
@@ -98,13 +98,13 @@ Approximately thirty engineers have committed to the feature manifest files. The
 
 | Contributor | Commits | Date Range | Components Touched | Bus Factor Role |
 |-------------|---------|------------|-------------------|----------------|
-| Igor Sysoev | 413 | 2003-05-12 → 2011-07-30 | All 7 | Original Author / Sole Owner (foundations) |
-| Maxim Dounin | 230 | 2011-08-18 → 2024-01-30 | Core, Proxy, Balancers, Event, Stream | Primary Maintainer (post-Sysoev era) |
-| Ruslan Ermilov | 99 | 2011-10-07 → 2021-12-24 | Stream (port), Core, Zones | Significant Contributor |
-| Roman Arutyunyan | 75 | 2014-05-23 → 2025-10-23 | Core, Hash, Stream, Proxy V2 | Significant Contributor (current active) |
+| Igor Sysoev | 420 | 2003-05-12 → 2011-07-30 | All 7 | Original Author / Sole Owner (foundations) |
+| Maxim Dounin | 239 | 2011-08-18 → 2024-01-30 | Core, Proxy, Balancers, Event, Stream | Primary Maintainer (post-Sysoev era) |
+| Ruslan Ermilov | 103 | 2011-10-07 → 2021-12-24 | Stream (port), Core, Zones | Significant Contributor |
+| Roman Arutyunyan | 77 | 2014-05-23 → 2025-10-23 | Core, Hash, Stream, Proxy V2 | Significant Contributor (current active) |
 | Sergey Kandaurov | 44 | 2013-04-11 → 2025-11-25 | Core, Proxy, Balancers | Regular Contributor (current active) |
 | Valentin Bartenev | 36 | 2011-12-09 → 2017-07-17 | Core, Proxy | Regular Contributor (inactive) |
-| Vladimir Homutov | 30 | 2013-12-03 → 2021-09-23 | Random module, Stream | Regular Contributor (inactive) |
+| Vladimir Homutov | 33 | 2013-12-03 → 2021-09-23 | Random module, Stream | Regular Contributor (inactive) |
 | Piotr Sikora | 12 | varies | Various | Regular Contributor |
 | Zhidao HONG | 6 | varies | Various | Drive-By Contributor |
 | Dmitry Volyntsev | 4 | varies | Various | Drive-By Contributor |
@@ -113,11 +113,11 @@ An additional ~20 contributors have ≤2 commits each, classified as Drive-By Co
 
 ### The Handoff Pattern
 
-The subsystem's history tells a story of serial ownership. Igor Sysoev built the entire foundation single-handedly from 2003 to 2011 — the core upstream state machine (`ngx_http_upstream.c`, 509 commits), the event pipe data transfer pump (`ngx_event_pipe.c`, 92 commits), the HTTP proxy module (`ngx_http_proxy_module.c`, 283 commits), and the first balancer (`ngx_http_upstream_ip_hash_module.c`, commit `3d2fd18a3` 2006-12-04). His last feature commit was on 2011-07-30. Maxim Dounin then assumed primary maintenance, contributing 230 commits through 2024-01-30, adding keepalive connection pooling (`44002e541`), least-connections balancing (`4cb4e8d17`), and extensive bug-fix work. He in turn became inactive after January 2024. Today, Roman Arutyunyan and Sergey Kandaurov are the only active contributors (2025), carrying forward the work of their predecessors without formal knowledge transfer documentation.
+The subsystem's history tells a story of serial ownership. Igor Sysoev built the entire foundation single-handedly from 2003 to 2011 — the core upstream state machine (`ngx_http_upstream.c`, 509 commits), the event pipe data transfer pump (`ngx_event_pipe.c`, 92 commits), the HTTP proxy module (`ngx_http_proxy_module.c`, 283 commits), and the first balancer (`ngx_http_upstream_ip_hash_module.c`, commit `3d2fd18a3` 2006-12-04). His last feature commit was on 2011-07-30. Maxim Dounin then assumed primary maintenance, contributing 239 commits through 2024-01-30, adding keepalive connection pooling (`44002e541`), least-connections balancing (`4cb4e8d17`), and extensive bug-fix work. He in turn became inactive after January 2024. Today, Roman Arutyunyan and Sergey Kandaurov are the only active contributors (2025), carrying forward the work of their predecessors without formal knowledge transfer documentation.
 
 ### Bus Factor Risk Assessment
 
-**Rating: 🔴 Critical.** Igor Sysoev (413 commits, ~43% of all feature commits) has been inactive since 2011-07-30. His foundational knowledge of the upstream state machine, event pipe, and round-robin balancer was transferred primarily to Maxim Dounin through code review — but Dounin is now also inactive since 2024-01-30. The event pipe component (`src/event/ngx_event_pipe.c`) is a particular knowledge silo: Igor Sysoev authored the majority of its 92 commits, and it has received only maintenance-level attention since his departure. No in-tree design documents, architecture decision records, or API guides exist for any component.
+**Rating: 🔴 Critical.** Igor Sysoev (420 commits, ~43% of all feature commits) has been inactive since 2011-07-30. His foundational knowledge of the upstream state machine, event pipe, and round-robin balancer was transferred primarily to Maxim Dounin through code review — but Dounin is now also inactive since 2024-01-30. The event pipe component (`src/event/ngx_event_pipe.c`) is a particular knowledge silo: Igor Sysoev authored the majority of its 92 commits, and it has received only maintenance-level attention since his departure. No in-tree design documents, architecture decision records, or API guides exist for any component.
 
 ---
 
@@ -148,19 +148,19 @@ gantt
     title Contributor Activity Timeline — Reverse Proxy & Load Balancing
     dateFormat YYYY-MM-DD
     section Igor Sysoev
-    Active (413 commits)      :done, 2003-05-12, 2011-07-30
+    Active (420 commits)      :done, 2003-05-12, 2011-07-30
     section Maxim Dounin
-    Active (230 commits)      :done, 2011-08-18, 2024-01-30
+    Active (239 commits)      :done, 2011-08-18, 2024-01-30
     section Ruslan Ermilov
-    Active (99 commits)       :done, 2011-10-07, 2021-12-24
+    Active (103 commits)      :done, 2011-10-07, 2021-12-24
     section Roman Arutyunyan
-    Active (75 commits)       :active, 2014-05-23, 2025-10-23
+    Active (77 commits)       :active, 2014-05-23, 2025-10-23
     section Sergey Kandaurov
     Active (44 commits)       :active, 2013-04-11, 2025-11-25
     section Valentin Bartenev
     Active (36 commits)       :done, 2011-12-09, 2017-07-17
     section Vladimir Homutov
-    Active (30 commits)       :done, 2013-12-03, 2021-09-23
+    Active (33 commits)       :done, 2013-12-03, 2021-09-23
 ```
 
 ### Delivery Metrics
@@ -289,7 +289,7 @@ Five execution bottlenecks were identified through git history analysis. Classif
 | Bottleneck | Classification | Evidence | Leadership Implication |
 |------------|---------------|----------|----------------------|
 | 521-day dormancy on `ngx_http_upstream.c` (2022-06-22 to 2023-11-25) | **Stall** | git log date analysis; exceeds 2-month threshold by 15× | The most critical file in the subsystem had zero commits for nearly 18 months — [inference] likely reflecting the contributor transition from Maxim Dounin to the current maintainers |
-| Igor Sysoev → Maxim Dounin handoff (2011): sole author of foundational code stopped contributing | **Knowledge Silo** | Igor Sysoev: 413 commits → 0 after 2011-07-30; no design documentation transferred | Original design rationale for the state machine, event pipe, and round-robin balancer exists only in one person's memory |
+| Igor Sysoev → Maxim Dounin handoff (2011): sole author of foundational code stopped contributing | **Knowledge Silo** | Igor Sysoev: 420 commits → 0 after 2011-07-30; no design documentation transferred | Original design rationale for the state machine, event pipe, and round-robin balancer exists only in one person's memory |
 | `ngx_event_pipe.c` quality degradation (48% bug-fix ratio) | **Under-resourced** | 92 total commits, 45 bug-fix; highest ratio in manifest; 2 unfixed TODOs at lines 590 and 721 (since 2004-05-28, commit `369145cef`) | The data transfer pump — used by every buffered upstream response — has the worst quality signal in the subsystem and receives minimal maintenance attention |
 | HTTP/2 proxy module rapid development (5 commits creating 4,160 LOC in 2025) | **Contested/Deferred** | `ngx_http_proxy_v2_module.c`: originally introduced in `56ad960e7` 2018-03-17 as part of gRPC; refactored as standalone in 2025 | [inference] Large-scale architectural work condensed into very few commits suggests either deferred work released in a burst, or limited review bandwidth |
 | Revert activity on upstream.c | **Thrashing** (isolated) | `87ee00702` — "revert r3935 and fix stalled cache updating alert" | Design uncertainty in cache integration required backing out a change; indicates insufficient pre-merge validation for cache-related features |
@@ -409,7 +409,7 @@ This scorecard synthesizes findings from Sections 2–9 into a leadership-facing
 
 | Dimension | Rating | Evidence Summary |
 |-----------|--------|-----------------|
-| Knowledge Distribution | 🔴 | Bus factor critical: original author (Igor Sysoev, 413 commits) inactive since 2011; primary maintainer (Maxim Dounin, 230 commits) inactive since 2024; only 2 active contributors in 2025 (Roman Arutyunyan, Sergey Kandaurov) |
+| Knowledge Distribution | 🔴 | Bus factor critical: original author (Igor Sysoev, 420 commits) inactive since 2011; primary maintainer (Maxim Dounin, 239 commits) inactive since 2024; only 2 active contributors in 2025 (Roman Arutyunyan, Sergey Kandaurov) |
 | Code Quality | 🟡 | 39–48% bug-fix ratios on core files; 14 TODO entries (oldest: 2003-10-31); 87 logging/debug points in `upstream.c` indicating good observability but high defect density |
 | Delivery Velocity | 🟡 | 221 active months over 22 years; average 3.6 commits/month; but 521-day dormancy gap on core file and declining post-2024 cadence |
 | Technical Debt | 🟡 | 14 TODOs (oldest ~22 years, commit `fe0f5cc6e`); duplicated HTTP/Stream upstream implementations; event pipe buffer management debt at lines 590 and 721 |
