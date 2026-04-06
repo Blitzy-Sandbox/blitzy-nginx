@@ -9,7 +9,7 @@
 | **Feature-Related Commits** | 792 (9.3%) |
 | **Feature Manifest** | 25 files across 7 component groups |
 | **Total Feature LOC** | ~31,573 |
-| **Contributors Profiled** | 20 total, 10 with ≥3 commits |
+| **Contributors Profiled** | ~30 total, 10 with ≥3 commits |
 | **Companion Artifacts** | [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md), [Executive Presentation](../presentations/reverse-proxy-executive-summary.html) |
 
 This document provides an archaeological analysis of the NGINX reverse proxy and load balancing subsystem — how it was built, who built it, delivery velocity patterns, quality signals, and execution health — for engineering leadership decision-making. All methodology decisions (feature boundary discovery heuristics, commit classification rules, bus factor thresholds, quality metric definitions, and bottleneck classification criteria) are documented with rationale and alternatives in the companion [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md).
@@ -94,7 +94,7 @@ The subsystem boundary was discovered through a multi-signal approach: keyword f
 
 ### Contributor Profiles
 
-Twenty engineers have committed to the feature manifest files. The table below profiles all 10 contributors with ≥3 commits; bus factor role thresholds are defined in the [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md) (>80% = Sole Owner, >40% = Primary, 10–40% = Significant, 5–10% = Regular, <5 commits = Drive-By).
+Approximately thirty engineers have committed to the feature manifest files. The table below profiles all 10 contributors with ≥3 commits; bus factor role thresholds are defined in the [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md) (>80% = Sole Owner, >40% = Primary, 10–40% = Significant, 5–10% = Regular, <5 commits = Drive-By).
 
 | Contributor | Commits | Date Range | Components Touched | Bus Factor Role |
 |-------------|---------|------------|-------------------|----------------|
@@ -109,7 +109,7 @@ Twenty engineers have committed to the feature manifest files. The table below p
 | Zhidao HONG | 6 | varies | Various | Drive-By Contributor |
 | Dmitry Volyntsev | 4 | varies | Various | Drive-By Contributor |
 
-An additional 10 contributors have ≤2 commits each, classified as Drive-By Contributors.
+An additional ~20 contributors have ≤2 commits each, classified as Drive-By Contributors.
 
 ### The Handoff Pattern
 
@@ -304,7 +304,7 @@ Bug-fix commits were identified using `git log --grep="fix\|bug\|segfault\|crash
 
 | Metric | Value | Citation |
 |--------|-------|---------|
-| Total Bug-Fix Commits | 342 | Grep-based classification across 25 manifest files |
+| Total Bug-Fix Commits | 346 | Grep-based classification across 25 manifest files |
 | Bug-Fix Ratio (`ngx_http_upstream.c`) | 39% (202 of 509) | Per-file commit classification |
 | Bug-Fix Ratio (`ngx_event_pipe.c`) | 48% (45 of 92) | Per-file commit classification — **highest ratio** |
 | Bug-Fix Ratio (`ngx_http_proxy_module.c`) | 39% (111 of 283) | Per-file commit classification |
