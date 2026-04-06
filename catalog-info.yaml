@@ -1,0 +1,29 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: blitzy-nginx
+  description: "NGINX HTTP status code registry refactoring with RFC 9110 compliance"
+  tags:
+    - c
+    - infrastructure
+    - in-progress
+  labels:
+    blitzy.com/status: in-progress
+    blitzy.com/language: c
+  annotations:
+    github.com/project-slug: Blitzy-Sandbox/blitzy-nginx
+    backstage.io/source-location: url:https://github.com/Blitzy-Sandbox/blitzy-nginx/tree/master/
+  links:
+    - url: https://github.com/Blitzy-Sandbox/blitzy-nginx
+      title: GitHub Repository
+    - url: https://github.com/Blitzy-Sandbox/blitzy-nginx/pull/1
+      title: "PR #1: HTTP Status Code RFC 9110 Refactoring"
+      icon: github
+    - url: https://github.com/Blitzy-Sandbox/blitzy-nginx/tree/master/blitzy/documentation
+      title: Blitzy Documentation
+      icon: docs
+spec:
+  type: service
+  lifecycle: experimental
+  owner: blitzy-sandbox
+  system: blitzy-sandbox-projects
