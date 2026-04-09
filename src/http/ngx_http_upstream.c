@@ -3162,7 +3162,14 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
         r->headers_out.date->hash = 0;
     }
 
-    r->headers_out.status = u->headers_in.status_n;
+    /*
+     * Upstream status pass-through: use ngx_http_status_set() for unified
+     * status code handling. The function detects r->upstream presence and
+     * bypasses strict RFC 9110 validation, allowing upstream servers to
+     * return any status code (including non-standard ones) unchanged.
+     * This preserves backward compatibility with existing proxy behavior.
+     */
+    (void) ngx_http_status_set(r, u->headers_in.status_n);
     r->headers_out.status_line = u->headers_in.status_line;
 
     r->headers_out.content_length_n = u->headers_in.content_length_n;

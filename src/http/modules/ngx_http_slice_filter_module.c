@@ -173,7 +173,7 @@ ngx_http_slice_header_filter(ngx_http_request_t *r)
     ctx->start = end;
     ctx->active = 1;
 
-    r->headers_out.status = NGX_HTTP_OK;
+    ngx_http_status_set(r, NGX_HTTP_OK);
     r->headers_out.status_line.len = 0;
     r->headers_out.content_length_n = cr.complete_length;
     r->headers_out.content_offset = cr.start;

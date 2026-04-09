@@ -134,7 +134,7 @@ ngx_http_stub_status_handler(ngx_http_request_t *r)
     b->last = ngx_sprintf(b->last, "Reading: %uA Writing: %uA Waiting: %uA \n",
                           rd, wr, wa);
 
-    r->headers_out.status = NGX_HTTP_OK;
+    ngx_http_status_set(r, NGX_HTTP_OK);
     r->headers_out.content_length_n = b->last - b->pos;
 
     b->last_buf = (r == r->main) ? 1 : 0;

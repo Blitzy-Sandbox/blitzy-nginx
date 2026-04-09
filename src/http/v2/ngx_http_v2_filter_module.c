@@ -414,9 +414,28 @@ ngx_http_v2_header_filter(ngx_http_request_t *r)
         h2c->table_update = 0;
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, fc->log, 0,
-                   "http2 output header: \":status: %03ui\"",
-                   r->headers_out.status);
+    /*
+     * Enhanced debug logging with reason phrase from status code registry.
+     * Uses ngx_http_status_reason() for human-readable status information.
+     * Note: HTTP/2 :status pseudo-header is numeric only per RFC 9113,
+     * so the reason phrase is for logging/debugging context only.
+     */
+#if (NGX_DEBUG)
+    {
+        const ngx_str_t  *reason;
+
+        reason = ngx_http_status_reason(r->headers_out.status);
+        if (reason) {
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, fc->log, 0,
+                           "http2 output header: \":status: %03ui\" (%V)",
+                           r->headers_out.status, reason);
+        } else {
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, fc->log, 0,
+                           "http2 output header: \":status: %03ui\"",
+                           r->headers_out.status);
+        }
+    }
+#endif
 
     if (status) {
         *pos++ = status;
@@ -729,9 +748,27 @@ ngx_http_v2_early_hints_filter(ngx_http_request_t *r)
         h2c->table_update = 0;
     }
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, fc->log, 0,
-                   "http2 output header: \":status: %03ui\"",
-                   (ngx_uint_t) NGX_HTTP_EARLY_HINTS);
+    /*
+     * Enhanced debug logging for 103 Early Hints with reason phrase.
+     * Uses ngx_http_status_reason() for human-readable status context.
+     * Note: HTTP/2 wire format uses numeric :status only per RFC 9113.
+     */
+#if (NGX_DEBUG)
+    {
+        const ngx_str_t  *reason;
+
+        reason = ngx_http_status_reason(NGX_HTTP_EARLY_HINTS);
+        if (reason) {
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, fc->log, 0,
+                           "http2 output header: \":status: %03ui\" (%V)",
+                           (ngx_uint_t) NGX_HTTP_EARLY_HINTS, reason);
+        } else {
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, fc->log, 0,
+                           "http2 output header: \":status: %03ui\"",
+                           (ngx_uint_t) NGX_HTTP_EARLY_HINTS);
+        }
+    }
+#endif
 
     *pos++ = ngx_http_v2_inc_indexed(NGX_HTTP_V2_STATUS_INDEX);
     *pos++ = NGX_HTTP_V2_ENCODE_RAW | 3;

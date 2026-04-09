@@ -1778,7 +1778,12 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
         return rc;
     }
 
-    r->headers_out.status = status;
+    /* Use centralized status API for RFC 9110 compliance validation */
+    if (ngx_http_status_set(r, status) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "invalid status code: %ui", status);
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
 
     if (ngx_http_complex_value(r, cv, &val) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -1856,7 +1861,12 @@ ngx_http_send_header(ngx_http_request_t *r)
     }
 
     if (r->err_status) {
-        r->headers_out.status = r->err_status;
+        /* Use centralized status API for RFC 9110 compliance validation */
+        if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                          "invalid error status code: %ui", r->err_status);
+            return NGX_ERROR;
+        }
         r->headers_out.status_line.len = 0;
     }
 

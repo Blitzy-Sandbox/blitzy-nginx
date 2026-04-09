@@ -159,6 +159,70 @@ ngx_int_t ngx_http_filter_finalize_request(ngx_http_request_t *r,
 void ngx_http_clean_header(ngx_http_request_t *r);
 
 
+/*
+ * HTTP Status Code Registry API (RFC 9110 Section 15 compliance)
+ *
+ * These functions provide a unified interface for HTTP status code operations,
+ * enabling centralized validation and reason phrase lookup.
+ */
+
+/*
+ * ngx_http_status_set - Sets response status code with optional validation
+ *
+ * Parameters:
+ *   r      - HTTP request structure
+ *   status - HTTP status code (100-599 per RFC 9110)
+ *
+ * Returns:
+ *   NGX_OK    - Status code set successfully
+ *   NGX_ERROR - Invalid status code (when strict validation enabled)
+ *
+ * Note: In permissive mode, always returns NGX_OK but logs invalid codes.
+ *       In strict mode (--with-http_status_validation), returns NGX_ERROR
+ *       for codes outside the valid RFC 9110 range.
+ */
+ngx_int_t ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status);
+
+/*
+ * ngx_http_status_validate - Validates status code against RFC 9110
+ *
+ * Parameters:
+ *   status - HTTP status code to validate
+ *
+ * Returns:
+ *   NGX_OK    - Status code is valid (100-599)
+ *   NGX_ERROR - Status code is outside valid range
+ */
+ngx_int_t ngx_http_status_validate(ngx_uint_t status);
+
+/*
+ * ngx_http_status_reason - Returns reason phrase for status code
+ *
+ * Parameters:
+ *   status - HTTP status code
+ *
+ * Returns:
+ *   Pointer to ngx_str_t containing reason phrase (e.g., "OK", "Not Found")
+ *   Returns NULL for unknown status codes
+ *
+ * Note: The returned pointer references static storage and must not be modified.
+ */
+const ngx_str_t *ngx_http_status_reason(ngx_uint_t status);
+
+/*
+ * ngx_http_status_is_cacheable - Checks if status code is cacheable
+ *
+ * Parameters:
+ *   status - HTTP status code
+ *
+ * Returns:
+ *   1 - Status code is cacheable by default per RFC 9110
+ *       (200, 203, 204, 206, 300, 301, 308, 404, 405, 410, 414, 501)
+ *   0 - Status code is not cacheable by default
+ */
+ngx_int_t ngx_http_status_is_cacheable(ngx_uint_t status);
+
+
 ngx_int_t ngx_http_discard_request_body(ngx_http_request_t *r);
 void ngx_http_discarded_request_body_handler(ngx_http_request_t *r);
 void ngx_http_block_reading(ngx_http_request_t *r);

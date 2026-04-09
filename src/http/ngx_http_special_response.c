@@ -11,11 +11,38 @@
 #include <nginx.h>
 
 
+/*
+ * HTTP Special Response Module
+ *
+ * This module handles the generation of special HTTP responses including
+ * error pages (4xx, 5xx) and redirect responses (3xx). It integrates with
+ * the centralized HTTP status code registry (RFC 9110) via the status API
+ * functions declared in ngx_http.h:
+ *
+ *   - ngx_http_status_reason(): Retrieves reason phrases from the registry
+ *   - ngx_http_status_validate(): Validates status codes per RFC 9110
+ *
+ * The module maintains static error page templates for common status codes
+ * for performance, while using the status API as a fallback for dynamic
+ * error page generation when predefined pages are not available.
+ *
+ * Error Page Lookup Order:
+ *   1. Custom error_page directive configuration (user-defined)
+ *   2. Static predefined error pages (ngx_http_error_pages[] array)
+ *   3. Dynamic generation using ngx_http_status_reason() from registry
+ *
+ * This ensures consistent status code metadata across the HTTP subsystem
+ * while preserving backward compatibility with existing configurations.
+ */
+
+
 static ngx_int_t ngx_http_send_error_page(ngx_http_request_t *r,
     ngx_http_err_page_t *err_page);
 static ngx_int_t ngx_http_send_special_response(ngx_http_request_t *r,
     ngx_http_core_loc_conf_t *clcf, ngx_uint_t err);
 static ngx_int_t ngx_http_send_refresh(ngx_http_request_t *r);
+static ngx_int_t ngx_http_generate_error_page(ngx_http_request_t *r,
+    ngx_http_core_loc_conf_t *clcf, ngx_uint_t status);
 
 
 static u_char ngx_http_error_full_tail[] =
@@ -669,6 +696,36 @@ ngx_http_send_error_page(ngx_http_request_t *r, ngx_http_err_page_t *err_page)
 }
 
 
+/*
+ * ngx_http_send_special_response - Sends error response with HTML body
+ *
+ * This function sends an HTTP error response with an HTML body. It uses
+ * a three-tier lookup strategy:
+ *
+ *   1. Static predefined error pages (ngx_http_error_pages[] array)
+ *      - Fast path for common status codes with pre-computed HTML
+ *
+ *   2. Dynamic generation using ngx_http_status_reason() from registry
+ *      - Fallback when predefined pages have zero length (ngx_null_string)
+ *      - Uses centralized status registry for consistent reason phrases
+ *
+ *   3. Empty body response
+ *      - Last resort when status code is not in registry or has no reason
+ *      - Used for special codes like 444 (connection close without response)
+ *
+ * This integration ensures that error page generation uses the same status
+ * code metadata as the rest of the HTTP subsystem, maintaining consistency
+ * per RFC 9110 HTTP Semantics.
+ *
+ * Parameters:
+ *   r    - HTTP request structure
+ *   clcf - Core location configuration
+ *   err  - Index into ngx_http_error_pages[] array
+ *
+ * Returns:
+ *   NGX_OK    on success
+ *   NGX_ERROR on failure
+ */
 static ngx_int_t
 ngx_http_send_special_response(ngx_http_request_t *r,
     ngx_http_core_loc_conf_t *clcf, ngx_uint_t err)
@@ -712,6 +769,22 @@ ngx_http_send_special_response(ngx_http_request_t *r,
         r->headers_out.content_type_lowcase = NULL;
 
     } else {
+        /*
+         * No predefined static error page for this status code.
+         * Try to dynamically generate one using the centralized status
+         * registry via ngx_http_status_reason(). This ensures consistency
+         * with the HTTP status line and other parts of the HTTP subsystem.
+         */
+        if (r->err_status >= 100 && r->err_status <= 599
+            && ngx_http_status_reason(r->err_status) != NULL)
+        {
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "http special response: dynamic generation for %i",
+                           r->err_status);
+            return ngx_http_generate_error_page(r, clcf, r->err_status);
+        }
+
+        /* Fall back to empty body for unknown/special status codes */
         r->headers_out.content_length_n = 0;
     }
 
@@ -781,6 +854,179 @@ ngx_http_send_special_response(ngx_http_request_t *r,
     b->last_in_chain = 1;
 
     return ngx_http_output_filter(r, &out[0]);
+}
+
+
+/*
+ * ngx_http_generate_error_page - Dynamically generates error page using status registry
+ *
+ * This function generates an error page HTML for status codes that do not have
+ * predefined static HTML pages in the ngx_http_error_pages[] array. It uses
+ * the ngx_http_status_reason() API to retrieve the reason phrase from the
+ * centralized HTTP status code registry, ensuring consistency with the rest
+ * of the HTTP subsystem.
+ *
+ * The generated HTML follows the same format as the static error pages:
+ *   <html>
+ *   <head><title>{status} {reason}</title></head>
+ *   <body>
+ *   <center><h1>{status} {reason}</h1></center>
+ *   {tail with nginx version or branding}
+ *   </body>
+ *   </html>
+ *
+ * Parameters:
+ *   r      - HTTP request structure
+ *   clcf   - Core location configuration (for server_tokens setting)
+ *   status - HTTP status code to generate page for
+ *
+ * Returns:
+ *   NGX_OK    on success
+ *   NGX_ERROR on allocation failure or output filter error
+ *
+ * Note: This function is called as a fallback when ngx_http_error_pages[]
+ * contains ngx_null_string for the given status code index.
+ */
+static ngx_int_t
+ngx_http_generate_error_page(ngx_http_request_t *r,
+    ngx_http_core_loc_conf_t *clcf, ngx_uint_t status)
+{
+    u_char            *p, *tail;
+    size_t             len, body_len, tail_len;
+    ngx_int_t          rc;
+    ngx_buf_t         *b;
+    ngx_chain_t        out;
+    ngx_uint_t         msie_padding;
+    const ngx_str_t   *reason;
+
+    /*
+     * Retrieve reason phrase from the centralized status code registry.
+     * This ensures consistency with other parts of the HTTP subsystem
+     * that use ngx_http_status_reason() for status line generation.
+     */
+    reason = ngx_http_status_reason(status);
+
+    if (reason == NULL || reason->len == 0) {
+        /*
+         * Status code not found in registry or has empty reason phrase.
+         * Generate a generic "Unknown Error" page as fallback.
+         * This maintains backward compatibility for codes like 444 (NGINX close).
+         */
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "http generate error page: no reason for status %ui",
+                       status);
+
+        r->headers_out.content_length_n = 0;
+        return ngx_http_send_special(r, NGX_HTTP_LAST);
+    }
+
+    /*
+     * Calculate body size: HTML template with status code and reason phrase.
+     * Format: "<html>\r\n<head><title>NNN Reason</title></head>\r\n"
+     *         "<body>\r\n<center><h1>NNN Reason</h1></center>\r\n"
+     * Status code is always 3 digits, reason phrase length is variable.
+     */
+    body_len = sizeof("<html>" CRLF
+                      "<head><title>") - 1
+               + 3                            /* status code (3 digits) */
+               + 1                            /* space */
+               + reason->len                  /* reason phrase */
+               + sizeof("</title></head>" CRLF
+                        "<body>" CRLF
+                        "<center><h1>") - 1
+               + 3                            /* status code (3 digits) */
+               + 1                            /* space */
+               + reason->len                  /* reason phrase */
+               + sizeof("</h1></center>" CRLF) - 1;
+
+    /* Determine tail based on server_tokens configuration */
+    if (clcf->server_tokens == NGX_HTTP_SERVER_TOKENS_ON) {
+        tail_len = sizeof(ngx_http_error_full_tail) - 1;
+        tail = ngx_http_error_full_tail;
+
+    } else if (clcf->server_tokens == NGX_HTTP_SERVER_TOKENS_BUILD) {
+        tail_len = sizeof(ngx_http_error_build_tail) - 1;
+        tail = ngx_http_error_build_tail;
+
+    } else {
+        tail_len = sizeof(ngx_http_error_tail) - 1;
+        tail = ngx_http_error_tail;
+    }
+
+    len = body_len + tail_len;
+
+    /* Check for MSIE/Chrome padding requirement for 4xx/5xx errors */
+    msie_padding = 0;
+
+    if (clcf->msie_padding
+        && (r->headers_in.msie || r->headers_in.chrome)
+        && r->http_version >= NGX_HTTP_VERSION_10
+        && status >= 400)
+    {
+        len += sizeof(ngx_http_msie_padding) - 1;
+        msie_padding = 1;
+    }
+
+    /* Set response headers */
+    r->headers_out.content_length_n = len;
+    r->headers_out.content_type_len = sizeof("text/html") - 1;
+    ngx_str_set(&r->headers_out.content_type, "text/html");
+    r->headers_out.content_type_lowcase = NULL;
+
+    if (r->headers_out.content_length) {
+        r->headers_out.content_length->hash = 0;
+        r->headers_out.content_length = NULL;
+    }
+
+    ngx_http_clear_accept_ranges(r);
+    ngx_http_clear_last_modified(r);
+    ngx_http_clear_etag(r);
+
+    rc = ngx_http_send_header(r);
+
+    if (rc == NGX_ERROR || r->header_only) {
+        return rc;
+    }
+
+    /* Allocate buffer for the response body */
+    b = ngx_create_temp_buf(r->pool, len);
+    if (b == NULL) {
+        return NGX_ERROR;
+    }
+
+    /*
+     * Generate error page HTML using the reason phrase from the status registry.
+     * This ensures the error page content is consistent with the HTTP status line.
+     */
+    p = b->pos;
+
+    p = ngx_cpymem(p, "<html>" CRLF "<head><title>",
+                   sizeof("<html>" CRLF "<head><title>") - 1);
+    p = ngx_sprintf(p, "%03ui ", status);
+    p = ngx_cpymem(p, reason->data, reason->len);
+    p = ngx_cpymem(p, "</title></head>" CRLF "<body>" CRLF "<center><h1>",
+                   sizeof("</title></head>" CRLF "<body>" CRLF "<center><h1>") - 1);
+    p = ngx_sprintf(p, "%03ui ", status);
+    p = ngx_cpymem(p, reason->data, reason->len);
+    p = ngx_cpymem(p, "</h1></center>" CRLF,
+                   sizeof("</h1></center>" CRLF) - 1);
+
+    /* Append tail with server version or branding */
+    p = ngx_cpymem(p, tail, tail_len);
+
+    /* Append MSIE/Chrome padding if needed */
+    if (msie_padding) {
+        p = ngx_cpymem(p, ngx_http_msie_padding, sizeof(ngx_http_msie_padding) - 1);
+    }
+
+    b->last = p;
+    b->last_buf = (r == r->main) ? 1 : 0;
+    b->last_in_chain = 1;
+
+    out.buf = b;
+    out.next = NULL;
+
+    return ngx_http_output_filter(r, &out);
 }
 
 

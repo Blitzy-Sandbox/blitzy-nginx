@@ -55,6 +55,16 @@ static ngx_str_t ngx_http_early_hints_status_line =
     ngx_string("HTTP/1.1 103 Early Hints" CRLF);
 
 
+/*
+ * DEPRECATED: This static array is retained for backward compatibility only.
+ * New code should use ngx_http_status_reason() from the centralized HTTP
+ * status code registry for O(1) lookup of status code reason phrases.
+ * The offset macros (NGX_HTTP_OFF_3XX, NGX_HTTP_OFF_4XX, NGX_HTTP_OFF_5XX)
+ * are no longer necessary when using the registry-based API.
+ *
+ * See RFC 9110 Section 15 for HTTP status code semantics.
+ */
+#if 0  /* DEPRECATED - kept for backward compatibility reference */
 static ngx_str_t ngx_http_status_lines[] = {
 
     ngx_string("200 OK"),
@@ -134,6 +144,7 @@ static ngx_str_t ngx_http_status_lines[] = {
 #define NGX_HTTP_LAST_5XX  508
 
 };
+#endif  /* DEPRECATED ngx_http_status_lines */
 
 
 ngx_http_header_out_t  ngx_http_headers_out[] = {
@@ -162,7 +173,8 @@ ngx_http_header_filter(ngx_http_request_t *r)
 {
     u_char                    *p;
     size_t                     len;
-    ngx_str_t                  host, *status_line;
+    ngx_str_t                  host;
+    const ngx_str_t           *status_line;
     ngx_buf_t                 *b;
     ngx_uint_t                 status, i, port;
     ngx_chain_t                out;
@@ -222,66 +234,43 @@ ngx_http_header_filter(ngx_http_request_t *r)
 
         status = r->headers_out.status;
 
-        if (status >= NGX_HTTP_OK
-            && status < NGX_HTTP_LAST_2XX)
-        {
-            /* 2XX */
+        /*
+         * Handle special status codes that require specific header behavior
+         * per RFC 9110 Section 15 (HTTP Semantics).
+         */
 
-            if (status == NGX_HTTP_NO_CONTENT) {
-                r->header_only = 1;
-                ngx_str_null(&r->headers_out.content_type);
-                r->headers_out.last_modified_time = -1;
-                r->headers_out.last_modified = NULL;
-                r->headers_out.content_length = NULL;
-                r->headers_out.content_length_n = -1;
-            }
+        if (status == NGX_HTTP_NO_CONTENT) {
+            /* 204 No Content - no message body allowed (RFC 9110 Section 15.3.5) */
+            r->header_only = 1;
+            ngx_str_null(&r->headers_out.content_type);
+            r->headers_out.last_modified_time = -1;
+            r->headers_out.last_modified = NULL;
+            r->headers_out.content_length = NULL;
+            r->headers_out.content_length_n = -1;
 
-            status -= NGX_HTTP_OK;
-            status_line = &ngx_http_status_lines[status];
-            len += ngx_http_status_lines[status].len;
-
-        } else if (status >= NGX_HTTP_MOVED_PERMANENTLY
-                   && status < NGX_HTTP_LAST_3XX)
-        {
-            /* 3XX */
-
-            if (status == NGX_HTTP_NOT_MODIFIED) {
-                r->header_only = 1;
-            }
-
-            status = status - NGX_HTTP_MOVED_PERMANENTLY + NGX_HTTP_OFF_3XX;
-            status_line = &ngx_http_status_lines[status];
-            len += ngx_http_status_lines[status].len;
-
-        } else if (status >= NGX_HTTP_BAD_REQUEST
-                   && status < NGX_HTTP_LAST_4XX)
-        {
-            /* 4XX */
-            status = status - NGX_HTTP_BAD_REQUEST
-                            + NGX_HTTP_OFF_4XX;
-
-            status_line = &ngx_http_status_lines[status];
-            len += ngx_http_status_lines[status].len;
-
-        } else if (status >= NGX_HTTP_INTERNAL_SERVER_ERROR
-                   && status < NGX_HTTP_LAST_5XX)
-        {
-            /* 5XX */
-            status = status - NGX_HTTP_INTERNAL_SERVER_ERROR
-                            + NGX_HTTP_OFF_5XX;
-
-            status_line = &ngx_http_status_lines[status];
-            len += ngx_http_status_lines[status].len;
-
-        } else {
-            len += NGX_INT_T_LEN + 1 /* SP */;
-            status_line = NULL;
+        } else if (status == NGX_HTTP_NOT_MODIFIED) {
+            /* 304 Not Modified - no message body (RFC 9110 Section 15.4.5) */
+            r->header_only = 1;
         }
 
-        if (status_line && status_line->len == 0) {
-            status = r->headers_out.status;
-            len += NGX_INT_T_LEN + 1 /* SP */;
-            status_line = NULL;
+        /*
+         * Use centralized status code registry for reason phrase lookup.
+         * ngx_http_status_reason() provides O(1) lookup and returns
+         * NULL for unknown status codes. This replaces the legacy
+         * ngx_http_status_lines[] array offset calculations.
+         *
+         * Note: ngx_http_status_reason() returns only the reason phrase
+         * (e.g., "OK", "Not Found"), not the full status line. The status
+         * code must be written separately before the reason phrase.
+         */
+        status_line = ngx_http_status_reason(status);
+
+        /* Status code takes 3 digits plus 1 space */
+        len += 3 + 1;
+
+        if (status_line != NULL && status_line->len > 0) {
+            /* Add reason phrase length */
+            len += status_line->len;
         }
     }
 
@@ -447,12 +436,24 @@ ngx_http_header_filter(ngx_http_request_t *r)
     /* "HTTP/1.x " */
     b->last = ngx_cpymem(b->last, "HTTP/1.1 ", sizeof("HTTP/1.x ") - 1);
 
-    /* status line */
-    if (status_line) {
-        b->last = ngx_copy(b->last, status_line->data, status_line->len);
-
+    /*
+     * Write status line: <status-code> SP <reason-phrase> CRLF
+     * Per RFC 9112 Section 4, the status code is a 3-digit integer.
+     * The reason phrase comes from ngx_http_status_reason() or is omitted
+     * for unknown status codes.
+     */
+    if (r->headers_out.status_line.len) {
+        /* Use custom status line provided by the module */
+        b->last = ngx_copy(b->last, r->headers_out.status_line.data,
+                           r->headers_out.status_line.len);
     } else {
+        /* Write status code (3 digits) + space */
         b->last = ngx_sprintf(b->last, "%03ui ", status);
+
+        /* Write reason phrase if available from registry */
+        if (status_line != NULL && status_line->len > 0) {
+            b->last = ngx_copy(b->last, status_line->data, status_line->len);
+        }
     }
     *b->last++ = CR; *b->last++ = LF;
 
