@@ -12,13 +12,15 @@
 | **Contributors Profiled** | ~30 total, 10 with ≥3 commits |
 | **Companion Artifacts** | [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md), [Executive Presentation](../presentations/reverse-proxy-executive-summary.html) |
 
-This document provides an archaeological analysis of the NGINX reverse proxy and load balancing subsystem — how it was built, who built it, delivery velocity patterns, quality signals, and execution health — for engineering leadership decision-making. All methodology decisions (feature boundary discovery heuristics, commit classification rules, bus factor thresholds, quality metric definitions, and bottleneck classification criteria) are documented with rationale and alternatives in the companion [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md).
+This document provides an archaeological analysis of the NGINX reverse proxy and load balancing subsystem — how it was built, who built it, delivery velocity patterns, quality signals, and execution health — for engineering leadership decision-making. Every section is organized around a single, recurring executive question: **"What does this tell us about how our team executes?"** — surfacing concrete, actionable execution signals from 22 years of in-tree evidence rather than raw technical detail. All methodology decisions (feature boundary discovery heuristics, commit classification rules, bus factor thresholds, quality metric definitions, and bottleneck classification criteria) are documented with rationale and alternatives in the companion [Methodology Decision Log](../decision-logs/archaeology-report-decisions.md).
 
 ---
 
 ## 1. Executive Summary
 
-The NGINX reverse proxy and load balancing subsystem is a 22-year-old, ~31,573 LOC codebase spanning 25 files across 7 component groups, representing 9.3% of all repository activity (792 of 8,518 commits). It was architected almost entirely by a single engineer — Igor Sysoev (420 commits, first: `9e4920b81` 2003-04-14) — and has since transitioned through two primary maintainers: Maxim Dounin (239 commits, 2011–2024) and currently Roman Arutyunyan and Sergey Kandaurov (active as of 2025). The subsystem's **critical risk is knowledge concentration**: both the original author and his successor are now inactive, leaving foundational design rationale undocumented and only two active contributors maintaining 31,573 lines of production-critical infrastructure. Quality signals are mixed — core files exhibit 39–48% bug-fix commit ratios (`src/http/ngx_http_upstream.c` at 39%, `src/event/ngx_event_pipe.c` at 48%), with 14 unresolved TODO entries in HEAD (oldest dating to 2003-10-31, commit `fe0f5cc6e`). Integration health is strong, with 9 consumer modules all at Production maturity. **What this tells leadership about execution: the team has built a remarkably durable subsystem over two decades, but knowledge continuity is now the single highest-priority risk requiring immediate intervention.**
+The NGINX reverse proxy and load balancing subsystem is a 22-year-old, ~31,573 LOC codebase spanning 25 files across 7 component groups, representing 9.3% of all repository activity (792 of 8,518 commits). It was architected almost entirely by a single engineer — Igor Sysoev (420 commits, first: `9e4920b81` 2003-04-14) — and has since transitioned through two primary maintainers: Maxim Dounin (239 commits, 2011–2024) and currently Roman Arutyunyan and Sergey Kandaurov (active as of 2025). The subsystem's **critical risk is knowledge concentration**: both the original author and his successor are now inactive, leaving foundational design rationale undocumented and only two active contributors maintaining 31,573 lines of production-critical infrastructure. Quality signals are mixed — core files exhibit 39–48% bug-fix commit ratios (`src/http/ngx_http_upstream.c` at 39%, `src/event/ngx_event_pipe.c` at 48%), with 14 unresolved TODO entries in HEAD (oldest dating to 2003-10-31, commit `fe0f5cc6e`). Integration health is strong, with 9 consumer modules all at Production maturity.
+
+**What this tells leadership about execution:** the team ships durable, architecturally coherent infrastructure — but delivers it through **serial ownership of dominant contributors** rather than through institutional process. This model has worked for 22 years and produced a rare piece of engineering (a single upstream API that has absorbed every protocol change since 2005 without a breaking redesign) — but the team's own pattern of contributor transitions (Sysoev → Dounin → Arutyunyan/Kandaurov) has now surfaced a recurring failure mode: when the dominant contributor exits, knowledge does not transfer — it evaporates. Knowledge continuity is therefore the single highest-priority execution risk requiring immediate leadership intervention; every subsequent section of this report reinforces that same signal from a different angle.
 
 ---
 
@@ -88,6 +90,10 @@ The subsystem boundary was discovered through a multi-signal approach: keyword f
 - `auto/options` — Feature flags: `HTTP_PROXY` (`auto/options:87`), `HTTP_UPSTREAM_HASH` / `IP_HASH` / `LEAST_CONN` / `RANDOM` / `KEEPALIVE` / `ZONE` (`auto/options:104-109`), `STREAM_UPSTREAM_*` (`auto/options:132-135`)
 - `auto/modules` — Module registration and source file linkage (`auto/modules:70-91`, `auto/modules:727-946`)
 
+### What this tells us about execution
+
+The subsystem is large but **cleanly decomposed**: 25 files, 7 component groups, with clear separation between the framework (Component 1), its consumers (Component 2), its pluggable policies (Component 3), and the parallel L4 implementation (Component 4). The team executes with an architectural instinct for modularity — every load-balancing strategy is an independent ~300–1,000 LOC module rather than a branch inside a single file. The downside signal: the symmetric `src/http/` ↔ `src/stream/` layout means balancer work must be done twice, and 9.3% of every commit in the repository (792 of 8,518) touches this subsystem — making it both a **revenue-critical core** and a **high-concentration maintenance surface**.
+
 ---
 
 ## 3. The Team
@@ -118,6 +124,10 @@ The subsystem's history tells a story of serial ownership. Igor Sysoev built the
 ### Bus Factor Risk Assessment
 
 **Rating: 🔴 Critical.** Igor Sysoev (420 commits, ~43% of all feature commits) has been inactive since 2011-07-30. His foundational knowledge of the upstream state machine, event pipe, and round-robin balancer was transferred primarily to Maxim Dounin through code review — but Dounin is now also inactive since 2024-01-30. The event pipe component (`src/event/ngx_event_pipe.c`) is a particular knowledge silo: Igor Sysoev authored the majority of its 92 commits, and it has received only maintenance-level attention since his departure. No in-tree design documents, architecture decision records, or API guides exist for any component.
+
+### What this tells us about execution
+
+The team executes through **serial ownership, not shared ownership** — each era has a single dominant contributor (Sysoev → Dounin → Arutyunyan/Kandaurov) and handoff happens implicitly through code review rather than deliberate knowledge-transfer artifacts. This pattern has produced remarkable continuity of style (every contributor writes in the same idiom) but concentrates risk: when the dominant contributor of an era stops contributing, the next generation inherits working code without documented intent. Two successive "dominant contributor → inactive" transitions in 13 years (Sysoev 2011, Dounin 2024) is a recurring pattern, not a one-time event — **the team's current execution model does not appear to plan for the exit of its most productive engineer.**
 
 ---
 
@@ -174,6 +184,10 @@ gantt
 | Average Commit Cadence | ~3.6 commits/month across feature files | 792 commits ÷ 221 active months |
 | Longest Gap | 521 days on `ngx_http_upstream.c` (2022-06-22 to 2023-11-25) | git log date diff |
 
+### What this tells us about execution
+
+The team delivers in **long, compounding arcs rather than in sprints**. Two decades of continuous activity (221 active months out of 271 elapsed months; dormancy ratio ~18%) indicate a stable, durable staffing model — but the 521-day gap on the most critical file in the manifest (`ngx_http_upstream.c`) is a clear anomaly that a 2-month-stall threshold flagged immediately. [inference] That gap (2022-06 → 2023-11) lines up with the Dounin-era wind-down and the current maintainers ramping up, suggesting leadership did not pre-stage a hand-off. Velocity is also decelerating: the bulk of foundational work (2003–2018) averaged materially higher cadence than the post-2018 period, and 2024–2025 activity is carried by only two active contributors. **The team executes reliably when fully staffed but degrades sharply on contributor transitions** — a signal that bench strength, not talent, is the binding constraint.
+
 ---
 
 ## 5. Design Decisions & Debt
@@ -213,7 +227,9 @@ All 14 TODO entries in current HEAD are cataloged below. Eight of 14 concentrate
 | 13 | `src/event/ngx_event_pipe.c:721` | `/* TODO: free buf if p->free_bufs && upstream done */` | Igor Sysoev (`369145cef`) | 2004-05-28 | ~21 years |
 | 14 | `src/event/ngx_event_connect.c:282` | `/* TODO: check in Win32, etc. As workaround... */` | Igor Sysoev (`fe0f5cc6e`) | 2003-10-31 | ~22 years |
 
-**What this tells leadership:** 11 of 14 TODOs were authored by Igor Sysoev (inactive since 2011). The two oldest entries — `ngx_event_pipe.c:590` and `ngx_event_pipe.c:721` — concern buffer memory management in the data transfer pump and have remained unresolved for over 21 years. No issue tracker linkage exists in-tree for any of these items; it is unclear whether they represent planned work or abandoned intentions (rationale not recorded in-tree).
+### What this tells us about execution
+
+The team's design decisions are **high-conviction and extraordinarily long-lived**: a callback-driven state machine chosen in 2005 still shapes every upstream request in 2025; a pluggable balancer contract defined once has absorbed six distinct algorithms without breaking changes; a "port rather than abstract" choice in 2015 (commit `c799c82fa`) still determines how stream features ship today. The team commits once and rarely revisits. The trade-off shows up in the TODO ledger: 11 of 14 TODOs were authored by Igor Sysoev (inactive since 2011), and the two oldest entries — `ngx_event_pipe.c:590` and `ngx_event_pipe.c:721` — have sat unresolved for over 21 years. No issue tracker linkage exists in-tree for any of these items (rationale not recorded in-tree). **This tells leadership two things**: (1) the team executes on architectural instinct without formal decision records, which is high-leverage but non-transferable; and (2) acknowledged debt is **tolerated, not tracked** — TODOs accumulate but are never formally retired, which means debt triage is not part of the team's working rhythm.
 
 ---
 
@@ -280,6 +296,10 @@ The original 2005 state machine (`02025fd6b`) contained approximately 10 handler
 
 The current HEAD (`b8492d9c2`, 2025-07-15) has ~40 static function declarations (`src/http/ngx_http_upstream.c:32-103`), representing a ~4× growth in state machine complexity over 20 years. [inference] This growth was organic and incremental — each new capability added handlers without refactoring the overall lifecycle — which contributes to the high bug-fix ratio (39%) observed on this file.
 
+### What this tells us about execution
+
+The team executes new capabilities by **additive extension, not by refactor**. Every new transport (SSL, WebSocket, HTTP/2, gRPC, early hints) grafted a new branch onto the existing state machine rather than reshaping the backbone. This is rational — refactoring a revenue-critical hot path has enormous blast radius — but it tells leadership that the team's default response to new requirements is "add a handler," not "redesign the lifecycle." The 4× handler-count growth over 20 years, paired with the 39% bug-fix ratio, is the mechanical result of this bias: more branches → more state interactions → more defects. **Leadership should expect that any future architectural reset (e.g., moving to coroutines, or unifying HTTP and stream upstreams) will not happen organically — it would require an explicit mandate and dedicated contributor bandwidth.**
+
 ---
 
 ## 7. Execution Bottlenecks
@@ -293,6 +313,10 @@ Five execution bottlenecks were identified through git history analysis. Classif
 | `ngx_event_pipe.c` quality degradation (48% bug-fix ratio) | **Under-resourced** | 92 total commits, 45 bug-fix; highest ratio in manifest; 2 unfixed TODOs at lines 590 and 721 (since 2004-05-28, commit `369145cef`) | The data transfer pump — used by every buffered upstream response — has the worst quality signal in the subsystem and receives minimal maintenance attention |
 | HTTP/2 proxy module rapid development (5 commits creating 4,160 LOC in 2025) | **Contested/Deferred** | `ngx_http_proxy_v2_module.c`: originally introduced in `56ad960e7` 2018-03-17 as part of gRPC; refactored as standalone in 2025 | [inference] Large-scale architectural work condensed into very few commits suggests either deferred work released in a burst, or limited review bandwidth |
 | Revert activity on upstream.c | **Thrashing** (isolated) | `87ee00702` — "revert r3935 and fix stalled cache updating alert" | Design uncertainty in cache integration required backing out a change; indicates insufficient pre-merge validation for cache-related features |
+
+### What this tells us about execution
+
+Four of the five bottlenecks (stall, knowledge silo, under-resourced file, deferred HTTP/2 work) share a **single root cause: dependence on individual contributor capacity** rather than on process or tooling. The team does not exhibit classic delivery-pipeline bottlenecks (no review queue backlog, no merge friction, no CI blocks are visible in-tree) — instead, the bottlenecks are all about **who is available to do the work**. When the right person is in the seat, the work ships; when they are not, it stalls. The 521-day `ngx_http_upstream.c` gap and the 5-commit burst that produced 4,160 LOC of HTTP/2 proxy code in 2025 are the same story from two sides: without a deliberate pipeline, the subsystem's cadence is entirely governed by individual contributor availability. **Leadership should read this as a staffing-model finding, not a process finding.**
 
 ---
 
@@ -335,6 +359,10 @@ Three revert commits were identified across feature files, serving as quality si
 3. `39892c626` — "SSL: fixed ngx_ssl_recv()" (body states the prior stream module workaround "was reverted")
 
 Reverts indicate areas where initial implementation did not survive production validation, requiring rollback.
+
+### What this tells us about execution
+
+Bug-fix ratios are a mirror of where **first-pass correctness is hardest**, not where the team is careless. The two worst ratios (`ngx_event_pipe.c` 48%, `ngx_http_upstream.c` 39%) both sit on code that manages complex lifecycle state across unreliable I/O — precisely the places where every new backend behavior forces new corner cases. The 18% ratio on `ngx_stream_proxy_module.c`, by contrast, reflects a simpler contract (L4 relay vs. L7 parsing) and newer code. What this tells leadership is that the team's **quality floor is good but its quality ceiling is capped by observability**: with 87 logging/debug calls in `upstream.c`, the team clearly anticipates ongoing debugging — but there are no structured metrics, no distributed traces, and no health-check endpoints in-tree. The team executes quality by logging + post-hoc fixes rather than by instrumentation + prevention. Only 3 reverts across 792 feature commits (0.4%) is evidence that the team **does not thrash** — when it ships, it ships with intent.
 
 ---
 
@@ -401,6 +429,10 @@ graph LR
 
 Maturity classifications: **Production** = tested and deployed at scale; Implemented = complete but limited usage; Stubbed = API defined, minimal implementation; Designed = planned, not implemented; Absent = not present. All 9 integration points above are Production maturity.
 
+### What this tells us about execution
+
+The single `ngx_http_upstream_init()` entry point serves seven first-class consumers (HTTP proxy, HTTP/2 proxy, gRPC, FastCGI, SCGI, uWSGI, memcached) plus the stream subsystem and the event pipe — and not a single consumer is classified below Production. That is a **rare and strong execution signal**: the team's API-design discipline has held up through 20 years of new protocols. When the upstream contract was defined in 2005, it was good enough to absorb HTTP/2 in 2025 without requiring a v2 of the core API — the HTTP/2 proxy was added as a new consumer, not as a fork of the framework. This tells leadership that the team **pays the upfront design cost once, and collects the reuse dividend for decades** — which is exactly the execution pattern one wants for infrastructure code. The counter-signal is the HTTP/Stream parallel implementation: the team chose operational isolation over abstraction in 2015, and that decision has now locked in a 40% duplicate maintenance surface.
+
 ---
 
 ## 10. Execution Health Scorecard
@@ -415,6 +447,10 @@ This scorecard synthesizes findings from Sections 2–9 into a leadership-facing
 | Technical Debt | 🟡 | 14 TODOs (oldest ~22 years, commit `fe0f5cc6e`); duplicated HTTP/Stream upstream implementations; event pipe buffer management debt at lines 590 and 721 |
 | Integration Health | 🟢 | 9 integration points all at Production maturity; clean API contracts via `ngx_http_upstream.h`; pluggable balancer architecture with 6 independent modules |
 | Documentation & Onboarding | 🔴 | Zero in-tree API documentation; no subsystem-level architecture guides; `README.md` has only a brief Load Balancing section; 22 years of design decisions undocumented |
+
+### What this tells us about execution
+
+The scorecard crystallises the team's execution signature: **two 🟢 strengths (integration health, sustained delivery), three 🟡 amber signals (code quality, velocity, technical debt), and two 🔴 critical gaps (knowledge distribution, documentation).** The strengths are structural and self-sustaining — they reflect an API contract and a staffing model that have survived decades of change. The amber signals are the natural wear of a long-lived, feature-accreting codebase and are manageable. **The two red dimensions are the same problem viewed from two angles**: knowledge exists only in people, and when those people leave, no in-tree artifact preserves it. This is the **single highest-leverage fix** available to leadership — every other amber or red signal degrades further if the red dimensions are not closed first.
 
 ---
 
