@@ -10,7 +10,7 @@ This document captures **every non-trivial architectural decision** made during 
 
 **How to read this document:**
 
-- **Section 2 (Architectural Decisions)** records 9 seed decisions with alternatives, rationale, and residual risks. These decisions are stable commitments; revisiting them requires a new ADR-style entry (Architecture Decision Record).
+- **Section 2 (Architectural Decisions)** records 10 seed decisions (D-001 through D-010) with alternatives, rationale, and residual risks. These decisions are stable commitments; revisiting them requires a new ADR-style entry (Architecture Decision Record).
 - **Sections 3–6 (Traceability Matrices)** map each pre-refactor source construct to its post-refactor target. A reviewer can audit any single `NGX_HTTP_*` constant, any single wire-table row, any single error-page entry, or any single direct field assignment and confirm its fate in the refactored codebase.
 - **Section 7 (Performance Impact)** captures the before/after `wrk` measurements that satisfy the <2% latency gate from AAP § 0.8.1 R-8.
 
@@ -21,13 +21,13 @@ This document captures **every non-trivial architectural decision** made during 
 | `#define NGX_HTTP_*` status-code macros in `src/http/ngx_http_request.h` lines 74–145 | 45 concrete `#define` directives covering ~30 unique codes | § 3 | 100% |
 | `ngx_http_status_lines[]` array rows in `src/http/ngx_http_header_filter_module.c` lines 58–136 | 36 explicit reason-phrase entries (excludes null-string placeholders) | § 4 | 100% |
 | `ngx_http_error_pages[]` array rows in `src/http/ngx_http_special_response.c` lines 340–412 | 35 explicit error-page entries (excludes null-string placeholders) | § 5 | 100% |
-| Direct `r->headers_out.status = ...` lvalue assignments across `src/http/` | 17 in-scope occurrences across 14 files (excluding `src/http/modules/perl/` which is out-of-scope) | § 6 | 100% of in-scope conversions |
+| Direct `r->headers_out.status = ...` lvalue assignments across `src/http/` | 17 empirical occurrences across 14 files (excluding `src/http/modules/perl/` which is out-of-scope); per D-010, `ngx_http_image_filter_module.c:594` and `ngx_http_slice_filter_module.c:176` are also OUT OF SCOPE — yielding **15 in-scope occurrences across 12 files** for actual conversion. | § 6 | 100% of in-scope conversions |
 
 **No construct is left unmapped. No gaps.**
 
 ## Architectural Decisions
 
-The following nine decisions are the foundational commitments of this refactor. Each decision record captures the alternatives considered at design time, the rationale for the chosen path, and the residual risks that the implementation and downstream operators must manage.
+The following ten decisions are the foundational commitments of this refactor. Each decision record captures the alternatives considered at design time, the rationale for the chosen path, and the residual risks that the implementation and downstream operators must manage.
 
 | ID | Decision | Alternatives Considered | Rationale | Risks |
 |---|---|---|---|---|
@@ -38,12 +38,13 @@ The following nine decisions are the foundational commitments of this refactor. 
 | D-005 | `--with-http_status_validation` is off by default | (a) On by default; (b) Removed entirely | Off-by-default ensures backward compatibility for existing nginx.conf deployments where third-party modules may emit non-standard codes. Strict mode is opt-in for nginx builders who want RFC 9110 conformance in their distribution. | Validation is latent and ungrammatical in default builds; mitigated by thorough documentation in `docs/migration/` and `docs/api/`. |
 | D-006 | Upstream pass-through bypasses strict validation | (a) Strict validation of upstream codes; (b) Upstream codes clamped to 100–599 | The prompt mandates "Status code validation applies only to nginx-originated responses, not proxied responses" and "Check `r->upstream` presence before applying strict validation." Rejecting an upstream's 999 response would be both a regression and a protocol violation. | Upstream 0/999 codes reach the access log unchanged; mitigated by the existing `$upstream_status` variable preserving visibility. |
 | D-007 | `ngx_http_status_reason()` returns sentinel `"Unknown"` for unregistered codes, never `NULL` | (a) Return `NULL`; (b) Abort via `ngx_log_error(NGX_LOG_EMERG, …)` | Null-object pattern eliminates defensive NULL checks in callers. "Unknown" matches the `ngx_http_status_lines[]` wire-table convention and what `ngx_http_header_filter_module.c` already emits for unknown codes. | Opaque failure mode if a caller inspects the reason expecting a canonical phrase; mitigated by the doc comment explicitly calling out the sentinel. |
-| D-008 | Reason phrases in the registry follow RFC 9110 canonical wording, but the `ngx_http_status_lines[]` wire table is NOT modified | (a) Update wire table to match RFC 9110; (b) Update registry to match current wire table | F-002 (RFC 9110 Reason-Phrase Alignment) is identified in the feature catalog as a Critical-priority feature, but changing the wire phrase (e.g., 302 "Moved Temporarily" → "Found") is an observable behavior change for clients and a regression from a strict backward-compatibility standpoint. The registry carries canonical phrases for future use by new code; the wire table stays on the classic wording. | The wire table and registry disagree for 6 codes; mitigated by explicit docs and an entry in this log flagging this as a future migration. |
-| D-009 | Single-commit / single-phase delivery | (a) Multi-commit staged delivery with separate "introduce API" and "migrate callers" commits | The prompt's "One-phase execution" directive ("The entire refactor will be executed by Blitzy in ONE phase. NEVER split the project into multiple phase") is explicit. The validation suite runs against a fully-converted binary in one pass. | Larger code-review surface; mitigated by the segmented PR review (`CODE_REVIEW.md`) that slices the review by domain rather than by commit. |
+| D-008 | Reason phrases in the registry follow RFC 9110 canonical wording, but the `ngx_http_status_lines[]` wire table is NOT modified | (a) Update wire table to match RFC 9110; (b) Update registry to match current wire table | F-002 (RFC 9110 Reason-Phrase Alignment) is identified in the feature catalog as a Critical-priority feature, but changing the wire phrase (e.g., 302 "Moved Temporarily" → "Found") is an observable behavior change for clients and a regression from a strict backward-compatibility standpoint. The registry carries canonical phrases for future use by new code; the wire table stays on the classic wording. | The wire table and registry disagree for **8 codes total**: **6 material divergences** (302, 408, 413, 414, 416, 503 — wholly different phrases or renamed semantics) and **2 minor phrasing variants** (405 `Not Allowed` vs RFC `Method Not Allowed`; 504 `Gateway Time-out` vs RFC `Gateway Timeout`). Both classes of divergence are captured in § 4 below with the `RFC-divergent (material)` and `RFC-divergent (minor)` flags; mitigated by explicit docs (this log, `docs/api/status_codes.md` "Wire Phrase vs Registry Phrase Divergences" section) and flagged for future migration. |
+| D-009 | Single-commit / single-phase delivery | (a) Multi-commit staged delivery with separate "introduce API" and "migrate callers" commits; (b) Multi-release staged rollout where the API ships in release N and the call-site migration ships in release N+1; (c) Feature-branch with cherry-pick rebase | **Trade-offs weighed:** Smaller per-commit review surface (favors multi-commit) vs. atomic ABI/behavior validation (favors single-commit); reduced merge-conflict potential per commit (favors multi-commit) vs. avoiding intermediate states where the API exists but call sites have not adopted it (favors single-commit); easier git-bisect granularity (favors multi-commit) vs. simplified rollback semantics — revert one commit returns the entire repository to the pre-refactor baseline (favors single-commit). **Decisive factor:** The prompt's "One-phase execution" directive ("The entire refactor will be executed by Blitzy in ONE phase. NEVER split the project into multiple phase") is explicit. **Secondary rationale:** Validation gates (nginx-tests, valgrind, wrk) MUST run against a fully-converted binary, not a partial mid-state, which makes a single-commit delivery the only path that satisfies the validation contract in one pass. | Larger code-review surface (~28 files); mitigated by the segmented PR review (`CODE_REVIEW.md`) that slices the review by domain rather than by commit, and by the bidirectional traceability matrices in this document that enable section-by-section audit. Larger merge-conflict potential against concurrent NGINX upstream changes; mitigated by the small footprint of additive includes and by the fact that direct-assignment call sites are localized to specific lines that rarely overlap with unrelated upstream patches. |
+| D-010 | `ngx_http_image_filter_module.c:594` and `ngx_http_slice_filter_module.c:176` are OUT OF SCOPE for conversion | (a) Convert both files to use `ngx_http_status_set()`; (b) Convert one but not the other; (c) Defer scope decision to Checkpoint 4 | These two files contain `r->headers_out.status = NGX_HTTP_OK;` lvalue writes, but neither is enumerated in AAP § 0.2.1's explicit "Core HTTP modules containing direct `r->headers_out.status = ...` assignments requiring conversion" 16-file list. AAP § 0.5.3 makes the Exclusive Classification Principle clear: the wildcard pattern `src/http/modules/ngx_http_*_module.c` is **not** a blanket "update every module" directive — only the explicitly enumerated set of 16 module files is converted. Both files are preserved byte-for-byte; their direct assignments continue to function under the AAP § 0.1.1 G2 backward-compatibility guarantee that the legacy field-assignment pattern remains operational. | These two direct assignments will not benefit from the strict-mode validation when `--with-http_status_validation` is active. Mitigated by: (a) both assignments use the compile-time constant `NGX_HTTP_OK` (200), which is RFC-9110-valid; (b) future scope expansion can add these files to a follow-up refactor without ABI breakage; (c) the migration guide (docs/migration/status_code_api.md) already documents how third-party module authors can opt in. |
 
 ### Decision Extension Guidance
 
-Future decisions (D-010 and beyond) SHOULD be appended to this table. Each new row MUST have the same four columns and MUST cite:
+Future decisions (D-011 and beyond) SHOULD be appended to this table. Each new row MUST have the same four columns and MUST cite:
 
 - An AAP section or project-rule anchor
 - The specific alternatives weighed
@@ -133,7 +134,8 @@ The wire table `ngx_http_status_lines[]` in `src/http/ngx_http_header_filter_mod
 **Legend:**
 
 - ✓ **Match** — wire phrase equals registry reason verbatim
-- ⚠ **RFC-divergent** — wire phrase differs from RFC 9110 canonical wording (registry has RFC-canonical phrase)
+- ⚠ **RFC-divergent (material)** — wire phrase differs from RFC 9110 canonical wording in a non-trivial way (e.g., wholly different phrase, renamed status semantics); registry has RFC-canonical phrase
+- ⚠ **RFC-divergent (minor)** — wire phrase differs from RFC 9110 canonical wording in a trivial way (hyphenation, word-order, or single-word abbreviation only) while preserving identical RFC semantics; registry has RFC-canonical phrase. Flagged separately from material divergences to enable cross-document consistency between this matrix and `docs/api/status_codes.md` "Wire Phrase vs Registry Phrase Divergences" section.
 
 | Wire Row | Wire Phrase | Source Line | Registry Reason (RFC 9110) | Divergence |
 |---|---|---|---|---|
@@ -143,7 +145,7 @@ The wire table `ngx_http_status_lines[]` in `src/http/ngx_http_header_filter_mod
 | 204 | `204 No Content` | `ngx_http_header_filter_module.c:64` | `No Content` | ✓ Match |
 | 206 | `206 Partial Content` | `ngx_http_header_filter_module.c:66` | `Partial Content` | ✓ Match |
 | 301 | `301 Moved Permanently` | `ngx_http_header_filter_module.c:75` | `Moved Permanently` | ✓ Match |
-| 302 | `302 Moved Temporarily` | `ngx_http_header_filter_module.c:76` | `Found` | ⚠ **RFC-divergent** — RFC 9110 § 15.4.3 uses `Found`; NGINX retains legacy `Moved Temporarily` for wire compatibility |
+| 302 | `302 Moved Temporarily` | `ngx_http_header_filter_module.c:76` | `Found` | ⚠ **RFC-divergent (material)** — RFC 9110 § 15.4.3 uses `Found`; NGINX retains legacy `Moved Temporarily` for wire compatibility |
 | 303 | `303 See Other` | `ngx_http_header_filter_module.c:77` | `See Other` | ✓ Match |
 | 304 | `304 Not Modified` | `ngx_http_header_filter_module.c:78` | `Not Modified` | ✓ Match |
 | 307 | `307 Temporary Redirect` | `ngx_http_header_filter_module.c:81` | `Temporary Redirect` | ✓ Match |
@@ -153,24 +155,24 @@ The wire table `ngx_http_status_lines[]` in `src/http/ngx_http_header_filter_mod
 | 402 | `402 Payment Required` | `ngx_http_header_filter_module.c:89` | `Payment Required` | ✓ Match |
 | 403 | `403 Forbidden` | `ngx_http_header_filter_module.c:90` | `Forbidden` | ✓ Match |
 | 404 | `404 Not Found` | `ngx_http_header_filter_module.c:91` | `Not Found` | ✓ Match |
-| 405 | `405 Not Allowed` | `ngx_http_header_filter_module.c:92` | `Method Not Allowed` | ⚠ Minor phrasing difference (NGINX shortens `Method Not Allowed` to `Not Allowed`); both refer to the same RFC 9110 § 15.5.6 semantics. Registry uses the RFC canonical form. |
+| 405 | `405 Not Allowed` | `ngx_http_header_filter_module.c:92` | `Method Not Allowed` | ⚠ **RFC-divergent (minor)** — RFC 9110 § 15.5.6 uses `Method Not Allowed`; NGINX shortens to `Not Allowed`. Both refer to identical RFC semantics. Registry uses the RFC canonical form. |
 | 406 | `406 Not Acceptable` | `ngx_http_header_filter_module.c:93` | `Not Acceptable` | ✓ Match |
-| 408 | `408 Request Time-out` | `ngx_http_header_filter_module.c:95` | `Request Timeout` | ⚠ **RFC-divergent** — RFC 9110 § 15.5.9 uses `Request Timeout` (no hyphen); NGINX retains hyphenated `Request Time-out` for wire compatibility |
+| 408 | `408 Request Time-out` | `ngx_http_header_filter_module.c:95` | `Request Timeout` | ⚠ **RFC-divergent (material)** — RFC 9110 § 15.5.9 uses `Request Timeout` (no hyphen); NGINX retains hyphenated `Request Time-out` for wire compatibility |
 | 409 | `409 Conflict` | `ngx_http_header_filter_module.c:96` | `Conflict` | ✓ Match |
 | 410 | `410 Gone` | `ngx_http_header_filter_module.c:97` | `Gone` | ✓ Match |
 | 411 | `411 Length Required` | `ngx_http_header_filter_module.c:98` | `Length Required` | ✓ Match |
 | 412 | `412 Precondition Failed` | `ngx_http_header_filter_module.c:99` | `Precondition Failed` | ✓ Match |
-| 413 | `413 Request Entity Too Large` | `ngx_http_header_filter_module.c:100` | `Content Too Large` | ⚠ **RFC-divergent** — RFC 9110 § 15.5.14 renames to `Content Too Large`; NGINX retains legacy `Request Entity Too Large` for wire compatibility |
-| 414 | `414 Request-URI Too Large` | `ngx_http_header_filter_module.c:101` | `URI Too Long` | ⚠ **RFC-divergent** — RFC 9110 § 15.5.15 renames to `URI Too Long`; NGINX retains legacy `Request-URI Too Large` for wire compatibility |
+| 413 | `413 Request Entity Too Large` | `ngx_http_header_filter_module.c:100` | `Content Too Large` | ⚠ **RFC-divergent (material)** — RFC 9110 § 15.5.14 renames to `Content Too Large`; NGINX retains legacy `Request Entity Too Large` for wire compatibility |
+| 414 | `414 Request-URI Too Large` | `ngx_http_header_filter_module.c:101` | `URI Too Long` | ⚠ **RFC-divergent (material)** — RFC 9110 § 15.5.15 renames to `URI Too Long`; NGINX retains legacy `Request-URI Too Large` for wire compatibility |
 | 415 | `415 Unsupported Media Type` | `ngx_http_header_filter_module.c:102` | `Unsupported Media Type` | ✓ Match |
-| 416 | `416 Requested Range Not Satisfiable` | `ngx_http_header_filter_module.c:103` | `Range Not Satisfiable` | ⚠ **RFC-divergent** — RFC 9110 § 15.5.17 shortens to `Range Not Satisfiable`; NGINX retains legacy `Requested Range Not Satisfiable` for wire compatibility |
+| 416 | `416 Requested Range Not Satisfiable` | `ngx_http_header_filter_module.c:103` | `Range Not Satisfiable` | ⚠ **RFC-divergent (material)** — RFC 9110 § 15.5.17 shortens to `Range Not Satisfiable`; NGINX retains legacy `Requested Range Not Satisfiable` for wire compatibility |
 | 421 | `421 Misdirected Request` | `ngx_http_header_filter_module.c:108` | `Misdirected Request` | ✓ Match |
 | 429 | `429 Too Many Requests` | `ngx_http_header_filter_module.c:116` | `Too Many Requests` | ✓ Match |
 | 500 | `500 Internal Server Error` | `ngx_http_header_filter_module.c:121` | `Internal Server Error` | ✓ Match |
 | 501 | `501 Not Implemented` | `ngx_http_header_filter_module.c:122` | `Not Implemented` | ✓ Match |
 | 502 | `502 Bad Gateway` | `ngx_http_header_filter_module.c:123` | `Bad Gateway` | ✓ Match |
-| 503 | `503 Service Temporarily Unavailable` | `ngx_http_header_filter_module.c:124` | `Service Unavailable` | ⚠ **RFC-divergent** — RFC 9110 § 15.6.4 uses `Service Unavailable`; NGINX retains verbose `Service Temporarily Unavailable` for wire compatibility |
-| 504 | `504 Gateway Time-out` | `ngx_http_header_filter_module.c:125` | `Gateway Timeout` | ⚠ Minor phrasing difference (NGINX uses hyphenated `Gateway Time-out`); semantically equivalent to RFC 9110 § 15.6.5 `Gateway Timeout`. Registry uses the RFC canonical form. |
+| 503 | `503 Service Temporarily Unavailable` | `ngx_http_header_filter_module.c:124` | `Service Unavailable` | ⚠ **RFC-divergent (material)** — RFC 9110 § 15.6.4 uses `Service Unavailable`; NGINX retains verbose `Service Temporarily Unavailable` for wire compatibility |
+| 504 | `504 Gateway Time-out` | `ngx_http_header_filter_module.c:125` | `Gateway Timeout` | ⚠ **RFC-divergent (minor)** — RFC 9110 § 15.6.5 uses `Gateway Timeout`; NGINX uses hyphenated `Gateway Time-out`. Both refer to identical RFC semantics. Registry uses the RFC canonical form. |
 | 505 | `505 HTTP Version Not Supported` | `ngx_http_header_filter_module.c:126` | `HTTP Version Not Supported` | ✓ Match |
 | 507 | `507 Insufficient Storage` | `ngx_http_header_filter_module.c:128` | `Insufficient Storage` | ✓ Match |
 
@@ -178,28 +180,44 @@ The wire table `ngx_http_status_lines[]` in `src/http/ngx_http_header_filter_mod
 
 - **Exact matches:** 28 rows
 - **RFC-divergent (material):** 6 rows — 302, 408, 413, 414, 416, 503 (as enumerated in AAP § 0.2.2 and § 0.7.2 D-008)
-- **Minor phrasing variants:** 2 rows — 405, 504 (hyphenation / shortening; same semantic code)
+- **RFC-divergent (minor):** 2 rows — 405, 504 (hyphenation / shortening; same semantic code)
 - **Total:** 36 rows enumerated in the table above
 
-**Boundary macro parity:**
+**Boundary macro parity (file-scoped `#define`s in `ngx_http_header_filter_module.c`):**
 
-- `NGX_HTTP_LAST_2XX = 207` in `ngx_http_header_filter_module.c:70`
-- `NGX_HTTP_OFF_3XX = (NGX_HTTP_LAST_2XX - 200)` in `ngx_http_header_filter_module.c:71`
-- `NGX_HTTP_LAST_3XX = 309` in `ngx_http_header_filter_module.c:84`
-- `NGX_HTTP_LAST_4XX = 430` in `ngx_http_header_filter_module.c:118`
-- `NGX_HTTP_LAST_5XX = 508` in `ngx_http_header_filter_module.c:134`
+These macros are translation-unit-private (file-scope `#define`s, not exported in any header) and are used only for class-index arithmetic into the `ngx_http_status_lines[]` array. Every line citation below was verified against the live source via `grep -n "NGX_HTTP_LAST_\|NGX_HTTP_OFF_" src/http/ngx_http_header_filter_module.c`.
 
-All boundary macros are **preserved verbatim** per AAP § 0.3.1 A and D-008.
+| Macro | Value | Source Line | Purpose |
+|---|---|---|---|
+| `NGX_HTTP_LAST_2XX` | 207 | `ngx_http_header_filter_module.c:70` | One past the last 2xx code present in the wire table (last present code is 206 Partial Content). Used as the upper bound of the 2xx slice in `ngx_http_status_lines[]` indexing arithmetic at lines 226 and 252. |
+| `NGX_HTTP_OFF_3XX` | `(NGX_HTTP_LAST_2XX - 200)` = 7 | `ngx_http_header_filter_module.c:71` | Offset into `ngx_http_status_lines[]` where the 3xx slice begins. |
+| `NGX_HTTP_LAST_3XX` | 309 | `ngx_http_header_filter_module.c:84` | One past the last 3xx code. Used as the upper bound of the 3xx slice (e.g., 308 Permanent Redirect). |
+| `NGX_HTTP_OFF_4XX` | `(NGX_HTTP_LAST_3XX - 301 + NGX_HTTP_OFF_3XX)` | `ngx_http_header_filter_module.c:85` | Offset into `ngx_http_status_lines[]` where the 4xx slice begins. |
+| `NGX_HTTP_LAST_4XX` | 430 | `ngx_http_header_filter_module.c:118` | One past the last 4xx code in the wire table (the table runs through 429 Too Many Requests then jumps to 5xx; codes 430+ are not in the wire table). |
+| `NGX_HTTP_OFF_5XX` | `(NGX_HTTP_LAST_4XX - 400 + NGX_HTTP_OFF_4XX)` | `ngx_http_header_filter_module.c:119` | Offset into `ngx_http_status_lines[]` where the 5xx slice begins. |
+| `NGX_HTTP_LAST_5XX` | 508 | `ngx_http_header_filter_module.c:134` | One past the last 5xx code in the wire table (last present code is 507 Insufficient Storage). |
+
+All boundary macros above are **preserved verbatim** per AAP § 0.3.1 A and D-008.
 
 ## Traceability Matrix — Error Pages (`ngx_http_error_pages[]` → registry)
 
 The error-pages table `ngx_http_error_pages[]` in `src/http/ngx_http_special_response.c` lines 340–412 provides HTML response bodies for the listed status codes. Per AAP § 0.4.4 and D-008, this table is **preserved byte-for-byte** — the refactor does NOT modify any entry or HTML template.
 
-**Boundary macro divergence (documented in AAP § 0.2.2):**
+**Boundary macro divergence (file-scoped `#define`s in `ngx_http_special_response.c`):**
 
-- `NGX_HTTP_LAST_2XX = 202` in `ngx_http_special_response.c:344`
+These macros are translation-unit-private (file-scope `#define`s, not exported in any header) and are used only for class-index arithmetic into the `ngx_http_error_pages[]` array. They share macro NAMES with the header-filter module but resolve to different VALUES. Every line citation below was verified against the live source via `grep -n "NGX_HTTP_LAST_" src/http/ngx_http_special_response.c`.
 
-This value (202) **differs** from the header-filter module's definition (207). This divergence is pre-existing NGINX behavior. It is **preserved as-is** per F-004 in the feature catalog (tracked for future harmonization but out of scope for this refactor).
+| Macro | Value | Source Line | Header-Filter Counterpart | Divergence? |
+|---|---|---|---|---|
+| `NGX_HTTP_LAST_2XX` | **202** | `ngx_http_special_response.c:344` | 207 (header-filter) | ⚠ **Yes — values differ** |
+| `NGX_HTTP_OFF_3XX` | `(NGX_HTTP_LAST_2XX - 201)` = 1 | `ngx_http_special_response.c:345` | `(NGX_HTTP_LAST_2XX - 200)` = 7 (header-filter) | ⚠ Yes — different formula |
+| `NGX_HTTP_LAST_3XX` | 309 | `ngx_http_special_response.c:357` | 309 (header-filter) | ✓ Match |
+| `NGX_HTTP_OFF_4XX` | `(NGX_HTTP_LAST_3XX - 301 + NGX_HTTP_OFF_3XX)` | `ngx_http_special_response.c:358` | Same formula (header-filter) | ✓ Match |
+| `NGX_HTTP_LAST_4XX` | 430 | `ngx_http_special_response.c:391` | 430 (header-filter) | ✓ Match |
+| `NGX_HTTP_OFF_5XX` | `(NGX_HTTP_LAST_4XX - 400 + NGX_HTTP_OFF_4XX)` | `ngx_http_special_response.c:392` | Same formula (header-filter) | ✓ Match |
+| `NGX_HTTP_LAST_5XX` | 508 | `ngx_http_special_response.c:410` | 508 (header-filter) | ✓ Match |
+
+**Divergence rationale:** The two files use different `LAST_2XX` values because they index different tables. The header-filter's `ngx_http_status_lines[]` carries entries for 200, 201, 202, 203 (placeholder), 204, 205 (placeholder), 206 — so `LAST_2XX = 207` is "one past the last present 2xx index." The special-response handler's `ngx_http_error_pages[]` only carries entries for codes that have HTML error templates, and no 2xx code in that range has an error page (a 2xx is by definition a success), so the table runs `[202, 203, ...]` only as a sparse placeholder; `LAST_2XX = 202` is the lower bound of the reachable range for the special-response slice arithmetic. The `OFF_3XX` formulas differ correspondingly: header-filter offsets by `LAST_2XX - 200` (start of 2xx range), while special-response offsets by `LAST_2XX - 201` (start of error-page range). This divergence is **pre-existing NGINX behavior** documented in AAP § 0.2.2; it is **preserved as-is** per F-004 in the feature catalog (tracked for future harmonization but explicitly out of scope for this refactor).
 
 | Error-Page Row | HTML Template | Source Line | Registry Entry | Preservation |
 |---|---|---|---|---|
@@ -265,12 +283,12 @@ Every direct `r->headers_out.status = X;` lvalue assignment in `src/http/` is co
 | `src/http/modules/ngx_http_dav_module.c` | 296 | `r->headers_out.status = status;` | `if (ngx_http_status_set(r, status) != NGX_OK) { return NGX_HTTP_INTERNAL_SERVER_ERROR; }` | R3 — runtime variable `status` (could be 201, 204, or DAV-specific), defensive error return |
 | `src/http/modules/ngx_http_flv_module.c` | 187 | `r->headers_out.status = NGX_HTTP_OK;` | `(void) ngx_http_status_set(r, NGX_HTTP_OK);` | R1 |
 | `src/http/modules/ngx_http_gzip_static_module.c` | 227 | `r->headers_out.status = NGX_HTTP_OK;` | `(void) ngx_http_status_set(r, NGX_HTTP_OK);` | R1 |
-| `src/http/modules/ngx_http_image_filter_module.c` | 594 | `r->headers_out.status = NGX_HTTP_OK;` | Per AAP § 0.2.1 NOT in the explicit modified list — read-only consumer treatment. NOTE: this file IS in the actual grep output and may require conversion if its direct assignment is in-scope. Reviewer should confirm whether this file is converted. | R1 (if converted) |
+| `src/http/modules/ngx_http_image_filter_module.c` | 594 | `r->headers_out.status = NGX_HTTP_OK;` | **OUT OF SCOPE — preserved byte-for-byte.** Per AAP § 0.2.1 enumeration, `ngx_http_image_filter_module.c` is NOT in the explicit modified-files list. Per the Exclusive Classification Principle and AAP § 0.5.3 ("CRITICAL clarification: The pattern `src/http/modules/ngx_http_*_module.c` is **not** a blanket 'update every module' directive. The set of modified files is the explicit … enumeration"), this file is OUT OF SCOPE for this refactor. Its direct assignment continues to compile and execute correctly because the legacy direct-assignment field-access pattern remains functional per AAP § 0.1.1 G2 ("The legacy direct-assignment field-access pattern remains functional"). | R1 — **NOT CONVERTED** |
 | `src/http/modules/ngx_http_mp4_module.c` | 678 | `r->headers_out.status = NGX_HTTP_OK;` | `(void) ngx_http_status_set(r, NGX_HTTP_OK);` | R1 |
 | `src/http/modules/ngx_http_not_modified_filter_module.c` | 94 | `r->headers_out.status = NGX_HTTP_NOT_MODIFIED;` | `(void) ngx_http_status_set(r, NGX_HTTP_NOT_MODIFIED);` | R1 |
 | `src/http/modules/ngx_http_range_filter_module.c` | 234 | `r->headers_out.status = NGX_HTTP_PARTIAL_CONTENT;` | `(void) ngx_http_status_set(r, NGX_HTTP_PARTIAL_CONTENT);` | R1 |
 | `src/http/modules/ngx_http_range_filter_module.c` | 618 | `r->headers_out.status = NGX_HTTP_RANGE_NOT_SATISFIABLE;` | `(void) ngx_http_status_set(r, NGX_HTTP_RANGE_NOT_SATISFIABLE);` | R1 |
-| `src/http/modules/ngx_http_slice_filter_module.c` | 176 | `r->headers_out.status = NGX_HTTP_OK;` | Per AAP § 0.2.1 NOT in the explicit modified list — reviewer should confirm whether this file is converted. If not converted, this direct assignment persists alongside the new API. | R1 (if converted) |
+| `src/http/modules/ngx_http_slice_filter_module.c` | 176 | `r->headers_out.status = NGX_HTTP_OK;` | **OUT OF SCOPE — preserved byte-for-byte.** Per AAP § 0.2.1 enumeration, `ngx_http_slice_filter_module.c` is NOT in the explicit modified-files list (it is correctly classified as a read-only consumer; see "Module files that reference `NGX_HTTP_*` status constants but perform no direct assignments" — note that the AAP § 0.2.1 read-only consumers section listed this module by name based on its primary status-comparison usage in slice-coordination logic; the single `r->headers_out.status` lvalue assignment at line 176 is incidental to that classification). Per the Exclusive Classification Principle, this file is OUT OF SCOPE for conversion. The direct assignment at line 176 persists alongside the new API; this is explicitly permitted under AAP § 0.1.1 G2 backward compatibility. | R1 — **NOT CONVERTED** |
 | `src/http/modules/ngx_http_static_module.c` | 229 | `r->headers_out.status = NGX_HTTP_OK;` | `(void) ngx_http_status_set(r, NGX_HTTP_OK);` | R1 |
 | `src/http/modules/ngx_http_stub_status_module.c` | 137 | `r->headers_out.status = NGX_HTTP_OK;` | `(void) ngx_http_status_set(r, NGX_HTTP_OK);` | R1 |
 

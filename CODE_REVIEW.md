@@ -1,5 +1,16 @@
 ---
 title: "Centralized HTTP Status Code API — Segmented PR Review"
+version: "1.0"
+status: "OPEN"
+owner: "Principal Reviewer Agent"
+reviewers:
+  infrastructure_devops: "Infrastructure/DevOps Expert Agent"
+  security: "Security Expert Agent"
+  backend_architecture: "Backend Architecture Expert Agent"
+  qa_test_integrity: "QA/Test Integrity Expert Agent"
+  business_domain: "Business/Domain Expert Agent"
+  frontend: "Frontend Expert Agent"
+  principal_reviewer: "Principal Reviewer Agent"
 refactor_id: "nginx-status-code-api-2025"
 nginx_baseline: "1.29.5"
 nginx_revision: "master_fc613b"
@@ -106,7 +117,7 @@ The following four status values are the only legal values for any `status:` fie
 
 ## Files-in-Scope Coverage Matrix
 
-The 26 in-scope files (21 source/build files + 5 documentation/deck artifacts) are partitioned across exactly one domain phase each. No file is double-assigned. The Frontend phase carries zero files by design (no UI surface).
+The 32 in-scope files (27 source/build files + 5 documentation/deck artifacts) are partitioned across exactly one domain phase each. No file is double-assigned. The Frontend phase carries zero files by design (no UI surface). File counts by phase: Infrastructure/DevOps = 4, Security = 3, Backend Architecture = 20, QA/Test Integrity = 1, Business/Domain = 4, Frontend = 0; total = 32.
 
 | # | File | Domain Phase |
 |---|------|--------------|

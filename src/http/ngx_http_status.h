@@ -70,6 +70,21 @@
  * NGINX-specific 4xx extension (e.g., 444) carries both
  * NGX_HTTP_STATUS_CLIENT_ERROR and NGX_HTTP_STATUS_NGINX_EXT.
  *
+ * Mutual-exclusivity contract for the three RFC 9110 status-class flags
+ * (NGX_HTTP_STATUS_INFORMATIONAL, NGX_HTTP_STATUS_CLIENT_ERROR, and
+ * NGX_HTTP_STATUS_SERVER_ERROR): AT MOST ONE of these three flags may be
+ * set per registry entry.  A single status code maps to exactly one RFC
+ * 9110 status class; setting more than one class flag on a single entry
+ * is a registry-population bug.  Note that 2xx Successful and 3xx
+ * Redirection codes carry NO class flag (the absence of a class flag
+ * implicitly means 2xx or 3xx; cacheability is signaled separately via
+ * NGX_HTTP_STATUS_CACHEABLE).
+ *
+ * NGX_HTTP_STATUS_CACHEABLE and NGX_HTTP_STATUS_NGINX_EXT compose freely
+ * with any class flag (or no class flag).  See the parallel discussion
+ * in docs/api/status_codes.md (Type Definitions section, line 94) for
+ * the same contract restated as part of the API reference.
+ *
  * Bit values are powers of two and reserve the low byte for class flags;
  * the upper bits remain free for future extensions without breaking ABI.
  */

@@ -680,6 +680,7 @@ A: No plans. Per the project's permanent backward-compatibility commitment (AAP 
 - [NGINX development guide](https://nginx.org/en/docs/dev/development_guide.html) — Coding conventions for NGINX module authors
 - NGINX source files referenced as live migration examples:
   - `src/http/modules/ngx_http_static_module.c:229` — Pattern 1 (`NGX_HTTP_OK` constant)
+  - `src/http/modules/ngx_http_autoindex_module.c:258` — Pattern 1 (`NGX_HTTP_OK` constant on directory-listing serve)
   - `src/http/modules/ngx_http_stub_status_module.c:137` — Pattern 1 (`NGX_HTTP_OK` constant)
   - `src/http/modules/ngx_http_not_modified_filter_module.c:94` — Pattern 1 (`NGX_HTTP_NOT_MODIFIED` 304 constant)
   - `src/http/modules/ngx_http_range_filter_module.c:234` — Pattern 1 (`NGX_HTTP_PARTIAL_CONTENT` 206 constant)
