@@ -1,0 +1,2487 @@
+
+In auto/options line 29:
+NGX_RPATH=NO
+^-------^ SC2034 (warning): NGX_RPATH appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 39:
+EVENT_FOUND=NO
+^---------^ SC2034 (warning): EVENT_FOUND appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 141:
+DYNAMIC_MODULES=
+^-------------^ SC2034 (warning): DYNAMIC_MODULES appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 142:
+DYNAMIC_MODULES_SRCS=
+^------------------^ SC2034 (warning): DYNAMIC_MODULES_SRCS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 145:
+NGX_ADDON_SRCS=
+^------------^ SC2034 (warning): NGX_ADDON_SRCS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 146:
+NGX_ADDON_DEPS=
+^------------^ SC2034 (warning): NGX_ADDON_DEPS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 154:
+PCRE_CONF_OPT=
+^-----------^ SC2034 (warning): PCRE_CONF_OPT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 158:
+USE_OPENSSL=NO
+^---------^ SC2034 (warning): USE_OPENSSL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 159:
+USE_OPENSSL_QUIC=NO
+^--------------^ SC2034 (warning): USE_OPENSSL_QUIC appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 162:
+USE_ZLIB=NO
+^------^ SC2034 (warning): USE_ZLIB appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 167:
+USE_PERL=NO
+^------^ SC2034 (warning): USE_PERL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 170:
+USE_LIBXSLT=NO
+^---------^ SC2034 (warning): USE_LIBXSLT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 171:
+USE_LIBGD=NO
+^-------^ SC2034 (warning): USE_LIBGD appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 172:
+USE_GEOIP=NO
+^-------^ SC2034 (warning): USE_GEOIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 177:
+SO_COOKIE_FOUND=NO
+^-------------^ SC2034 (warning): SO_COOKIE_FOUND appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 181:
+NGX_CPU_CACHE_LINE=
+^----------------^ SC2034 (warning): NGX_CPU_CACHE_LINE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 189:
+    opt="$opt `echo $option | sed -e \"s/\(--[^=]*=\)\(.* .*\)/\1'\2'/\"`"
+              ^-- SC2006 (style): Use $(...) notation instead of legacy backticks `...`.
+                    ^-----^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    opt="$opt $(echo "$option" | sed -e \"s/\(--[^=]*=\)\(.* .*\)/\1'\2'/\")"
+
+
+In auto/options line 192:
+        -*=*) value=`echo "$option" | sed -e 's/[-_a-zA-Z0-9]*=//'` ;;
+                    ^-- SC2006 (style): Use $(...) notation instead of legacy backticks `...`.
+
+Did you mean: 
+        -*=*) value=$(echo "$option" | sed -e 's/[-_a-zA-Z0-9]*=//') ;;
+
+
+In auto/options line 207:
+        --user=*)                        NGX_USER="$value"          ;;
+                                         ^------^ SC2034 (warning): NGX_USER appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 208:
+        --group=*)                       NGX_GROUP="$value"         ;;
+                                         ^-------^ SC2034 (warning): NGX_GROUP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 212:
+        --build=*)                       NGX_BUILD="$value"         ;;
+                                         ^-------^ SC2034 (warning): NGX_BUILD appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 213:
+        --builddir=*)                    NGX_OBJS="$value"          ;;
+                                         ^------^ SC2034 (warning): NGX_OBJS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 216:
+        --without-select_module)         EVENT_SELECT=NONE          ;;
+                                         ^----------^ SC2034 (warning): EVENT_SELECT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 218:
+        --without-poll_module)           EVENT_POLL=NONE            ;;
+                                         ^--------^ SC2034 (warning): EVENT_POLL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 220:
+        --with-threads)                  USE_THREADS=YES            ;;
+                                         ^---------^ SC2034 (warning): USE_THREADS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 222:
+        --with-file-aio)                 NGX_FILE_AIO=YES           ;;
+                                         ^----------^ SC2034 (warning): NGX_FILE_AIO appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 224:
+        --without-quic_bpf_module)       QUIC_BPF=NONE              ;;
+                                         ^------^ SC2034 (warning): QUIC_BPF appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 231:
+        --without-http)                  HTTP=NO                    ;;
+                                         ^--^ SC2034 (warning): HTTP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 232:
+        --without-http-cache)            HTTP_CACHE=NO              ;;
+                                         ^--------^ SC2034 (warning): HTTP_CACHE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 241:
+        --with-http_ssl_module)          HTTP_SSL=YES               ;;
+                                         ^------^ SC2034 (warning): HTTP_SSL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 242:
+        --with-http_v2_module)           HTTP_V2=YES                ;;
+                                         ^-----^ SC2034 (warning): HTTP_V2 appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 243:
+        --with-http_v3_module)           HTTP_V3=YES                ;;
+                                         ^-----^ SC2034 (warning): HTTP_V3 appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 244:
+        --with-http_realip_module)       HTTP_REALIP=YES            ;;
+                                         ^---------^ SC2034 (warning): HTTP_REALIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 245:
+        --with-http_addition_module)     HTTP_ADDITION=YES          ;;
+                                         ^-----------^ SC2034 (warning): HTTP_ADDITION appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 247:
+        --with-http_xslt_module=dynamic) HTTP_XSLT=DYNAMIC          ;;
+                                         ^-------^ SC2034 (warning): HTTP_XSLT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 250:
+                                         HTTP_IMAGE_FILTER=DYNAMIC  ;;
+                                         ^---------------^ SC2034 (warning): HTTP_IMAGE_FILTER appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 253:
+                                         HTTP_GEOIP=DYNAMIC         ;;
+                                         ^--------^ SC2034 (warning): HTTP_GEOIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 254:
+        --with-http_sub_module)          HTTP_SUB=YES               ;;
+                                         ^------^ SC2034 (warning): HTTP_SUB appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 255:
+        --with-http_dav_module)          HTTP_DAV=YES               ;;
+                                         ^------^ SC2034 (warning): HTTP_DAV appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 256:
+        --with-http_flv_module)          HTTP_FLV=YES               ;;
+                                         ^------^ SC2034 (warning): HTTP_FLV appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 257:
+        --with-http_mp4_module)          HTTP_MP4=YES               ;;
+                                         ^------^ SC2034 (warning): HTTP_MP4 appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 258:
+        --with-http_gunzip_module)       HTTP_GUNZIP=YES            ;;
+                                         ^---------^ SC2034 (warning): HTTP_GUNZIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 259:
+        --with-http_gzip_static_module)  HTTP_GZIP_STATIC=YES       ;;
+                                         ^--------------^ SC2034 (warning): HTTP_GZIP_STATIC appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 260:
+        --with-http_auth_request_module) HTTP_AUTH_REQUEST=YES      ;;
+                                         ^---------------^ SC2034 (warning): HTTP_AUTH_REQUEST appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 261:
+        --with-http_random_index_module) HTTP_RANDOM_INDEX=YES      ;;
+                                         ^---------------^ SC2034 (warning): HTTP_RANDOM_INDEX appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 262:
+        --with-http_secure_link_module)  HTTP_SECURE_LINK=YES       ;;
+                                         ^--------------^ SC2034 (warning): HTTP_SECURE_LINK appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 263:
+        --with-http_degradation_module)  HTTP_DEGRADATION=YES       ;;
+                                         ^--------------^ SC2034 (warning): HTTP_DEGRADATION appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 264:
+        --with-http_slice_module)        HTTP_SLICE=YES             ;;
+                                         ^--------^ SC2034 (warning): HTTP_SLICE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 266:
+        --without-http_charset_module)   HTTP_CHARSET=NO            ;;
+                                         ^----------^ SC2034 (warning): HTTP_CHARSET appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 267:
+        --without-http_gzip_module)      HTTP_GZIP=NO               ;;
+                                         ^-------^ SC2034 (warning): HTTP_GZIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 268:
+        --without-http_ssi_module)       HTTP_SSI=NO                ;;
+                                         ^------^ SC2034 (warning): HTTP_SSI appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 269:
+        --without-http_userid_module)    HTTP_USERID=NO             ;;
+                                         ^---------^ SC2034 (warning): HTTP_USERID appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 270:
+        --without-http_access_module)    HTTP_ACCESS=NO             ;;
+                                         ^---------^ SC2034 (warning): HTTP_ACCESS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 271:
+        --without-http_auth_basic_module) HTTP_AUTH_BASIC=NO        ;;
+                                          ^-------------^ SC2034 (warning): HTTP_AUTH_BASIC appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 272:
+        --without-http_mirror_module)    HTTP_MIRROR=NO             ;;
+                                         ^---------^ SC2034 (warning): HTTP_MIRROR appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 273:
+        --without-http_autoindex_module) HTTP_AUTOINDEX=NO          ;;
+                                         ^------------^ SC2034 (warning): HTTP_AUTOINDEX appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 274:
+        --without-http_status_module)    HTTP_STATUS=NO             ;;
+                                         ^---------^ SC2034 (warning): HTTP_STATUS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 275:
+        --without-http_geo_module)       HTTP_GEO=NO                ;;
+                                         ^------^ SC2034 (warning): HTTP_GEO appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 276:
+        --without-http_map_module)       HTTP_MAP=NO                ;;
+                                         ^------^ SC2034 (warning): HTTP_MAP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 277:
+        --without-http_split_clients_module) HTTP_SPLIT_CLIENTS=NO  ;;
+                                             ^----------------^ SC2034 (warning): HTTP_SPLIT_CLIENTS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 278:
+        --without-http_referer_module)   HTTP_REFERER=NO            ;;
+                                         ^----------^ SC2034 (warning): HTTP_REFERER appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 279:
+        --without-http_rewrite_module)   HTTP_REWRITE=NO            ;;
+                                         ^----------^ SC2034 (warning): HTTP_REWRITE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 280:
+        --without-http_proxy_module)     HTTP_PROXY=NO              ;;
+                                         ^--------^ SC2034 (warning): HTTP_PROXY appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 281:
+        --without-http_fastcgi_module)   HTTP_FASTCGI=NO            ;;
+                                         ^----------^ SC2034 (warning): HTTP_FASTCGI appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 282:
+        --without-http_uwsgi_module)     HTTP_UWSGI=NO              ;;
+                                         ^--------^ SC2034 (warning): HTTP_UWSGI appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 283:
+        --without-http_scgi_module)      HTTP_SCGI=NO               ;;
+                                         ^-------^ SC2034 (warning): HTTP_SCGI appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 284:
+        --without-http_grpc_module)      HTTP_GRPC=NO               ;;
+                                         ^-------^ SC2034 (warning): HTTP_GRPC appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 285:
+        --without-http_memcached_module) HTTP_MEMCACHED=NO          ;;
+                                         ^------------^ SC2034 (warning): HTTP_MEMCACHED appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 286:
+        --without-http_limit_conn_module) HTTP_LIMIT_CONN=NO        ;;
+                                          ^-------------^ SC2034 (warning): HTTP_LIMIT_CONN appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 287:
+        --without-http_limit_req_module) HTTP_LIMIT_REQ=NO         ;;
+                                         ^------------^ SC2034 (warning): HTTP_LIMIT_REQ appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 288:
+        --without-http_empty_gif_module) HTTP_EMPTY_GIF=NO          ;;
+                                         ^------------^ SC2034 (warning): HTTP_EMPTY_GIF appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 289:
+        --without-http_browser_module)   HTTP_BROWSER=NO            ;;
+                                         ^----------^ SC2034 (warning): HTTP_BROWSER appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 290:
+        --without-http_upstream_hash_module) HTTP_UPSTREAM_HASH=NO  ;;
+                                             ^----------------^ SC2034 (warning): HTTP_UPSTREAM_HASH appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 291:
+        --without-http_upstream_ip_hash_module) HTTP_UPSTREAM_IP_HASH=NO ;;
+                                                ^-------------------^ SC2034 (warning): HTTP_UPSTREAM_IP_HASH appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 293:
+                                         HTTP_UPSTREAM_LEAST_CONN=NO ;;
+                                         ^----------------------^ SC2034 (warning): HTTP_UPSTREAM_LEAST_CONN appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 295:
+                                         HTTP_UPSTREAM_RANDOM=NO    ;;
+                                         ^------------------^ SC2034 (warning): HTTP_UPSTREAM_RANDOM appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 296:
+        --without-http_upstream_keepalive_module) HTTP_UPSTREAM_KEEPALIVE=NO ;;
+                                                  ^---------------------^ SC2034 (warning): HTTP_UPSTREAM_KEEPALIVE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 297:
+        --without-http_upstream_zone_module) HTTP_UPSTREAM_ZONE=NO  ;;
+                                             ^----------------^ SC2034 (warning): HTTP_UPSTREAM_ZONE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 300:
+        --with-http_perl_module=dynamic) HTTP_PERL=DYNAMIC          ;;
+                                         ^-------^ SC2034 (warning): HTTP_PERL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 302:
+        --with-perl=*)                   NGX_PERL="$value"          ;;
+                                         ^------^ SC2034 (warning): NGX_PERL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 305:
+        --with-http_stub_status_module)  HTTP_STUB_STATUS=YES       ;;
+                                         ^--------------^ SC2034 (warning): HTTP_STUB_STATUS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 308:
+        --with-http_status_validation)   HTTP_STATUS_VALIDATION=YES ;;
+                                         ^--------------------^ SC2034 (warning): HTTP_STATUS_VALIDATION appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 321:
+            MAIL_SSL=YES
+            ^------^ SC2034 (warning): MAIL_SSL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 326:
+        --without-mail_pop3_module)      MAIL_POP3=NO               ;;
+                                         ^-------^ SC2034 (warning): MAIL_POP3 appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 327:
+        --without-mail_imap_module)      MAIL_IMAP=NO               ;;
+                                         ^-------^ SC2034 (warning): MAIL_IMAP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 328:
+        --without-mail_smtp_module)      MAIL_SMTP=NO               ;;
+                                         ^-------^ SC2034 (warning): MAIL_SMTP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 331:
+        --with-stream=dynamic)           STREAM=DYNAMIC             ;;
+                                         ^----^ SC2034 (warning): STREAM appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 332:
+        --with-stream_ssl_module)        STREAM_SSL=YES             ;;
+                                         ^--------^ SC2034 (warning): STREAM_SSL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 333:
+        --with-stream_realip_module)     STREAM_REALIP=YES          ;;
+                                         ^-----------^ SC2034 (warning): STREAM_REALIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 336:
+                                         STREAM_GEOIP=DYNAMIC       ;;
+                                         ^----------^ SC2034 (warning): STREAM_GEOIP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 338:
+                                         STREAM_SSL_PREREAD=YES     ;;
+                                         ^----------------^ SC2034 (warning): STREAM_SSL_PREREAD appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 340:
+                                         STREAM_LIMIT_CONN=NO       ;;
+                                         ^---------------^ SC2034 (warning): STREAM_LIMIT_CONN appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 341:
+        --without-stream_access_module)  STREAM_ACCESS=NO           ;;
+                                         ^-----------^ SC2034 (warning): STREAM_ACCESS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 342:
+        --without-stream_geo_module)     STREAM_GEO=NO              ;;
+                                         ^--------^ SC2034 (warning): STREAM_GEO appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 343:
+        --without-stream_map_module)     STREAM_MAP=NO              ;;
+                                         ^--------^ SC2034 (warning): STREAM_MAP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 345:
+                                         STREAM_SPLIT_CLIENTS=NO    ;;
+                                         ^------------------^ SC2034 (warning): STREAM_SPLIT_CLIENTS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 346:
+        --without-stream_return_module)  STREAM_RETURN=NO           ;;
+                                         ^-----------^ SC2034 (warning): STREAM_RETURN appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 347:
+        --without-stream_pass_module)    STREAM_PASS=NO             ;;
+                                         ^---------^ SC2034 (warning): STREAM_PASS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 348:
+        --without-stream_set_module)     STREAM_SET=NO              ;;
+                                         ^--------^ SC2034 (warning): STREAM_SET appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 350:
+                                         STREAM_UPSTREAM_HASH=NO    ;;
+                                         ^------------------^ SC2034 (warning): STREAM_UPSTREAM_HASH appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 352:
+                                         STREAM_UPSTREAM_LEAST_CONN=NO ;;
+                                         ^------------------------^ SC2034 (warning): STREAM_UPSTREAM_LEAST_CONN appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 354:
+                                         STREAM_UPSTREAM_RANDOM=NO  ;;
+                                         ^--------------------^ SC2034 (warning): STREAM_UPSTREAM_RANDOM appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 356:
+                                         STREAM_UPSTREAM_ZONE=NO    ;;
+                                         ^------------------^ SC2034 (warning): STREAM_UPSTREAM_ZONE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 358:
+        --with-google_perftools_module)  NGX_GOOGLE_PERFTOOLS=YES   ;;
+                                         ^------------------^ SC2034 (warning): NGX_GOOGLE_PERFTOOLS appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 359:
+        --with-cpp_test_module)          NGX_CPP_TEST=YES           ;;
+                                         ^----------^ SC2034 (warning): NGX_CPP_TEST appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 364:
+        --with-compat)                   NGX_COMPAT=YES             ;;
+                                         ^--------^ SC2034 (warning): NGX_COMPAT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 367:
+        --with-cpp=*)                    CPP="$value"               ;;
+                                         ^-^ SC2034 (warning): CPP appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 368:
+        --with-cc-opt=*)                 NGX_CC_OPT="$value"        ;;
+                                         ^--------^ SC2034 (warning): NGX_CC_OPT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 369:
+        --with-ld-opt=*)                 NGX_LD_OPT="$value"        ;;
+                                         ^--------^ SC2034 (warning): NGX_LD_OPT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 370:
+        --with-cpu-opt=*)                CPU="$value"               ;;
+                                         ^-^ SC2034 (warning): CPU appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 371:
+        --with-debug)                    NGX_DEBUG=YES              ;;
+                                         ^-------^ SC2034 (warning): NGX_DEBUG appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 374:
+        --with-pcre)                     USE_PCRE=YES               ;;
+                                         ^------^ SC2034 (warning): USE_PCRE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 375:
+        --with-pcre=*)                   PCRE="$value"              ;;
+                                         ^--^ SC2034 (warning): PCRE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 376:
+        --with-pcre-opt=*)               PCRE_OPT="$value"          ;;
+                                         ^------^ SC2034 (warning): PCRE_OPT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 377:
+        --with-pcre-jit)                 PCRE_JIT=YES               ;;
+                                         ^------^ SC2034 (warning): PCRE_JIT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 378:
+        --without-pcre2)                 PCRE2=DISABLED             ;;
+                                         ^---^ SC2034 (warning): PCRE2 appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 380:
+        --with-openssl=*)                OPENSSL="$value"           ;;
+                                         ^-----^ SC2034 (warning): OPENSSL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 381:
+        --with-openssl-opt=*)            OPENSSL_OPT="$value"       ;;
+                                         ^---------^ SC2034 (warning): OPENSSL_OPT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 409:
+        --with-zlib=*)                   ZLIB="$value"              ;;
+                                         ^--^ SC2034 (warning): ZLIB appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 410:
+        --with-zlib-opt=*)               ZLIB_OPT="$value"          ;;
+                                         ^------^ SC2034 (warning): ZLIB_OPT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 411:
+        --with-zlib-asm=*)               ZLIB_ASM="$value"          ;;
+                                         ^------^ SC2034 (warning): ZLIB_ASM appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 414:
+        --with-libatomic=*)              NGX_LIBATOMIC="$value"     ;;
+                                         ^-----------^ SC2034 (warning): NGX_LIBATOMIC appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 416:
+        --test-build-devpoll)            NGX_TEST_BUILD_DEVPOLL=YES ;;
+                                         ^--------------------^ SC2034 (warning): NGX_TEST_BUILD_DEVPOLL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 417:
+        --test-build-eventport)          NGX_TEST_BUILD_EVENTPORT=YES ;;
+                                         ^----------------------^ SC2034 (warning): NGX_TEST_BUILD_EVENTPORT appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 418:
+        --test-build-epoll)              NGX_TEST_BUILD_EPOLL=YES   ;;
+                                         ^------------------^ SC2034 (warning): NGX_TEST_BUILD_EPOLL appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 419:
+        --test-build-solaris-sendfilev)  NGX_TEST_BUILD_SOLARIS_SENDFILEV=YES ;;
+                                         ^-- SC2034 (warning): NGX_TEST_BUILD_SOLARIS_SENDFILEV appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 429:
+NGX_CONFIGURE="$opt"
+^-----------^ SC2034 (warning): NGX_CONFIGURE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 623:
+    NGX_WINE=$WINE
+    ^------^ SC2034 (warning): NGX_WINE appears unused. Verify use (or export if used externally).
+
+
+In auto/options line 630:
+NGX_CONF_PREFIX=`dirname $NGX_CONF_PATH`
+^-------------^ SC2034 (warning): NGX_CONF_PREFIX appears unused. Verify use (or export if used externally).
+                ^----------------------^ SC2006 (style): Use $(...) notation instead of legacy backticks `...`.
+                         ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+NGX_CONF_PREFIX=$(dirname "$NGX_CONF_PATH")
+
+
+In auto/modules line 6:
+if [ $EVENT_SELECT = NO -a $EVENT_FOUND = NO ]; then
+     ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                        ^-- SC2166 (warning): Prefer [ p ] && [ q ] as [ p -a q ] is not well defined.
+                           ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$EVENT_SELECT" = NO -a "$EVENT_FOUND" = NO ]; then
+
+
+In auto/modules line 10:
+if [ $EVENT_SELECT = YES ]; then
+     ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$EVENT_SELECT" = YES ]; then
+
+
+In auto/modules line 11:
+    have=NGX_HAVE_SELECT . auto/have
+                           ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 17:
+if [ $EVENT_POLL = NO -a $EVENT_FOUND = NO ]; then
+     ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                      ^-- SC2166 (warning): Prefer [ p ] && [ q ] as [ p -a q ] is not well defined.
+                         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$EVENT_POLL" = NO -a "$EVENT_FOUND" = NO ]; then
+
+
+In auto/modules line 21:
+if [ $EVENT_POLL = YES ]; then
+     ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$EVENT_POLL" = YES ]; then
+
+
+In auto/modules line 22:
+    have=NGX_HAVE_POLL . auto/have
+                         ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 28:
+if [ $NGX_TEST_BUILD_DEVPOLL = YES ]; then
+     ^---------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_TEST_BUILD_DEVPOLL" = YES ]; then
+
+
+In auto/modules line 29:
+    have=NGX_HAVE_DEVPOLL . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 30:
+    have=NGX_TEST_BUILD_DEVPOLL . auto/have
+                                  ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 36:
+if [ $NGX_TEST_BUILD_EVENTPORT = YES ]; then
+     ^-----------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_TEST_BUILD_EVENTPORT" = YES ]; then
+
+
+In auto/modules line 37:
+    have=NGX_HAVE_EVENTPORT . auto/have
+                              ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 38:
+    have=NGX_TEST_BUILD_EVENTPORT . auto/have
+                                    ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 43:
+if [ $NGX_TEST_BUILD_EPOLL = YES ]; then
+     ^-------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_TEST_BUILD_EPOLL" = YES ]; then
+
+
+In auto/modules line 44:
+    have=NGX_HAVE_EPOLL . auto/have
+                          ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 45:
+    have=NGX_HAVE_EPOLLRDHUP . auto/have
+                               ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 46:
+    have=NGX_HAVE_EPOLLEXCLUSIVE . auto/have
+                                   ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 47:
+    have=NGX_HAVE_EVENTFD . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 48:
+    have=NGX_TEST_BUILD_EPOLL . auto/have
+                                ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 53:
+if [ $NGX_TEST_BUILD_SOLARIS_SENDFILEV = YES ]; then
+     ^-- SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_TEST_BUILD_SOLARIS_SENDFILEV" = YES ]; then
+
+
+In auto/modules line 54:
+    have=NGX_TEST_BUILD_SOLARIS_SENDFILEV . auto/have
+                                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 59:
+if [ $HTTP = YES ]; then
+     ^---^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP" = YES ]; then
+
+
+In auto/modules line 61:
+    HTTP_DEPS=
+    ^-------^ SC2034 (warning): HTTP_DEPS appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 62:
+    HTTP_INCS=
+    ^-------^ SC2034 (warning): HTTP_INCS appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 96:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 100:
+    if [ $HTTP_CACHE = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_CACHE" = YES ]; then
+
+
+In auto/modules line 101:
+        have=NGX_HTTP_CACHE . auto/have
+                              ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 106:
+    if [ $HTTP_STATUS_VALIDATION = YES ]; then
+         ^---------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_STATUS_VALIDATION" = YES ]; then
+
+
+In auto/modules line 107:
+        have=NGX_HTTP_STATUS_VALIDATION . auto/have
+                                          ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 111:
+    if [ $HTTP_V2 = YES -o $HTTP_V3 = YES ]; then
+         ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                        ^-- SC2166 (warning): Prefer [ p ] || [ q ] as [ p -o q ] is not well defined.
+                           ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_V2" = YES -o "$HTTP_V3" = YES ]; then
+
+
+In auto/modules line 192:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 203:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 214:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 217:
+    if [ $HTTP_V2 = YES ]; then
+         ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_V2" = YES ]; then
+
+
+In auto/modules line 225:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 228:
+    if [ $HTTP_V3 = YES ]; then
+         ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_V3" = YES ]; then
+
+
+In auto/modules line 236:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 247:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 250:
+    if [ $HTTP_GZIP = YES ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_GZIP" = YES ]; then
+
+
+In auto/modules line 251:
+        have=NGX_HTTP_GZIP . auto/have
+                             ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 261:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 272:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 275:
+    if [ $HTTP_SSI = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+         ^-------^ SC2153 (info): Possible misspelling: HTTP_SSI may not be assigned. Did you mean HTTP_SSL?
+
+Did you mean: 
+    if [ "$HTTP_SSI" = YES ]; then
+
+
+In auto/modules line 276:
+        have=NGX_HTTP_SSI . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 285:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 288:
+    if [ $HTTP_CHARSET = YES ]; then
+         ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_CHARSET" = YES ]; then
+
+
+In auto/modules line 296:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 299:
+    if [ $HTTP_XSLT != NO ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+         ^--------^ SC2153 (info): Possible misspelling: HTTP_XSLT may not be assigned. Did you mean HTTP_SSL?
+
+Did you mean: 
+    if [ "$HTTP_XSLT" != NO ]; then
+
+
+In auto/modules line 307:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 310:
+    if [ $HTTP_IMAGE_FILTER != NO ]; then
+         ^----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_IMAGE_FILTER" != NO ]; then
+
+
+In auto/modules line 318:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 321:
+    if [ $HTTP_SUB = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+         ^-------^ SC2153 (info): Possible misspelling: HTTP_SUB may not be assigned. Did you mean HTTP_SSL?
+
+Did you mean: 
+    if [ "$HTTP_SUB" = YES ]; then
+
+
+In auto/modules line 329:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 332:
+    if [ $HTTP_ADDITION = YES ]; then
+         ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_ADDITION" = YES ]; then
+
+
+In auto/modules line 340:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 343:
+    if [ $HTTP_GUNZIP = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_GUNZIP" = YES ]; then
+
+
+In auto/modules line 344:
+        have=NGX_HTTP_GZIP . auto/have
+                             ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 345:
+        USE_ZLIB=YES
+        ^------^ SC2034 (warning): USE_ZLIB appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 354:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 357:
+    if [ $HTTP_USERID = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_USERID" = YES ]; then
+
+
+In auto/modules line 365:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 376:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 391:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 402:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 413:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 416:
+    if [ $HTTP_SLICE = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_SLICE" = YES ]; then
+
+
+In auto/modules line 424:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 430:
+    if [ $HTTP_V2 = YES ]; then
+         ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_V2" = YES ]; then
+
+
+In auto/modules line 431:
+        have=NGX_HTTP_V2 . auto/have
+                           ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 444:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 447:
+    if [ $HTTP_V3 = YES ]; then
+         ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_V3" = YES ]; then
+
+
+In auto/modules line 451:
+        have=NGX_HTTP_V3 . auto/have
+                           ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 470:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 481:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 484:
+    if [ $HTTP_GZIP_STATIC = YES ]; then
+         ^---------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_GZIP_STATIC" = YES ]; then
+
+
+In auto/modules line 485:
+        have=NGX_HTTP_GZIP . auto/have
+                             ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 494:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 497:
+    if [ $HTTP_DAV = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_DAV" = YES ]; then
+
+
+In auto/modules line 498:
+        have=NGX_HTTP_DAV . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 507:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 510:
+    if [ $HTTP_AUTOINDEX = YES ]; then
+         ^-------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_AUTOINDEX" = YES ]; then
+
+
+In auto/modules line 518:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 529:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 532:
+    if [ $HTTP_RANDOM_INDEX = YES ]; then
+         ^----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_RANDOM_INDEX" = YES ]; then
+
+
+In auto/modules line 540:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 543:
+    if [ $HTTP_MIRROR = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_MIRROR" = YES ]; then
+
+
+In auto/modules line 551:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 562:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 565:
+    if [ $HTTP_AUTH_REQUEST = YES ]; then
+         ^----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_AUTH_REQUEST" = YES ]; then
+
+
+In auto/modules line 573:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 576:
+    if [ $HTTP_AUTH_BASIC = YES ]; then
+         ^--------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_AUTH_BASIC" = YES ]; then
+
+
+In auto/modules line 577:
+        have=NGX_CRYPT . auto/have
+                         ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 586:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 589:
+    if [ $HTTP_ACCESS = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_ACCESS" = YES ]; then
+
+
+In auto/modules line 597:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 600:
+    if [ $HTTP_LIMIT_CONN = YES ]; then
+         ^--------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_LIMIT_CONN" = YES ]; then
+
+
+In auto/modules line 608:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 611:
+    if [ $HTTP_LIMIT_REQ = YES ]; then
+         ^-------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_LIMIT_REQ" = YES ]; then
+
+
+In auto/modules line 619:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 622:
+    if [ $HTTP_REALIP = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_REALIP" = YES ]; then
+
+
+In auto/modules line 623:
+        have=NGX_HTTP_REALIP . auto/have
+                               ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 624:
+        have=NGX_HTTP_X_FORWARDED_FOR . auto/have
+                                        ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 633:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 636:
+    if [ $HTTP_STATUS = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_STATUS" = YES ]; then
+
+
+In auto/modules line 644:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 647:
+    if [ $HTTP_GEO = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_GEO" = YES ]; then
+
+
+In auto/modules line 648:
+        have=NGX_HTTP_X_FORWARDED_FOR . auto/have
+                                        ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 657:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 660:
+    if [ $HTTP_GEOIP != NO ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_GEOIP" != NO ]; then
+
+
+In auto/modules line 661:
+        have=NGX_HTTP_X_FORWARDED_FOR . auto/have
+                                        ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 670:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 673:
+    if [ $HTTP_MAP = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_MAP" = YES ]; then
+
+
+In auto/modules line 681:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 684:
+    if [ $HTTP_SPLIT_CLIENTS = YES ]; then
+         ^-----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_SPLIT_CLIENTS" = YES ]; then
+
+
+In auto/modules line 692:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 695:
+    if [ $HTTP_REFERER = YES ]; then
+         ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_REFERER" = YES ]; then
+
+
+In auto/modules line 703:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 706:
+    if [ $HTTP_REWRITE = YES -a $USE_PCRE != DISABLED ]; then
+         ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                             ^-- SC2166 (warning): Prefer [ p ] && [ q ] as [ p -a q ] is not well defined.
+                                ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_REWRITE" = YES -a "$USE_PCRE" != DISABLED ]; then
+
+
+In auto/modules line 716:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 719:
+    if [ $HTTP_SSL = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_SSL" = YES ]; then
+
+
+In auto/modules line 721:
+        have=NGX_HTTP_SSL . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 730:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 733:
+    if [ $HTTP_PROXY = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_PROXY" = YES ]; then
+
+
+In auto/modules line 734:
+        have=NGX_HTTP_X_FORWARDED_FOR . auto/have
+                                        ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 743:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 746:
+    if [ $HTTP_FASTCGI = YES ]; then
+         ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_FASTCGI" = YES ]; then
+
+
+In auto/modules line 754:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 757:
+    if [ $HTTP_UWSGI = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UWSGI" = YES ]; then
+
+
+In auto/modules line 765:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 768:
+    if [ $HTTP_SCGI = YES ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_SCGI" = YES ]; then
+
+
+In auto/modules line 776:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 779:
+    if [ $HTTP_GRPC = YES -a $HTTP_V2 = YES ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                          ^-- SC2166 (warning): Prefer [ p ] && [ q ] as [ p -a q ] is not well defined.
+                             ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_GRPC" = YES -a "$HTTP_V2" = YES ]; then
+
+
+In auto/modules line 787:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 790:
+    if [ $HTTP_PROXY = YES -a $HTTP_V2 = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                           ^-- SC2166 (warning): Prefer [ p ] && [ q ] as [ p -a q ] is not well defined.
+                              ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_PROXY" = YES -a "$HTTP_V2" = YES ]; then
+
+
+In auto/modules line 798:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 801:
+    if [ $HTTP_PERL != NO ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_PERL" != NO ]; then
+
+
+In auto/modules line 809:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 812:
+    if [ $HTTP_MEMCACHED = YES ]; then
+         ^-------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_MEMCACHED" = YES ]; then
+
+
+In auto/modules line 820:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 823:
+    if [ $HTTP_EMPTY_GIF = YES ]; then
+         ^-------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_EMPTY_GIF" = YES ]; then
+
+
+In auto/modules line 831:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 834:
+    if [ $HTTP_BROWSER = YES ]; then
+         ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_BROWSER" = YES ]; then
+
+
+In auto/modules line 842:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 845:
+    if [ $HTTP_SECURE_LINK = YES ]; then
+         ^---------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_SECURE_LINK" = YES ]; then
+
+
+In auto/modules line 853:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 856:
+    if [ $HTTP_DEGRADATION = YES ]; then
+         ^---------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_DEGRADATION" = YES ]; then
+
+
+In auto/modules line 857:
+        have=NGX_HTTP_DEGRADATION . auto/have
+                                    ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 866:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 869:
+    if [ $HTTP_FLV = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_FLV" = YES ]; then
+
+
+In auto/modules line 877:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 880:
+    if [ $HTTP_MP4 = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_MP4" = YES ]; then
+
+
+In auto/modules line 888:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 891:
+    if [ $HTTP_UPSTREAM_HASH = YES ]; then
+         ^-----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UPSTREAM_HASH" = YES ]; then
+
+
+In auto/modules line 899:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 902:
+    if [ $HTTP_UPSTREAM_IP_HASH = YES ]; then
+         ^--------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UPSTREAM_IP_HASH" = YES ]; then
+
+
+In auto/modules line 910:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 913:
+    if [ $HTTP_UPSTREAM_LEAST_CONN = YES ]; then
+         ^-----------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UPSTREAM_LEAST_CONN" = YES ]; then
+
+
+In auto/modules line 921:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 924:
+    if [ $HTTP_UPSTREAM_RANDOM = YES ]; then
+         ^-------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UPSTREAM_RANDOM" = YES ]; then
+
+
+In auto/modules line 932:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 935:
+    if [ $HTTP_UPSTREAM_KEEPALIVE = YES ]; then
+         ^----------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UPSTREAM_KEEPALIVE" = YES ]; then
+
+
+In auto/modules line 943:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 946:
+    if [ $HTTP_UPSTREAM_ZONE = YES ]; then
+         ^-----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_UPSTREAM_ZONE" = YES ]; then
+
+
+In auto/modules line 947:
+        have=NGX_HTTP_UPSTREAM_ZONE . auto/have
+                                      ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 956:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 959:
+    if [ $HTTP_STUB_STATUS = YES ]; then
+         ^---------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$HTTP_STUB_STATUS" = YES ]; then
+
+
+In auto/modules line 960:
+        have=NGX_STAT_STUB . auto/have
+                             ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 969:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 974:
+if [ $MAIL != NO ]; then
+     ^---^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$MAIL" != NO ]; then
+
+
+In auto/modules line 976:
+    MAIL_DEPS=
+    ^-------^ SC2034 (warning): MAIL_DEPS appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 977:
+    MAIL_INCS=
+    ^-------^ SC2034 (warning): MAIL_INCS appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 993:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 997:
+    if [ $MAIL_SSL = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$MAIL_SSL" = YES ]; then
+
+
+In auto/modules line 999:
+        have=NGX_MAIL_SSL . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1005:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1008:
+    if [ $MAIL_POP3 = YES ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$MAIL_POP3" = YES ]; then
+
+
+In auto/modules line 1014:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1017:
+    if [ $MAIL_IMAP = YES ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$MAIL_IMAP" = YES ]; then
+
+
+In auto/modules line 1023:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1026:
+    if [ $MAIL_SMTP = YES ]; then
+         ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$MAIL_SMTP" = YES ]; then
+
+
+In auto/modules line 1032:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1039:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1045:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1051:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1055:
+if [ $STREAM != NO ]; then
+     ^-----^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$STREAM" != NO ]; then
+
+
+In auto/modules line 1057:
+    STREAM_DEPS=
+    ^---------^ SC2034 (warning): STREAM_DEPS appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1058:
+    STREAM_INCS=
+    ^---------^ SC2034 (warning): STREAM_INCS appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1089:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1093:
+    if [ $STREAM_SSL = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_SSL" = YES ]; then
+
+
+In auto/modules line 1095:
+        have=NGX_STREAM_SSL . auto/have
+                              ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1103:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1106:
+    if [ $STREAM_REALIP = YES ]; then
+         ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_REALIP" = YES ]; then
+
+
+In auto/modules line 1113:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1116:
+    if [ $STREAM_LIMIT_CONN = YES ]; then
+         ^----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_LIMIT_CONN" = YES ]; then
+
+
+In auto/modules line 1123:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1126:
+    if [ $STREAM_ACCESS = YES ]; then
+         ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_ACCESS" = YES ]; then
+
+
+In auto/modules line 1133:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1136:
+    if [ $STREAM_GEO = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_GEO" = YES ]; then
+
+
+In auto/modules line 1143:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1146:
+    if [ $STREAM_GEOIP != NO ]; then
+         ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_GEOIP" != NO ]; then
+
+
+In auto/modules line 1153:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1156:
+    if [ $STREAM_MAP = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_MAP" = YES ]; then
+
+
+In auto/modules line 1163:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1166:
+    if [ $STREAM_SPLIT_CLIENTS = YES ]; then
+         ^-------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_SPLIT_CLIENTS" = YES ]; then
+
+
+In auto/modules line 1173:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1176:
+    if [ $STREAM_RETURN = YES ]; then
+         ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_RETURN" = YES ]; then
+
+
+In auto/modules line 1183:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1186:
+    if [ $STREAM_PASS = YES ]; then
+         ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_PASS" = YES ]; then
+
+
+In auto/modules line 1193:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1196:
+    if [ $STREAM_SET = YES ]; then
+         ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_SET" = YES ]; then
+
+
+In auto/modules line 1203:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1206:
+    if [ $STREAM_UPSTREAM_HASH = YES ]; then
+         ^-------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_UPSTREAM_HASH" = YES ]; then
+
+
+In auto/modules line 1213:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1216:
+    if [ $STREAM_UPSTREAM_LEAST_CONN = YES ]; then
+         ^-------------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_UPSTREAM_LEAST_CONN" = YES ]; then
+
+
+In auto/modules line 1223:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1226:
+    if [ $STREAM_UPSTREAM_RANDOM = YES ]; then
+         ^---------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_UPSTREAM_RANDOM" = YES ]; then
+
+
+In auto/modules line 1233:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1236:
+    if [ $STREAM_UPSTREAM_ZONE = YES ]; then
+         ^-------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_UPSTREAM_ZONE" = YES ]; then
+
+
+In auto/modules line 1237:
+        have=NGX_STREAM_UPSTREAM_ZONE . auto/have
+                                        ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1245:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1248:
+    if [ $STREAM_SSL_PREREAD = YES ]; then
+         ^-----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM_SSL_PREREAD" = YES ]; then
+
+
+In auto/modules line 1255:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1282:
+        if test -f $ngx_addon_dir/config; then
+                   ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+        if test -f "$ngx_addon_dir"/config; then
+
+
+In auto/modules line 1283:
+            . $ngx_addon_dir/config
+              ^-------------------^ SC1091 (info): Not following: ./config was not specified as input (see shellcheck -x).
+              ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+            . "$ngx_addon_dir"/config
+
+
+In auto/modules line 1285:
+            echo " + $ngx_addon_name was configured"
+                     ^-------------^ SC2154 (warning): ngx_addon_name is referenced but not assigned.
+
+
+In auto/modules line 1312:
+        if test -f $ngx_addon_dir/config; then
+                   ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+        if test -f "$ngx_addon_dir"/config; then
+
+
+In auto/modules line 1313:
+            . $ngx_addon_dir/config
+              ^-------------------^ SC1091 (info): Not following: ./config was not specified as input (see shellcheck -x).
+              ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+            . "$ngx_addon_dir"/config
+
+
+In auto/modules line 1325:
+if [ $USE_OPENSSL = YES ]; then
+     ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$USE_OPENSSL" = YES ]; then
+
+
+In auto/modules line 1337:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1341:
+if [ $USE_OPENSSL_QUIC = YES ]; then
+     ^---------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$USE_OPENSSL_QUIC" = YES ]; then
+
+
+In auto/modules line 1378:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1380:
+    if [ $QUIC_BPF = YES -a $SO_COOKIE_FOUND = YES ]; then
+         ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+                         ^-- SC2166 (warning): Prefer [ p ] && [ q ] as [ p -a q ] is not well defined.
+                            ^--------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$QUIC_BPF" = YES -a "$SO_COOKIE_FOUND" = YES ]; then
+
+
+In auto/modules line 1391:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1393:
+        have=NGX_QUIC_BPF . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1398:
+if [ $USE_PCRE = YES ]; then
+     ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$USE_PCRE" = YES ]; then
+
+
+In auto/modules line 1406:
+    ngx_module_order=
+    ^--------------^ SC2034 (warning): ngx_module_order appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1408:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1416:
+if [ $USE_THREADS = YES ]; then
+     ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$USE_THREADS" = YES ]; then
+
+
+In auto/modules line 1421:
+if [ $HTTP = YES ]; then
+     ^---^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP" = YES ]; then
+
+
+In auto/modules line 1429:
+if [ $MAIL != NO ]; then
+     ^---^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$MAIL" != NO ]; then
+
+
+In auto/modules line 1431:
+    if [ $MAIL = YES ]; then
+         ^---^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$MAIL" = YES ]; then
+
+
+In auto/modules line 1434:
+    elif [ $MAIL = DYNAMIC ]; then
+           ^---^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    elif [ "$MAIL" = DYNAMIC ]; then
+
+
+In auto/modules line 1438:
+        ngx_module_srcs=$MAIL_SRCS
+                        ^--------^ SC2153 (info): Possible misspelling: MAIL_SRCS may not be assigned. Did you mean MAIL_INCS?
+
+
+In auto/modules line 1442:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1449:
+if [ $STREAM != NO ]; then
+     ^-----^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$STREAM" != NO ]; then
+
+
+In auto/modules line 1451:
+    if [ $STREAM = YES ]; then
+         ^-----^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    if [ "$STREAM" = YES ]; then
+
+
+In auto/modules line 1454:
+    elif [ $STREAM = DYNAMIC ]; then
+           ^-----^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    elif [ "$STREAM" = DYNAMIC ]; then
+
+
+In auto/modules line 1458:
+        ngx_module_srcs=$STREAM_SRCS
+                        ^----------^ SC2153 (info): Possible misspelling: STREAM_SRCS may not be assigned. Did you mean STREAM_INCS?
+
+
+In auto/modules line 1462:
+        . auto/module
+          ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1469:
+ngx_module_type=MISC
+^-------------^ SC2034 (warning): ngx_module_type appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1472:
+if [ $NGX_GOOGLE_PERFTOOLS = YES ]; then
+     ^-------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_GOOGLE_PERFTOOLS" = YES ]; then
+
+
+In auto/modules line 1480:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1483:
+if [ $NGX_CPP_TEST = YES ]; then
+     ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_CPP_TEST" = YES ]; then
+
+
+In auto/modules line 1484:
+    ngx_module_name=
+    ^-------------^ SC2034 (warning): ngx_module_name appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1485:
+    ngx_module_incs=
+    ^-------------^ SC2034 (warning): ngx_module_incs appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1486:
+    ngx_module_deps=
+    ^-------------^ SC2034 (warning): ngx_module_deps appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1487:
+    ngx_module_srcs=src/misc/ngx_cpp_test_module.cpp
+    ^-------------^ SC2034 (warning): ngx_module_srcs appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1488:
+    ngx_module_libs=-lstdc++
+    ^-------------^ SC2034 (warning): ngx_module_libs appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1489:
+    ngx_module_link=$NGX_CPP_TEST
+    ^-------------^ SC2034 (warning): ngx_module_link appears unused. Verify use (or export if used externally).
+
+
+In auto/modules line 1491:
+    . auto/module
+      ^---------^ SC1091 (info): Not following: auto/module was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1497:
+if [ $NGX_COMPAT = YES ]; then
+     ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$NGX_COMPAT" = YES ]; then
+
+
+In auto/modules line 1498:
+    have=NGX_COMPAT . auto/have
+                      ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1499:
+    have=NGX_HTTP_GZIP . auto/have
+                         ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1500:
+    have=NGX_HTTP_DAV . auto/have
+                        ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1501:
+    have=NGX_HTTP_REALIP . auto/have
+                           ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1502:
+    have=NGX_HTTP_X_FORWARDED_FOR . auto/have
+                                    ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1503:
+    have=NGX_HTTP_HEADERS . auto/have
+                            ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1504:
+    have=NGX_HTTP_UPSTREAM_ZONE . auto/have
+                                  ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1505:
+    have=NGX_STREAM_UPSTREAM_ZONE . auto/have
+                                    ^-------^ SC1091 (info): Not following: auto/have was not specified as input (see shellcheck -x).
+
+
+In auto/modules line 1509:
+cat << END                                    > $NGX_MODULES_C
+                                                ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+cat << END                                    > "$NGX_MODULES_C"
+
+
+In auto/modules line 1520:
+    echo "extern ngx_module_t  $mod;"         >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    echo "extern ngx_module_t  $mod;"         >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1523:
+echo                                          >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+echo                                          >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1524:
+echo 'ngx_module_t *ngx_modules[] = {'        >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+echo 'ngx_module_t *ngx_modules[] = {'        >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1528:
+    echo "    &$mod,"                         >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    echo "    &$mod,"                         >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1531:
+cat << END                                    >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+cat << END                                    >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1537:
+echo 'char *ngx_module_names[] = {'           >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+echo 'char *ngx_module_names[] = {'           >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1541:
+    echo "    \"$mod\","                      >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+    echo "    \"$mod\","                      >> "$NGX_MODULES_C"
+
+
+In auto/modules line 1544:
+cat << END                                    >> $NGX_MODULES_C
+                                                 ^------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+cat << END                                    >> "$NGX_MODULES_C"
+
+
+In auto/define line 6:
+cat << END >> $NGX_AUTO_CONFIG_H
+              ^----------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+cat << END >> "$NGX_AUTO_CONFIG_H"
+
+
+In auto/define line 8:
+#ifndef $have
+        ^---^ SC2154 (warning): have is referenced but not assigned.
+
+
+In auto/define line 9:
+#define $have  $value
+               ^----^ SC2154 (warning): value is referenced but not assigned.
+
+
+In auto/summary line 10:
+if [ $USE_THREADS = YES ]; then
+     ^----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$USE_THREADS" = YES ]; then
+
+
+In auto/summary line 14:
+if [ $HTTP_STATUS_VALIDATION = YES ]; then
+     ^---------------------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP_STATUS_VALIDATION" = YES ]; then
+
+
+In auto/summary line 18:
+if [ $USE_PCRE = DISABLED ]; then
+     ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$USE_PCRE" = DISABLED ]; then
+
+
+In auto/summary line 70:
+if [ $HTTP_PROXY = YES ]; then
+     ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP_PROXY" = YES ]; then
+
+
+In auto/summary line 74:
+if [ $HTTP_FASTCGI = YES ]; then
+     ^-----------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP_FASTCGI" = YES ]; then
+
+
+In auto/summary line 78:
+if [ $HTTP_UWSGI = YES ]; then
+     ^---------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP_UWSGI" = YES ]; then
+
+
+In auto/summary line 82:
+if [ $HTTP_SCGI = YES ]; then
+     ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+if [ "$HTTP_SCGI" = YES ]; then
+
+For more information:
+  https://www.shellcheck.net/wiki/SC2034 -- CPP appears unused. Verify use (o...
+  https://www.shellcheck.net/wiki/SC2154 -- have is referenced but not assign...
+  https://www.shellcheck.net/wiki/SC2166 -- Prefer [ p ] && [ q ] as [ p -a q...

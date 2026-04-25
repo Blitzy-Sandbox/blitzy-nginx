@@ -89,7 +89,8 @@ if [ $HTTP = YES ]; then
                          src/http/ngx_http_variables.c \
                          src/http/ngx_http_script.c \
                          src/http/ngx_http_upstream.c \
-                         src/http/ngx_http_upstream_round_robin.c"
+                         src/http/ngx_http_upstream_round_robin.c \
+                         src/http/ngx_http_status.c"
         ngx_module_libs=
         ngx_module_link=YES
 
