@@ -452,7 +452,9 @@ The following invariants are contractual and apply to all NGINX 1.29.5+ releases
 | All `ngx_http_status_*` functions are re-entrant | All five functions read the immutable registry; no global mutable state is touched. Safe to call from any callback. |
 | `error_page` directive parser is preserved byte-for-byte | The 300–599 range check, 499 rejection, and 494/495/496/497→400 masquerade in `ngx_http_core_error_page()` are not replaced by the new API. |
 
-### Behavioral Prohibitions (per AAP § 0.8.2 — preserved verbatim)
+## Behavioral Prohibitions (per AAP § 0.8.2 — preserved verbatim)
+
+The API explicitly does NOT support the following capabilities. These are not implementation gaps; they are deliberate, contractual commitments to API simplicity and ABI stability that the registry maintainers will refuse to relax in future revisions without a major-version ABI break.
 
 The API explicitly does NOT support:
 
@@ -465,7 +467,7 @@ The API explicitly does NOT support:
 - Custom reason phrase generation beyond registry lookup
 - Status code aliasing functionality
 
-These prohibitions are commitments to API simplicity and ABI stability.
+Each prohibition has an architectural rationale recorded in the [Decision Log](../architecture/decision_log.md): D-004 anchors the static-array storage choice (forbidding more elaborate caching), D-006 anchors the upstream pass-through invariant (forbidding transformation), and D-008 anchors the wire-vs-registry phrase split (forbidding custom phrase generation). Operators auditing for compliance with the stated prohibitions can rely on the registry's source-level immutability after initialization (a single boolean guard in `ngx_http_status_register()`) as the runtime enforcement mechanism.
 
 ## Status Code Registry
 

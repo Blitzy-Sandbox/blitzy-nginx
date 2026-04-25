@@ -6,6 +6,9 @@
   <title>Centralized HTTP Status Code API — Executive Summary</title>
   <meta name="description" content="Executive summary of the NGINX 1.29.5 HTTP status code registry refactor.">
 
+  <!-- Empty data-URI favicon to suppress the browser's default /favicon.ico request (and avoid a 404 in console). -->
+  <link rel="icon" href="data:,">
+
   <!-- Preconnect for Google Fonts performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -557,7 +560,7 @@
       <section>
         <p class="eyebrow-mini">EXECUTIVE OVERVIEW</p>
         <h2>At a Glance &mdash; KPI Summary</h2>
-        <p class="lead">A surgical refactor of the NGINX 1.29.5 HTTP subsystem: a centralized status-code registry and unified API replace 33 scattered field assignments &mdash; without disturbing a single existing constant or wire byte.</p>
+        <p class="lead">A surgical refactor of the NGINX 1.29.5 HTTP subsystem: a centralized status-code registry and unified API replace 15 in-scope direct field assignments across 12 source files &mdash; without disturbing a single existing constant or wire byte.</p>
         <div class="kpi-grid">
           <div class="kpi-card">
             <p class="kpi-value">58</p>
@@ -594,7 +597,7 @@ flowchart LR
       A1["~58 NGX_HTTP_* defines<br/>in ngx_http_request.h"]
     end
     subgraph Consumers["Direct Field Assignments"]
-      B1["20 modules<br/>33 assignment sites"]
+      B1["12 in-scope files<br/>15 assignment sites"]
     end
     subgraph Wire["Parallel Wire Tables"]
       C1["ngx_http_status_lines"]
@@ -1042,11 +1045,19 @@ pie showData
      * rendering occurs. Mermaid 11 mutates the element's innerHTML when it
      * processes a diagram, so without this cache we cannot recover the
      * original source for re-rendering.
+     *
+     * IMPORTANT: We use `innerHTML` (not `textContent`) so that inline HTML
+     * tags such as <br> embedded in node labels survive the round-trip.
+     * Mermaid 11 reads source via innerHTML and supports htmlLabels: true,
+     * meaning <br> within a node label produces a line break in the rendered
+     * diagram. Using textContent would strip these tags, leaving labels like
+     * "ngx_http_status.h5 public functions" instead of "ngx_http_status.h /
+     * 5 public functions" after a degenerate-viewBox reset.
      */
     function cacheMermaidSources() {
       document.querySelectorAll('.mermaid').forEach(function (el) {
         if (!el.hasAttribute('data-mermaid-source')) {
-          el.setAttribute('data-mermaid-source', el.textContent.replace(/^\s+|\s+$/g, ''));
+          el.setAttribute('data-mermaid-source', el.innerHTML.replace(/^\s+|\s+$/g, ''));
         }
       });
     }
@@ -1076,6 +1087,41 @@ pie showData
     }
 
     /**
+     * Mermaid 11.4.0 emits pie-chart SVGs with viewBox="0 0 512 450" and
+     * an inline style="max-width: 512px;". However, Mermaid positions the
+     * legend text inside the pie group at translate(216, *), with the pie
+     * group itself at translate(225, 225), placing legend labels at
+     * absolute x ~463 and extending ~150px wider — well past the 512px
+     * viewBox boundary. The result is that legend labels are clipped
+     * mid-word ("4xx Cl…", "5xx Se…", etc.).
+     *
+     * The pie config options (useWidth, useMaxWidth) do not influence
+     * Mermaid 11's emitted SVG dimensions, so we post-process every
+     * rendered pie SVG: expand its viewBox width and clear the inline
+     * max-width so the .mermaid CSS rule (`max-width: 100% !important`)
+     * applies and the SVG scales naturally to its container.
+     *
+     * 760 is chosen as the new viewBox width to comfortably accommodate
+     * the longest legend label in this deck ("NGINX-specific 4xx [6]")
+     * while keeping the pie itself centered.
+     */
+    function expandPieChartViewBoxes(rootEl) {
+      var scope = rootEl || document;
+      scope.querySelectorAll('svg[aria-roledescription="pie"]').forEach(function (svg) {
+        if (svg.hasAttribute('data-blitzy-pie-expanded')) return;
+        var vbAttr = svg.getAttribute('viewBox') || '';
+        var vb = vbAttr.split(/\s+/).map(parseFloat);
+        if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+          var newWidth = Math.max(vb[2], 760);
+          svg.setAttribute('viewBox', vb[0] + ' ' + vb[1] + ' ' + newWidth + ' ' + vb[3]);
+          // Clear inline max-width so the deck-level CSS rule applies.
+          svg.style.maxWidth = '';
+          svg.setAttribute('data-blitzy-pie-expanded', '1');
+        }
+      });
+    }
+
+    /**
      * Render only the Mermaid diagrams that live inside the currently-active
      * reveal.js slide. Rendering inside hidden (display:none) slides triggers
      * Mermaid's degenerate-viewBox bug because its layout pass cannot measure
@@ -1093,10 +1139,16 @@ pie showData
         if (!currentSlide) return;
         // First, repair any previously-rendered diagrams that came out broken.
         resetDegenerateMermaid(currentSlide);
+        // Expand any already-rendered pie chart SVGs whose legend was cut off.
+        expandPieChartViewBoxes(currentSlide);
         // Then render any remaining unprocessed diagrams in this slide.
         var unprocessed = currentSlide.querySelectorAll('.mermaid:not([data-processed="true"])');
         if (unprocessed.length === 0) return;
         mermaid.run({ nodes: Array.from(unprocessed) })
+          .then(function () {
+            // After rendering completes, expand any new pie SVGs in this slide.
+            expandPieChartViewBoxes(currentSlide);
+          })
           .catch(function (err) { console.warn('Mermaid render warning:', err); });
       } catch (err) {
         console.warn('Mermaid render failure:', err);
