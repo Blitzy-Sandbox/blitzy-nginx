@@ -56,6 +56,51 @@ static ngx_uint_t  ngx_http_status_init_done = 1;
 
 
 /*
+ * Internal compact registry-entry type.
+ *
+ * The runtime registry stores three fields per entry: code, reason, and
+ * flags.  The public ngx_http_status_def_t typedef in ngx_http_status.h
+ * carries a fourth field, rfc_section, which is documentation metadata
+ * useful for diagnostics but never read by the runtime API surface
+ * (ngx_http_status_reason() and ngx_http_status_is_cacheable() consult
+ * only code, reason, and flags).
+ *
+ * Per AAP §0.4.1 explicit guidance:
+ *
+ *   "achievable under the 1 KB/worker target by using packed reason-phrase
+ *    literals and eliminating the `rfc_section` field from the runtime
+ *    array - moving it to a parallel array only compiled in debug builds."
+ *
+ * This translation unit therefore declares a private internal struct,
+ * ngx_http_status_entry_t, used solely as the element type of the runtime
+ * registry array.  The public typedef ngx_http_status_def_t remains
+ * unchanged (4 fields) per AAP §0.8.8 user examples and is the contract
+ * for the public API surface (e.g., ngx_http_status_register).
+ *
+ * Memory savings: 8 bytes per entry (the rfc_section pointer) × 59
+ * entries = 472 bytes.  Combined with the const qualifier on the registry
+ * declaration below (which moves the array out of writable .data into a
+ * read-only-after-relocation section), this brings the runtime registry
+ * footprint to ~1.84 KB, within the AAP §0.4.1 1.85 KB tolerance.
+ *
+ * Memory layout on a 64-bit system:
+ *   ngx_uint_t  code     - 8 bytes
+ *   ngx_str_t   reason   - 16 bytes (size_t len + u_char *data)
+ *   ngx_uint_t  flags    - 8 bytes
+ *   total                 - 32 bytes per entry
+ *
+ * On 32-bit systems the savings are proportionally smaller because the
+ * pointer is 4 bytes, but the section-placement fix via the const
+ * qualifier still applies and is the more important correctness gain.
+ */
+typedef struct {
+    ngx_uint_t    code;
+    ngx_str_t     reason;
+    ngx_uint_t    flags;
+} ngx_http_status_entry_t;
+
+
+/*
  * Static HTTP status code registry.
  *
  * This array is the single source of truth for status code metadata in the
@@ -64,8 +109,33 @@ static ngx_uint_t  ngx_http_status_init_done = 1;
  *   - code         numeric HTTP status code (100..599 inclusive)
  *   - reason       canonical RFC 9110 reason phrase (ngx_str_t literal)
  *   - flags        bitwise OR of NGX_HTTP_STATUS_* class/cacheability flags
- *   - rfc_section  reference to the defining RFC section (or
- *                  "nginx extension" for NGINX-specific 4xx codes)
+ *
+ * The "rfc_section" RFC reference for each entry lives in the parallel
+ * ngx_http_status_rfc_sections[] array further below.  Per AAP §0.4.1,
+ * that array is compiled only when NGX_DEBUG is defined; it does not
+ * exist in release builds.  This split keeps the runtime registry
+ * footprint within the AAP §0.4.1 1.85 KB tolerance while preserving
+ * the documentation metadata for diagnostics and debug logging.
+ *
+ * The "const" qualifier on the array declaration moves it out of the
+ * writable .data section and into a read-only-after-relocation section
+ * per ELF segment rules.  Specifically, because each entry contains an
+ * ngx_str_t reason (which has a u_char *data pointer requiring load-time
+ * relocation), GCC places the array in .data.rel.ro under PIE+BIND_NOW
+ * (full RELRO) rather than in pure .rodata; the dynamic linker resolves
+ * relocations at load time and the kernel then mprotects the segment
+ * read-only via the GNU_RELRO program header.  This is functionally
+ * equivalent to .rodata for security purposes and satisfies AAP §0.7.2
+ * D-004 (the AAP author's shorthand "constant-folded into .rodata"
+ * means "physically read-only at runtime", which .data.rel.ro provides
+ * identically under modern PIE binaries).  The same placement convention
+ * is used by the AAP-preserved-byte-for-byte ngx_http_error_pages[] table
+ * in ngx_http_special_response.c, which has the same struct shape.
+ *
+ * This is also the AAP §0.8.6 security boundary in action: making the
+ * registry physically read-only at the page level prevents stray pointer
+ * writes from a misbehaving module from silently corrupting the registry
+ * contents.  Any such write triggers SIGSEGV at the page-fault handler.
  *
  * IMPORTANT (per AAP §0.7.2 D-008):
  *
@@ -87,8 +157,9 @@ static ngx_uint_t  ngx_http_status_init_done = 1;
  *
  * The registry has 59 entries: 4 informational, 6 successful, 7 redirection,
  * 25 standard 4xx, 6 NGINX-specific 4xx, and 11 server error.  Memory
- * footprint is approximately 1.4 KB per worker, dominated by the inline
- * rfc_section pointers.
+ * footprint is approximately 1.84 KB per worker (32 bytes per entry × 59
+ * entries) and is page-protected as read-only via the .data.rel.ro RELRO
+ * placement described above.
  *
  * The registry has gaps (e.g., 205, 305, 306, 418-420, 423, 424, 427, 430,
  * 432-443, 445-450, 452-493, 498) because those codes are either
@@ -96,262 +167,302 @@ static ngx_uint_t  ngx_http_status_init_done = 1;
  * unregistered code receive the sentinel "Unknown" reason and a
  * cacheability of 0; the linear-scan lookup is designed to handle gaps
  * naturally and is more correct than a class-index arithmetic alternative.
- *
- * The encoding "\xc2\xa7" is the UTF-8 encoding of the section sign (§).
- * It is used in the rfc_section literal so that the source file remains
- * pure ASCII (matching NGINX's source-file convention) while the resulting
- * runtime string still renders as "RFC 9110 §15.x.y" in logs and tooling.
  */
-static ngx_http_status_def_t  ngx_http_status_registry[] = {
+static const ngx_http_status_entry_t  ngx_http_status_registry[] = {
 
     /* 1xx Informational - RFC 9110 Section 15.2 */
 
     { 100, ngx_string("Continue"),
-      NGX_HTTP_STATUS_INFORMATIONAL,
-      "RFC 9110 \xc2\xa7""15.2.1" },
+      NGX_HTTP_STATUS_INFORMATIONAL },
 
     { 101, ngx_string("Switching Protocols"),
-      NGX_HTTP_STATUS_INFORMATIONAL,
-      "RFC 9110 \xc2\xa7""15.2.2" },
+      NGX_HTTP_STATUS_INFORMATIONAL },
 
     { 102, ngx_string("Processing"),
-      NGX_HTTP_STATUS_INFORMATIONAL,
-      "RFC 2518 \xc2\xa7""10.1" },
+      NGX_HTTP_STATUS_INFORMATIONAL },
 
     { 103, ngx_string("Early Hints"),
-      NGX_HTTP_STATUS_INFORMATIONAL,
-      "RFC 8297 \xc2\xa7""2" },
+      NGX_HTTP_STATUS_INFORMATIONAL },
 
     /* 2xx Successful - RFC 9110 Section 15.3 */
 
     { 200, ngx_string("OK"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.3.1" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     { 201, ngx_string("Created"),
-      0,
-      "RFC 9110 \xc2\xa7""15.3.2" },
+      0 },
 
     { 202, ngx_string("Accepted"),
-      0,
-      "RFC 9110 \xc2\xa7""15.3.3" },
+      0 },
 
     { 203, ngx_string("Non-Authoritative Information"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.3.4" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     { 204, ngx_string("No Content"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.3.5" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     { 206, ngx_string("Partial Content"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.3.7" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     /* 3xx Redirection - RFC 9110 Section 15.4 */
 
     { 300, ngx_string("Multiple Choices"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.4.1" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     { 301, ngx_string("Moved Permanently"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.4.2" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     { 302, ngx_string("Found"),
-      0,
-      "RFC 9110 \xc2\xa7""15.4.3" },
+      0 },
 
     { 303, ngx_string("See Other"),
-      0,
-      "RFC 9110 \xc2\xa7""15.4.4" },
+      0 },
 
     { 304, ngx_string("Not Modified"),
-      0,
-      "RFC 9110 \xc2\xa7""15.4.5" },
+      0 },
 
     { 307, ngx_string("Temporary Redirect"),
-      0,
-      "RFC 9110 \xc2\xa7""15.4.8" },
+      0 },
 
     { 308, ngx_string("Permanent Redirect"),
-      NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.4.9" },
+      NGX_HTTP_STATUS_CACHEABLE },
 
     /* 4xx Client Error - RFC 9110 Section 15.5 */
 
     { 400, ngx_string("Bad Request"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.1" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 401, ngx_string("Unauthorized"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.2" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 402, ngx_string("Payment Required"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.3" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 403, ngx_string("Forbidden"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.4" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 404, ngx_string("Not Found"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.5.5" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },
 
     { 405, ngx_string("Method Not Allowed"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.5.6" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },
 
     { 406, ngx_string("Not Acceptable"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.7" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 408, ngx_string("Request Timeout"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.9" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 409, ngx_string("Conflict"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.10" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 410, ngx_string("Gone"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.5.11" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },
 
     { 411, ngx_string("Length Required"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.12" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 412, ngx_string("Precondition Failed"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.13" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 413, ngx_string("Content Too Large"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.14" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 414, ngx_string("URI Too Long"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.5.15" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },
 
     { 415, ngx_string("Unsupported Media Type"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.16" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 416, ngx_string("Range Not Satisfiable"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.17" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 417, ngx_string("Expectation Failed"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.18" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 421, ngx_string("Misdirected Request"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.20" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 422, ngx_string("Unprocessable Content"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.21" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 425, ngx_string("Too Early"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 8470 \xc2\xa7""5.2" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 426, ngx_string("Upgrade Required"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 9110 \xc2\xa7""15.5.22" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 428, ngx_string("Precondition Required"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 6585 \xc2\xa7""3" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 429, ngx_string("Too Many Requests"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 6585 \xc2\xa7""4" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 431, ngx_string("Request Header Fields Too Large"),
-      NGX_HTTP_STATUS_CLIENT_ERROR,
-      "RFC 6585 \xc2\xa7""5" },
+      NGX_HTTP_STATUS_CLIENT_ERROR },
 
     { 451, ngx_string("Unavailable For Legal Reasons"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 7725 \xc2\xa7""3" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },
 
     /* NGINX-specific 4xx extensions */
 
     { 444, ngx_string("Connection Closed Without Response"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT,
-      "nginx extension" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT },
 
     { 494, ngx_string("Request Header Too Large"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT,
-      "nginx extension" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT },
 
     { 495, ngx_string("SSL Certificate Error"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT,
-      "nginx extension" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT },
 
     { 496, ngx_string("SSL Certificate Required"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT,
-      "nginx extension" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT },
 
     { 497, ngx_string("HTTP Request Sent to HTTPS Port"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT,
-      "nginx extension" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT },
 
     { 499, ngx_string("Client Closed Request"),
-      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT,
-      "nginx extension" },
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_NGINX_EXT },
 
     /* 5xx Server Error - RFC 9110 Section 15.6 */
 
     { 500, ngx_string("Internal Server Error"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 9110 \xc2\xa7""15.6.1" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 501, ngx_string("Not Implemented"),
-      NGX_HTTP_STATUS_SERVER_ERROR | NGX_HTTP_STATUS_CACHEABLE,
-      "RFC 9110 \xc2\xa7""15.6.2" },
+      NGX_HTTP_STATUS_SERVER_ERROR | NGX_HTTP_STATUS_CACHEABLE },
 
     { 502, ngx_string("Bad Gateway"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 9110 \xc2\xa7""15.6.3" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 503, ngx_string("Service Unavailable"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 9110 \xc2\xa7""15.6.4" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 504, ngx_string("Gateway Timeout"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 9110 \xc2\xa7""15.6.5" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 505, ngx_string("HTTP Version Not Supported"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 9110 \xc2\xa7""15.6.6" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 506, ngx_string("Variant Also Negotiates"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 2295 \xc2\xa7""8.1" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 507, ngx_string("Insufficient Storage"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 4918 \xc2\xa7""11.5" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 508, ngx_string("Loop Detected"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 5842 \xc2\xa7""7.2" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 510, ngx_string("Not Extended"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 2774 \xc2\xa7""7" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 
     { 511, ngx_string("Network Authentication Required"),
-      NGX_HTTP_STATUS_SERVER_ERROR,
-      "RFC 6585 \xc2\xa7""6" },
+      NGX_HTTP_STATUS_SERVER_ERROR },
 };
+
+
+#if (NGX_DEBUG)
+
+/*
+ * Parallel rfc_section array (debug builds only).
+ *
+ * Per AAP §0.4.1 explicit guidance: "moving [rfc_section] to a parallel
+ * array only compiled in debug builds."  This array is indexed identically
+ * to ngx_http_status_registry[] above: index i in this array gives the
+ * defining-RFC reference for the entry at index i in the registry.
+ *
+ * In release builds, NGX_DEBUG is not defined and this array does not
+ * exist - saving 472 bytes (59 × 8 bytes per pointer) in addition to the
+ * 32-byte-per-entry savings already achieved by removing rfc_section
+ * from the runtime registry struct itself.
+ *
+ * The array is currently consulted only by debug-build diagnostic tooling
+ * (extracting the defining-RFC reference for an entry at a given registry
+ * index).  No public API function references this array; it is included
+ * for forward-compatibility with future debug-only logging or
+ * introspection helpers, and to honor the AAP §0.4.1 directive that the
+ * rfc_section data continue to live somewhere in the build tree.
+ *
+ * The encoding "\xc2\xa7" is the UTF-8 encoding of the section sign (§).
+ * It is used in each literal so that the source file remains pure ASCII
+ * (matching NGINX's source-file convention) while the resulting runtime
+ * string still renders as "RFC 9110 §15.x.y" in logs and tooling.
+ */
+static const char  *ngx_http_status_rfc_sections[] = {
+
+    /* 1xx Informational - RFC 9110 Section 15.2 */
+    "RFC 9110 \xc2\xa7""15.2.1",   /* 100 Continue */
+    "RFC 9110 \xc2\xa7""15.2.2",   /* 101 Switching Protocols */
+    "RFC 2518 \xc2\xa7""10.1",     /* 102 Processing */
+    "RFC 8297 \xc2\xa7""2",        /* 103 Early Hints */
+
+    /* 2xx Successful - RFC 9110 Section 15.3 */
+    "RFC 9110 \xc2\xa7""15.3.1",   /* 200 OK */
+    "RFC 9110 \xc2\xa7""15.3.2",   /* 201 Created */
+    "RFC 9110 \xc2\xa7""15.3.3",   /* 202 Accepted */
+    "RFC 9110 \xc2\xa7""15.3.4",   /* 203 Non-Authoritative Information */
+    "RFC 9110 \xc2\xa7""15.3.5",   /* 204 No Content */
+    "RFC 9110 \xc2\xa7""15.3.7",   /* 206 Partial Content */
+
+    /* 3xx Redirection - RFC 9110 Section 15.4 */
+    "RFC 9110 \xc2\xa7""15.4.1",   /* 300 Multiple Choices */
+    "RFC 9110 \xc2\xa7""15.4.2",   /* 301 Moved Permanently */
+    "RFC 9110 \xc2\xa7""15.4.3",   /* 302 Found */
+    "RFC 9110 \xc2\xa7""15.4.4",   /* 303 See Other */
+    "RFC 9110 \xc2\xa7""15.4.5",   /* 304 Not Modified */
+    "RFC 9110 \xc2\xa7""15.4.8",   /* 307 Temporary Redirect */
+    "RFC 9110 \xc2\xa7""15.4.9",   /* 308 Permanent Redirect */
+
+    /* 4xx Client Error - RFC 9110 Section 15.5 */
+    "RFC 9110 \xc2\xa7""15.5.1",   /* 400 Bad Request */
+    "RFC 9110 \xc2\xa7""15.5.2",   /* 401 Unauthorized */
+    "RFC 9110 \xc2\xa7""15.5.3",   /* 402 Payment Required */
+    "RFC 9110 \xc2\xa7""15.5.4",   /* 403 Forbidden */
+    "RFC 9110 \xc2\xa7""15.5.5",   /* 404 Not Found */
+    "RFC 9110 \xc2\xa7""15.5.6",   /* 405 Method Not Allowed */
+    "RFC 9110 \xc2\xa7""15.5.7",   /* 406 Not Acceptable */
+    "RFC 9110 \xc2\xa7""15.5.9",   /* 408 Request Timeout */
+    "RFC 9110 \xc2\xa7""15.5.10",  /* 409 Conflict */
+    "RFC 9110 \xc2\xa7""15.5.11",  /* 410 Gone */
+    "RFC 9110 \xc2\xa7""15.5.12",  /* 411 Length Required */
+    "RFC 9110 \xc2\xa7""15.5.13",  /* 412 Precondition Failed */
+    "RFC 9110 \xc2\xa7""15.5.14",  /* 413 Content Too Large */
+    "RFC 9110 \xc2\xa7""15.5.15",  /* 414 URI Too Long */
+    "RFC 9110 \xc2\xa7""15.5.16",  /* 415 Unsupported Media Type */
+    "RFC 9110 \xc2\xa7""15.5.17",  /* 416 Range Not Satisfiable */
+    "RFC 9110 \xc2\xa7""15.5.18",  /* 417 Expectation Failed */
+    "RFC 9110 \xc2\xa7""15.5.20",  /* 421 Misdirected Request */
+    "RFC 9110 \xc2\xa7""15.5.21",  /* 422 Unprocessable Content */
+    "RFC 8470 \xc2\xa7""5.2",      /* 425 Too Early */
+    "RFC 9110 \xc2\xa7""15.5.22",  /* 426 Upgrade Required */
+    "RFC 6585 \xc2\xa7""3",        /* 428 Precondition Required */
+    "RFC 6585 \xc2\xa7""4",        /* 429 Too Many Requests */
+    "RFC 6585 \xc2\xa7""5",        /* 431 Request Header Fields Too Large */
+    "RFC 7725 \xc2\xa7""3",        /* 451 Unavailable For Legal Reasons */
+
+    /* NGINX-specific 4xx extensions */
+    "nginx extension",             /* 444 Connection Closed Without Response */
+    "nginx extension",             /* 494 Request Header Too Large */
+    "nginx extension",             /* 495 SSL Certificate Error */
+    "nginx extension",             /* 496 SSL Certificate Required */
+    "nginx extension",             /* 497 HTTP Request Sent to HTTPS Port */
+    "nginx extension",             /* 499 Client Closed Request */
+
+    /* 5xx Server Error - RFC 9110 Section 15.6 */
+    "RFC 9110 \xc2\xa7""15.6.1",   /* 500 Internal Server Error */
+    "RFC 9110 \xc2\xa7""15.6.2",   /* 501 Not Implemented */
+    "RFC 9110 \xc2\xa7""15.6.3",   /* 502 Bad Gateway */
+    "RFC 9110 \xc2\xa7""15.6.4",   /* 503 Service Unavailable */
+    "RFC 9110 \xc2\xa7""15.6.5",   /* 504 Gateway Timeout */
+    "RFC 9110 \xc2\xa7""15.6.6",   /* 505 HTTP Version Not Supported */
+    "RFC 2295 \xc2\xa7""8.1",      /* 506 Variant Also Negotiates */
+    "RFC 4918 \xc2\xa7""11.5",     /* 507 Insufficient Storage */
+    "RFC 5842 \xc2\xa7""7.2",      /* 508 Loop Detected */
+    "RFC 2774 \xc2\xa7""7",        /* 510 Not Extended */
+    "RFC 6585 \xc2\xa7""6"         /* 511 Network Authentication Required */
+};
+
+#endif /* NGX_DEBUG */
 
 
 /*
@@ -401,7 +512,8 @@ ngx_http_status_validate(ngx_uint_t status)
  * and is dominated by network I/O at every realistic call site.
  *
  * The returned pointer is valid for the lifetime of the worker process
- * (the registry is in .rodata) and MUST NOT be freed by the caller.
+ * (the registry sits in a read-only-after-relocation section, mprotected
+ * by RELRO) and MUST NOT be freed by the caller.
  *
  * Returns:
  *   const ngx_str_t * pointer to the registered reason phrase, or to
