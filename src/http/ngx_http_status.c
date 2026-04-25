@@ -884,11 +884,33 @@ ngx_http_status_register(ngx_http_status_def_t *def)
  *
  *   3. (Strict mode only) Single-final-code enforcement per AAP §0.1.1 G4:
  *      detects a different final (>= 200 and <= 599) status assignment
- *      that overrides a final response already recorded on the request.
- *      Such attempts are rejected with NGX_LOG_ERR.  Identical
- *      reassignment of the same final code is permitted because it
- *      produces a wire-identical response and is a common idiom in
- *      NGINX's filter chain.
+ *      that overrides a non-200 final response already recorded on the
+ *      request.  Such attempts are rejected with NGX_LOG_ERR.  Two
+ *      categories of override are permitted:
+ *
+ *        (a) Identical reassignment (e.g., a phase handler re-emitting
+ *            the already-recorded code) is permitted because it produces
+ *            a wire-identical response and is a common idiom.
+ *
+ *        (b) Override of an existing NGX_HTTP_OK (200) by any other
+ *            final code is permitted because NGINX's filter chain
+ *            architecture is fundamentally override-based: content
+ *            handlers set an initial 200 OK and downstream header
+ *            filters (range, not-modified, error-page) override it to
+ *            the request-appropriate final code (206/304/416/4xx/5xx).
+ *            These overrides happen during in-memory request processing,
+ *            before any byte of the response is transmitted, so exactly
+ *            ONE final status still reaches the client.  Filter modules
+ *            guard their overrides with explicit `r->headers_out.status
+ *            == NGX_HTTP_OK` checks (see e.g. range_filter_module.c
+ *            line 156 and not_modified_filter_module.c line 57), so a
+ *            200-to-other-final transition observed at this site is a
+ *            documented filter-chain override rather than a genuine
+ *            protocol violation.
+ *
+ *      The forbidden case is therefore a transition between two
+ *      different non-200 final codes (e.g., 404 -> 500), which always
+ *      signals a logic bug in the calling module.
  *
  *   4. Bypasses strict validation when r->upstream is non-NULL (per AAP
  *      §0.1.1 I3 + §0.7.2 D-006).  Upstream pass-through must preserve the
@@ -929,8 +951,11 @@ ngx_http_status_register(ngx_http_status_def_t *def)
  *   NGX_OK     on successful assignment (always in permissive mode; in
  *              strict mode if validation passes).
  *   NGX_ERROR  in strict mode only, if validation fails (out-of-range
- *              code, 1xx after a final response, or a different final
- *              code overriding an existing final response).
+ *              code, 1xx after a final response, or a different non-200
+ *              final code overriding an existing non-200 final response;
+ *              200-to-other-final-code transitions are permitted as
+ *              documented filter-chain overrides — see the function body
+ *              comment for the full transition matrix).
  *
  * Side effects:
  *   - Sets r->headers_out.status = status (always, in permissive mode;
@@ -962,17 +987,67 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
         }
 
         /*
-         * Single-final-code enforcement per AAP §0.1.1 G4: reject any
-         * final (>= 200 and <= 599) status assignment that overrides a
-         * different final response already recorded on the request.
-         * Identical reassignment (e.g. a phase handler re-emitting
-         * NGX_HTTP_OK) is permitted because it produces a wire-identical
-         * response and is a common idiom in NGINX's filter chain; only
-         * a *different* final code constitutes the protocol violation
-         * the rule guards against.
+         * Single-final-code enforcement per AAP §0.1.1 G4: detect a
+         * different final (>= 200 and <= 599) status assignment that
+         * overrides a final response already recorded on the request.
+         *
+         * NGINX FILTER-CHAIN EXCEPTION (200 OK is the documented "initial"
+         * state that filters override):
+         *
+         * NGINX's response pipeline relies on content handlers setting an
+         * initial 200 OK that downstream header filters subsequently
+         * override based on request semantics.  Concrete in-tree examples:
+         *
+         *   - ngx_http_range_filter_module.c gates its filter on
+         *     "r->headers_out.status != NGX_HTTP_OK" (line 156) and only
+         *     overrides 200 -> 206 (Partial Content) for a satisfied Range
+         *     request, or 200 -> 416 (Range Not Satisfiable) for an
+         *     unsatisfiable Range.
+         *
+         *   - ngx_http_not_modified_filter_module.c gates its filter on
+         *     the same "r->headers_out.status != NGX_HTTP_OK" check
+         *     (line 57) and overrides 200 -> 304 (Not Modified) when
+         *     conditional-GET preconditions match.
+         *
+         *   - ngx_http_send_header() in ngx_http_core_module.c translates
+         *     r->err_status into the wire response (line 1883), which can
+         *     override the 200 set by an earlier content-handler call to
+         *     ngx_http_status_set() before the error path was selected.
+         *
+         * These overrides are intentional and produce wire-correct
+         * responses: exactly ONE final status reaches the client, because
+         * the override happens during in-memory request processing, before
+         * any byte of the response is transmitted.  Treating these
+         * transitions as protocol violations rejects valid NGINX filter
+         * chain semantics and causes range_filter/not_modified_filter to
+         * emit RFC-malformed responses (200 with Content-Range, 200 with
+         * full body for a matched If-Modified-Since, etc.).
+         *
+         * The check therefore applies only when the previously-recorded
+         * status is a non-200 final code.  Permitted transitions:
+         *
+         *   - 0      -> any final         (initial assignment)
+         *   - 200    -> any final         (filter chain override)
+         *   - C      -> C                 (idempotent reassignment)
+         *
+         * Forbidden transitions (true protocol-violation patterns):
+         *
+         *   - 4xx/5xx (other than 200) -> different non-equal final
+         *     (e.g., a 404 erroneously overridden by a 500 from a
+         *     separate code path is a genuine logic bug)
+         *
+         * Identical reassignment (e.g., a phase handler re-emitting an
+         * already-recorded NGX_HTTP_OK) remains permitted via the
+         * `!= status` predicate because it produces a wire-identical
+         * response and is a common idiom.
+         *
+         * The 1xx-after-final check above is unaffected by this exception:
+         * it operates on a disjoint slice of the (status, prior status)
+         * domain (1xx new code vs. any final prior).
          */
         if (status >= 200 && status <= 599
             && r->headers_out.status >= 200 && r->headers_out.status <= 599
+            && r->headers_out.status != NGX_HTTP_OK
             && r->headers_out.status != status)
         {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,

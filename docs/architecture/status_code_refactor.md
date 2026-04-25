@@ -202,8 +202,9 @@ flowchart TD
     RangeCheck -->|No| RangeFail["Log LOG_WARN:<br/>out of RFC 9110 range<br/>return NGX_ERROR"]
     RangeCheck -->|Yes| InformCheck{"status is 1xx<br/>AND<br/>r->headers_out.status<br/>is 2xx-5xx already?"}
     InformCheck -->|Yes - 1xx-after-final violation| InformFail["Log LOG_ERR:<br/>1xx after final response<br/>return NGX_ERROR"]
-    InformCheck -->|No| FinalCheck{"multiple final status<br/>assignments to same request?<br/>NOT DETECTED IN V1"}
-    FinalCheck -->|Not detected| LookupReason["ngx_http_status_reason&#40;status&#41;<br/>linear scan of 58-entry registry"]
+    InformCheck -->|No| FinalCheck{"new is final 200-599 AND<br/>existing is non-200 final 200-599 AND<br/>existing != new?<br/>filter-chain exception:<br/>existing == 200 is allowed"}
+    FinalCheck -->|Yes - genuine override conflict| FinalFail["Log LOG_ERR:<br/>final response N after final M<br/>single-final-code rule violated<br/>return NGX_ERROR"]
+    FinalCheck -->|No - allowed transition| LookupReason["ngx_http_status_reason&#40;status&#41;<br/>linear scan of 58-entry registry"]
     LookupReason --> LogDbg["Log LOG_DEBUG_HTTP:<br/>http status set: N reason<br/>strict=yes upstream=no"]
     LogDbg --> Assign["r->headers_out.status = status<br/>return NGX_OK"]
     Bypass --> Assign
@@ -212,18 +213,18 @@ flowchart TD
     classDef failBox fill:#f5d0c5,stroke:#8f3b00,color:#3d1a00
     classDef okBox fill:#dce9f7,stroke:#2a5a8a,color:#0b2a4a
     class Entry,RangeCheck,InformCheck,FinalCheck,LookupReason,LogDbg strictBox
-    class RangeFail,InformFail failBox
+    class RangeFail,InformFail,FinalFail failBox
     class Upstream,Bypass,Assign okBox
 ```
 
-**Figure 4 depicts:** the full strict-mode decision tree. Green diamonds and rectangles are the decision points and logging actions introduced in strict mode. Red rectangles are the two failure modes that return `NGX_ERROR`. Blue rectangles are the success paths.
+**Figure 4 depicts:** the full strict-mode decision tree. Green diamonds and rectangles are the decision points and logging actions introduced in strict mode. Red rectangles are the three failure modes that return `NGX_ERROR`. Blue rectangles are the success paths.
 
 **Decision-tree invariants:**
 
 1. **Upstream pass-through always bypasses validation.** Even in strict mode, if `r->upstream != NULL`, the code is assigned unconditionally. This is a hard contract per [decision D-006](./decision_log.md) — NGINX MUST NOT second-guess upstream response codes.
 2. **Range check is the first substantive check** when `r->upstream == NULL`. Codes outside 100–599 are rejected in strict mode and logged at WARN. Permissive mode (not shown in this figure; see Fig-3) logs at DEBUG and still assigns.
 3. **1xx-after-final detection** runs only after the range check succeeds. It examines the current `r->headers_out.status` field to determine whether a final (2xx–5xx) response has already been recorded; if so, a new 1xx assignment is a protocol violation per RFC 9110 § 15.2 (clients are required to be able to parse one or more 1xx responses received prior to a final response — the converse of 1xx after final is disallowed).
-4. **Multiple final status assignments** is not implemented in the initial refactor (flagged "NOT DETECTED IN V1" in Fig-4). A future enhancement may add request-state tracking; for now, the refactor accepts sequential final-code assignments for backward compatibility with modules that overwrite status during internal redirects.
+4. **Single-final-code enforcement with filter-chain exception.** A new final (200–599) code that overrides a different existing _non-200_ final code is rejected (e.g., a 404 erroneously overridden by a 500 indicates a logic bug). However, transitions FROM `NGX_HTTP_OK` (200) to any other final code are **always permitted** because NGINX's filter chain is fundamentally override-based: content handlers set an initial 200 OK and downstream header filters (`range_filter`, `not_modified_filter`, `error_page` handler) override it to the request-appropriate final code (206/304/416/4xx/5xx). These overrides happen in-memory before any byte is transmitted, so exactly ONE final status reaches the client. Filter modules guard their overrides with explicit `r->headers_out.status == NGX_HTTP_OK` checks before calling `ngx_http_status_set()` (see `range_filter_module.c:156`, `not_modified_filter_module.c:57`). Identical reassignment of the same code is also permitted.
 5. **Debug logging** is unconditional in strict mode — every successful `ngx_http_status_set` call emits a `NGX_LOG_DEBUG_HTTP` line. This line is the observability anchor per the [observability document](./observability.md).
 
 **What Fig-4 does NOT show:** the permissive-mode equivalent (simpler — only the range check logs at DEBUG; see Fig-3), the caller's error-handling contract (the caller should fall back to `NGX_HTTP_INTERNAL_SERVER_ERROR` on `NGX_ERROR` per the AAP error-handling protocol), and the registry-lookup internals (linear scan over 58 entries; see [decision D-007](./decision_log.md)).

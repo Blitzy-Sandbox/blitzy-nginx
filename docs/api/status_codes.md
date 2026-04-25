@@ -140,6 +140,18 @@ Assigns the response status code on the supplied request, performing range valid
 |---|---|---|
 | Out-of-range code (`< 100` or `> 599`) | `NGX_LOG_WARN` with RFC § reference | Returns `NGX_ERROR`; `r->headers_out.status` is NOT modified. |
 | 1xx code emitted after a final (2xx–5xx) response on same request | `NGX_LOG_ERR` | Returns `NGX_ERROR`; `r->headers_out.status` is NOT modified. |
+| Different final code (`200`–`599`) overriding an existing **non-200** final response on the same request (e.g., `404` → `500`) | `NGX_LOG_ERR` | Returns `NGX_ERROR`; `r->headers_out.status` is NOT modified. |
+
+**Single-final-code rule — filter-chain exception:** Transitions from `NGX_HTTP_OK` (200) to any other final code are **always permitted** in strict mode because NGINX's filter chain is fundamentally override-based: content handlers set an initial 200 OK and downstream header filters (`range`, `not_modified`, error-page handler) override it to the request-appropriate final code (206/304/416/4xx/5xx). These overrides happen during in-memory request processing, before any byte of the response is transmitted, so exactly ONE final status still reaches the client. Filter modules guard their overrides with `r->headers_out.status == NGX_HTTP_OK` checks (see `range_filter_module.c:156`, `not_modified_filter_module.c:57`). Identical reassignment of the same code is also permitted. The rule therefore rejects only the truly anomalous case: a transition between two _different non-200_ final codes, which always signals a logic bug in the calling module.
+
+**Permitted transition matrix (strict mode):**
+
+| Prior `r->headers_out.status` | New `status` | Outcome |
+|---|---|---|
+| `0` (default) | any final (200–599) | accepted (initial assignment) |
+| `200` (`NGX_HTTP_OK`) | any other final (200–599) | accepted (filter-chain override) |
+| `C` (any final) | `C` (same code) | accepted (idempotent reassignment) |
+| `C ≠ 200` (final) | `D ≠ C ≠ 200` (different non-200 final) | **rejected** (single-final-code violation) |
 
 **Threading:** Safe to call from any worker process. The function reads the immutable static registry; no shared-state mutation occurs.
 
