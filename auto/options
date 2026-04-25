@@ -262,7 +262,6 @@ $0: warning: the \"--with-ipv6\" option is deprecated"
         --with-http_secure_link_module)  HTTP_SECURE_LINK=YES       ;;
         --with-http_degradation_module)  HTTP_DEGRADATION=YES       ;;
         --with-http_slice_module)        HTTP_SLICE=YES             ;;
-        --with-http_status_validation)   HTTP_STATUS_VALIDATION=YES ;;
 
         --without-http_charset_module)   HTTP_CHARSET=NO            ;;
         --without-http_gzip_module)      HTTP_GZIP=NO               ;;
@@ -304,6 +303,9 @@ $0: warning: the \"--with-ipv6\" option is deprecated"
 
         # STUB
         --with-http_stub_status_module)  HTTP_STUB_STATUS=YES       ;;
+
+        # STATUS VALIDATION (RFC 9110 strict mode)
+        --with-http_status_validation)   HTTP_STATUS_VALIDATION=YES ;;
 
         --with-mail)                     MAIL=YES                   ;;
         --with-mail=dynamic)             MAIL=DYNAMIC               ;;

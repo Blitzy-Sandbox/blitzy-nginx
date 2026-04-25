@@ -10,23 +10,3 @@ cat << END >> $NGX_AUTO_CONFIG_H
 #endif
 
 END
-
-
-# Conditionally emit NGX_HTTP_STATUS_VALIDATION on first invocation only.
-# Activated by --with-http_status_validation in auto/options.
-# Idempotent via a one-shot guard variable so that repeated sourcing of
-# auto/define (which happens many times during configure) emits the macro
-# exactly once into objs/ngx_auto_config.h.
-if [ "${HTTP_STATUS_VALIDATION:-NO}" = YES ] \
-   && [ -z "${ngx_http_status_validation_defined}" ]
-then
-    ngx_http_status_validation_defined=yes
-
-    cat << END >> $NGX_AUTO_CONFIG_H
-
-#ifndef NGX_HTTP_STATUS_VALIDATION
-#define NGX_HTTP_STATUS_VALIDATION  1
-#endif
-
-END
-fi
