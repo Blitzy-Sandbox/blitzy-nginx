@@ -160,7 +160,25 @@ ngx_int_t ngx_http_filter_finalize_request(ngx_http_request_t *r,
 void ngx_http_clean_header(ngx_http_request_t *r);
 
 
-ngx_int_t ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status);
+/*
+ * The ngx_http_status_set prototype is declared in <ngx_http_status.h>
+ * with build-mode-dependent linkage:
+ *
+ *   - Permissive mode (default): defined as `static ngx_inline` in the
+ *     header, so every translation unit that includes <ngx_http.h> (which
+ *     pulls in <ngx_http_status.h> at line 35 above) gets a fully-inlined
+ *     copy.  This realizes AAP D-004's compile-time inlining promise and
+ *     AAP §0.7.6's "no CALL instruction for NGX_HTTP_OK-style literals"
+ *     disassembly criterion.
+ *
+ *   - Strict mode (--with-http_status_validation): declared extern in the
+ *     header; defined out-of-line in src/http/ngx_http_status.c with the
+ *     full RFC 9110 validation logic.
+ *
+ * Declaring the symbol here would either conflict with the static-inline
+ * permissive-mode definition or be redundant with the strict-mode extern
+ * declaration; <ngx_http_status.h> is the single source of truth.
+ */
 ngx_int_t ngx_http_status_validate(ngx_uint_t status);
 const ngx_str_t *ngx_http_status_reason(ngx_uint_t status);
 ngx_uint_t ngx_http_status_is_cacheable(ngx_uint_t status);

@@ -180,4 +180,138 @@ typedef struct {
 ngx_int_t ngx_http_status_init_registry(ngx_cycle_t *cycle);
 
 
+/*
+ * ngx_http_status_set: status-code assignment facade — dual-mode dispatch.
+ *
+ * The two build modes split the implementation strategy to satisfy AAP
+ * D-004 ("the compiler will optimize the range check to a no-op in
+ * permissive builds") and AAP §0.7.6 ("Confirm that gcc -O2 inlines
+ * ngx_http_status_set() for compile-time-constant arguments by inspecting
+ * disassembly... The expected output shows a direct store to
+ * r->headers_out.status with no CALL instruction for NGX_HTTP_OK-style
+ * literals").  Strict mode is opt-in (--with-http_status_validation) and
+ * keeps the extensive RFC 9110 validation logic out of line in
+ * ngx_http_status.c; permissive mode is the default and inlines a tiny
+ * fast-path body at every call site to deliver true zero-overhead
+ * dispatch.
+ *
+ *   Permissive mode (NGX_HTTP_STATUS_VALIDATION undefined — the default):
+ *
+ *     The function is defined here as `static ngx_inline`.  The body
+ *     comprises only an NGX_LOG_DEBUG_HTTP trace (which the preprocessor
+ *     fully eliminates in release builds — see <ngx_log.h>'s NGX_DEBUG
+ *     gating of the ngx_log_debug* macros) and a single store to
+ *     r->headers_out.status.  Because the body is visible to every
+ *     translation unit that includes <ngx_http.h>, gcc inlines it at
+ *     -O1 and higher (the default NGINX CFLAGS use -O which is
+ *     equivalent to -O1, and -O1 enables inlining of small static
+ *     functions visible at the call site).  For compile-time-constant
+ *     status arguments (e.g., NGX_HTTP_OK), the call collapses to a
+ *     single mov-immediate to r->headers_out.status, satisfying the AAP
+ *     D-004 zero-overhead promise and the §0.7.6 disassembly criterion.
+ *
+ *     The static-inline pattern is the canonical NGINX idiom for
+ *     header-resident inlinable helpers (see ngx_array_init in
+ *     <ngx_array.h>, ngx_log_error in <ngx_log.h>, ngx_atomic_*
+ *     primitives, and many others) and uses the same `ngx_inline`
+ *     keyword, which is conditionally `inline` per <ngx_config.h>.
+ *
+ *   Strict mode (NGX_HTTP_STATUS_VALIDATION defined):
+ *
+ *     The function is declared here as a normal extern prototype; the
+ *     definition lives in src/http/ngx_http_status.c and performs the
+ *     full RFC 9110 strict-validation logic (range check, 1xx-after-
+ *     final detection, single-final-code enforcement, upstream pass-
+ *     through bypass, structured WARN/ERR logging, debug-trace).  The
+ *     ~100-line body is too large to comfortably inline at every call
+ *     site without bloating the binary, and strict mode is an opt-in
+ *     pre-deployment validation feature where the marginal CALL/RET
+ *     cost is irrelevant to the production hot path.
+ *
+ * Include-order requirement (permissive mode):
+ *
+ *   The inline body references ngx_http_request_t pointer fields
+ *   (r->headers_out.status, r->upstream, r->connection->log).  The full
+ *   ngx_http_request_t type lives in <ngx_http_request.h>.  This header
+ *   <ngx_http_status.h> is included exclusively from <ngx_http.h> at
+ *   line 35, immediately AFTER <ngx_http_request.h> is included at line
+ *   34, guaranteeing that the full request type is visible whenever
+ *   this inline definition is processed.  Direct inclusion of this
+ *   header from a translation unit that has not first included
+ *   <ngx_http_request.h> (or its umbrella <ngx_http.h>) is not a
+ *   supported usage pattern.
+ *
+ * Parameters:
+ *   r       Active request whose response status code is being set.
+ *           Must not be NULL; r->connection must not be NULL;
+ *           r->connection->log must not be NULL (NGINX guarantees these
+ *           for any live request).
+ *   status  Numeric HTTP status code to assign.
+ *
+ * Returns:
+ *   NGX_OK     Always in permissive mode.  In strict mode: on successful
+ *              validation.
+ *   NGX_ERROR  Strict mode only: if validation rejects the code (out of
+ *              range, 1xx-after-final, or different non-200 final-code
+ *              transition — see the full transition matrix in the strict
+ *              definition's comment block in ngx_http_status.c).
+ *
+ * Side effects:
+ *   - Sets r->headers_out.status = status (always in permissive mode;
+ *     conditionally in strict mode, after validation passes).
+ *   - May emit a debug-level trace at NGX_LOG_DEBUG_HTTP via the
+ *     canonical observability format string documented in
+ *     docs/architecture/observability.md.  In strict mode validation
+ *     failures additionally emit NGX_LOG_WARN or NGX_LOG_ERR entries.
+ */
+#if (NGX_HTTP_STATUS_VALIDATION)
+
+ngx_int_t ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status);
+
+#else
+
+static ngx_inline ngx_int_t
+ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
+{
+    /*
+     * Emit the unified observability trace line per the canonical format
+     * string contract documented in docs/architecture/observability.md
+     * ("http status set: %ui %V (strict=%s upstream=%s)").  The four
+     * format fields — numeric code (%ui), canonical reason phrase from
+     * the registry (%V), the strict-mode flag literal (%s), and the
+     * upstream-presence flag (%s) — match the strict-mode emission in
+     * ngx_http_status.c so that downstream log parsers (e.g., the
+     * Grafana templates in docs/architecture/observability.md) extract
+     * fields uniformly across build modes.
+     *
+     * In release builds (NGX_DEBUG undefined) the entire ngx_log_debug4
+     * macro expands to nothing — the registry-lookup call to
+     * ngx_http_status_reason() and the literal-string load are both
+     * fully elided by the preprocessor — leaving only the assignment
+     * and return below.  In debug builds (NGX_DEBUG defined) the trace
+     * is emitted and the body is somewhat larger but still inlinable.
+     */
+    ngx_log_debug4(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http status set: %ui %V (strict=%s upstream=%s)",
+                   status, ngx_http_status_reason(status),
+                   "no",
+                   r->upstream != NULL ? "yes" : "no");
+
+    /*
+     * The single hot-path operation: store the numeric status code into
+     * r->headers_out.status.  For compile-time-constant status arguments
+     * the compiler folds this to a mov-immediate at the call site;
+     * for runtime-variable status arguments the compiler emits a single
+     * mov from the source register.  Either way, no CALL instruction is
+     * generated for ngx_http_status_set itself in optimized permissive
+     * builds — the AAP D-004 design contract is realized.
+     */
+    r->headers_out.status = status;
+
+    return NGX_OK;
+}
+
+#endif
+
+
 #endif /* _NGX_HTTP_STATUS_H_INCLUDED_ */

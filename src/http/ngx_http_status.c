@@ -869,22 +869,44 @@ ngx_http_status_register(ngx_http_status_def_t *def)
 /*
  * ngx_http_status_set: central facade for assigning the response status code.
  *
- * This is the unified entry point through which all NGINX-originated status
- * code assignments flow after this refactor.  It replaces the legacy direct
- * field assignment "r->headers_out.status = status;" pattern with a thin
- * facade that:
+ * BUILD-MODE DISPATCH (key invariant for the AAP D-004 zero-overhead promise):
  *
- *   1. (Strict mode only) Range-checks status against 100..599 inclusive.
- *      Out-of-range codes are rejected with NGX_LOG_WARN.  This prevents
- *      header injection via crafted status values per AAP §0.8.6.
+ *   This out-of-line definition compiles ONLY when NGX_HTTP_STATUS_VALIDATION
+ *   is defined (configure flag --with-http_status_validation).  In permissive
+ *   builds — the default — the function is defined as `static ngx_inline`
+ *   directly in <ngx_http_status.h> so that every translation unit that
+ *   includes <ngx_http.h> sees the body and inlines it at the call site.
+ *   That dual-mode split realizes AAP D-004's "compile-time inlining" design
+ *   contract and AAP §0.7.6's "no CALL instruction for NGX_HTTP_OK-style
+ *   literals" disassembly criterion: the public symbol `ngx_http_status_set`
+ *   does not appear in the binary's symbol table for default permissive
+ *   builds, and every compile-time-constant call site collapses to a single
+ *   mov-immediate to r->headers_out.status.
  *
- *   2. (Strict mode only) Detects a 1xx response emitted after a final
- *      (>= 200) response, which is a protocol violation.  Such attempts
- *      are rejected with NGX_LOG_ERR.
+ *   The strict-mode body below is large (~100 lines including comments) and
+ *   would inflate the binary substantially if inlined at every call site.
+ *   Strict mode is an opt-in pre-deployment validation feature, so the
+ *   marginal CALL/RET cost from out-of-line dispatch is acceptable in that
+ *   configuration.
  *
- *   3. (Strict mode only) Single-final-code enforcement per AAP §0.1.1 G4:
- *      detects a different final (>= 200 and <= 599) status assignment
- *      that overrides a non-200 final response already recorded on the
+ * STRICT-MODE BEHAVIOR (this function):
+ *
+ *   This is the unified entry point through which all NGINX-originated
+ *   status code assignments flow after this refactor.  It replaces the
+ *   legacy direct field assignment "r->headers_out.status = status;"
+ *   pattern with a facade that:
+ *
+ *   1. Range-checks status against 100..599 inclusive.  Out-of-range codes
+ *      are rejected with NGX_LOG_WARN.  This prevents header injection via
+ *      crafted status values per AAP §0.8.6.
+ *
+ *   2. Detects a 1xx response emitted after a final (>= 200) response,
+ *      which is a protocol violation.  Such attempts are rejected with
+ *      NGX_LOG_ERR.
+ *
+ *   3. Single-final-code enforcement per AAP §0.1.1 G4: detects a
+ *      different final (>= 200 and <= 599) status assignment that
+ *      overrides a non-200 final response already recorded on the
  *      request.  Such attempts are rejected with NGX_LOG_ERR.  Two
  *      categories of override are permitted:
  *
@@ -913,33 +935,23 @@ ngx_http_status_register(ngx_http_status_def_t *def)
  *      signals a logic bug in the calling module.
  *
  *   4. Bypasses strict validation when r->upstream is non-NULL (per AAP
- *      §0.1.1 I3 + §0.7.2 D-006).  Upstream pass-through must preserve the
- *      original code from the backend response verbatim, even if it falls
- *      outside the RFC range; rejecting an upstream's 0 or 999 would be a
- *      regression and a protocol violation against the proxy contract.
+ *      §0.1.1 I3 + §0.7.2 D-006).  Upstream pass-through must preserve
+ *      the original code from the backend response verbatim, even if it
+ *      falls outside the RFC range; rejecting an upstream's 0 or 999
+ *      would be a regression and a protocol violation against the proxy
+ *      contract.
  *
  *   5. Emits a debug-level trace log line at NGX_LOG_DEBUG_HTTP for every
- *      successful assignment in both strict and permissive modes, using
- *      the canonical format-string contract documented in
- *      docs/architecture/observability.md ("http status set: %ui %V
- *      (strict=%s upstream=%s)").  Validation failures emit their own
- *      higher-severity log lines (NGX_LOG_WARN / NGX_LOG_ERR) and do not
- *      proceed to the debug-trace emission because no assignment has
- *      occurred.
+ *      successful assignment, using the canonical format-string contract
+ *      documented in docs/architecture/observability.md ("http status
+ *      set: %ui %V (strict=%s upstream=%s)").  The permissive-mode inline
+ *      definition emits the same canonical format with a hard-coded
+ *      strict="no" so log parsers extract fields uniformly across modes.
+ *      Validation failures emit their own higher-severity log lines
+ *      (NGX_LOG_WARN / NGX_LOG_ERR) and do not proceed to the debug-
+ *      trace emission because no assignment has occurred.
  *
  *   6. Assigns r->headers_out.status to the requested value.
- *
- * Build-mode dispatch:
- *
- *   When NGX_HTTP_STATUS_VALIDATION is defined (configure flag
- *   --with-http_status_validation), strict-mode behavior is active and
- *   invalid codes return NGX_ERROR.  When it is NOT defined (the default),
- *   permissive-mode behavior is active: every code is assigned and the
- *   function always returns NGX_OK.  The unified debug log line is emitted
- *   in both modes — the only difference is the value of the "strict=..."
- *   flag in the format expansion.  The compiler eliminates the validation
- *   block in default builds, so default builds incur zero validation
- *   overhead beyond the assignment itself.
  *
  * Parameters:
  *   r       The request whose response status code is being set.  Must not
@@ -948,26 +960,23 @@ ngx_http_status_register(ngx_http_status_def_t *def)
  *   status  The numeric HTTP status code to assign.
  *
  * Returns:
- *   NGX_OK     on successful assignment (always in permissive mode; in
- *              strict mode if validation passes).
- *   NGX_ERROR  in strict mode only, if validation fails (out-of-range
- *              code, 1xx after a final response, or a different non-200
- *              final code overriding an existing non-200 final response;
- *              200-to-other-final-code transitions are permitted as
- *              documented filter-chain overrides — see the function body
- *              comment for the full transition matrix).
+ *   NGX_OK     on successful validation and assignment.
+ *   NGX_ERROR  if validation fails (out-of-range code, 1xx after a final
+ *              response, or a different non-200 final code overriding an
+ *              existing non-200 final response; 200-to-other-final-code
+ *              transitions are permitted as documented filter-chain
+ *              overrides — see the full transition matrix above).
  *
  * Side effects:
- *   - Sets r->headers_out.status = status (always, in permissive mode;
- *     conditionally in strict mode after validation passes).
+ *   - Sets r->headers_out.status = status when validation passes.
  *   - May emit log entries at NGX_LOG_DEBUG_HTTP, NGX_LOG_WARN, or
- *     NGX_LOG_ERR depending on the build mode and the input.
+ *     NGX_LOG_ERR depending on the input.
  */
+#if (NGX_HTTP_STATUS_VALIDATION)
+
 ngx_int_t
 ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 {
-#if (NGX_HTTP_STATUS_VALIDATION)
-
     if (r->upstream == NULL) {
         if (status < 100 || status > 599) {
             ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
@@ -1058,14 +1067,6 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
         }
     }
 
-#define NGX_HTTP_STATUS_STRICT_FLAG_STR  "yes"
-
-#else
-
-#define NGX_HTTP_STATUS_STRICT_FLAG_STR  "no"
-
-#endif
-
     /*
      * Emit the unified observability trace line per the canonical format
      * string documented in docs/architecture/observability.md:
@@ -1076,15 +1077,12 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
      * reason phrase from the registry), %s (strict-mode flag), %s
      * (upstream-presence flag) — must remain in this exact order so that
      * downstream log parsers (e.g., Grafana dashboards described in
-     * docs/architecture/observability.md) extract fields correctly.
+     * docs/architecture/observability.md) extract fields correctly.  This
+     * format is mirrored in the permissive-mode inline definition in
+     * <ngx_http_status.h> with a hard-coded strict="no" so that log lines
+     * from both modes parse identically.
      *
      * Implementation notes:
-     *
-     *   - The strict-mode flag is resolved at preprocessor time via
-     *     NGX_HTTP_STATUS_STRICT_FLAG_STR.  This avoids needing a live
-     *     local variable to bridge the validation #if boundary above and
-     *     keeps the single canonical format string intact (Finding #3 of
-     *     the Checkpoint 3 review report).
      *
      *   - The registry lookup ngx_http_status_reason(status) is inlined
      *     as a macro argument rather than assigned to a local variable.
@@ -1093,25 +1091,25 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
      *     fully elided by the preprocessor, and there is neither a
      *     runtime cost nor an "unused variable" warning.
      *
-     *   - The line is emitted on every successful assignment in both
-     *     strict and permissive modes.  Validation failures (above) emit
-     *     their own NGX_LOG_WARN / NGX_LOG_ERR entries and return
-     *     NGX_ERROR before reaching this point — those higher-severity
-     *     entries already record the rejected status, so emitting the
-     *     debug-trace line for a non-assignment would be misleading.
+     *   - The line is emitted on every successful assignment.  Validation
+     *     failures (above) emit their own NGX_LOG_WARN / NGX_LOG_ERR
+     *     entries and return NGX_ERROR before reaching this point —
+     *     those higher-severity entries already record the rejected
+     *     status, so emitting the debug-trace line for a non-assignment
+     *     would be misleading.
      */
     ngx_log_debug4(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http status set: %ui %V (strict=%s upstream=%s)",
                    status, ngx_http_status_reason(status),
-                   NGX_HTTP_STATUS_STRICT_FLAG_STR,
+                   "yes",
                    r->upstream != NULL ? "yes" : "no");
-
-#undef NGX_HTTP_STATUS_STRICT_FLAG_STR
 
     r->headers_out.status = status;
 
     return NGX_OK;
 }
+
+#endif /* NGX_HTTP_STATUS_VALIDATION */
 
 
 /*
