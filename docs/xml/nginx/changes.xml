@@ -5,6 +5,24 @@
 <change_log title="nginx">
 
 
+<changes ver="1.29.5" date="2026-04-25">
+
+<change type="feature">
+<para lang="ru">
+централизованный реестр HTTP-кодов ответов и API ngx_http_status_set();
+новый параметр конфигурации --with-http_status_validation для
+включения опциональной проверки соответствия RFC 9110.
+</para>
+<para lang="en">
+centralized HTTP status code registry and the ngx_http_status_set() API;
+the new "--with-http_status_validation" configure flag for
+opt-in RFC 9110 compliance checking.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.29.4" date="2025-12-09">
 
 <change type="feature">
