@@ -161,28 +161,46 @@ void ngx_http_clean_header(ngx_http_request_t *r);
 
 
 /*
- * The ngx_http_status_set prototype is declared in <ngx_http_status.h>
- * with build-mode-dependent linkage:
+ * All five public status-code API prototypes (ngx_http_status_set,
+ * ngx_http_status_validate, ngx_http_status_reason,
+ * ngx_http_status_is_cacheable, ngx_http_status_register) are declared
+ * in <ngx_http_status.h>, which is included from this file at line 35
+ * above.  Every HTTP module that includes <ngx_http.h> therefore still
+ * receives the full API surface transitively, satisfying AAP D-002's
+ * "every HTTP module already includes <ngx_http.h>, so placing
+ * prototypes there guarantees zero-touch availability to consumers"
+ * promise without duplication.
  *
- *   - Permissive mode (default): defined as `static ngx_inline` in the
- *     header, so every translation unit that includes <ngx_http.h> (which
- *     pulls in <ngx_http_status.h> at line 35 above) gets a fully-inlined
- *     copy.  This realizes AAP D-004's compile-time inlining promise and
- *     AAP §0.7.6's "no CALL instruction for NGX_HTTP_OK-style literals"
- *     disassembly criterion.
+ * The prototypes were consolidated into <ngx_http_status.h> because the
+ * permissive-mode `static ngx_inline` body of ngx_http_status_set()
+ * (defined inside <ngx_http_status.h>) calls ngx_http_status_reason()
+ * from inside its ngx_log_debug4 trace, and the compiler must see that
+ * prototype before processing the inline body.  Declaring the prototype
+ * here (in <ngx_http.h>, which includes <ngx_http_status.h> earlier)
+ * caused -Werror=implicit-function-declaration in the
+ * `--with-debug` + permissive build (NGX_DEBUG defined, no
+ * --with-http_status_validation): the inline body's ngx_log_debug4 call
+ * survives the preprocessor in debug builds and references a function
+ * declared 148 lines later.  See the matching comment block at the top
+ * of <ngx_http_status.h>'s public-prototype section for the full
+ * rationale.
  *
- *   - Strict mode (--with-http_status_validation): declared extern in the
- *     header; defined out-of-line in src/http/ngx_http_status.c with the
- *     full RFC 9110 validation logic.
+ * Build-mode dispatch for ngx_http_status_set itself remains as
+ * documented in <ngx_http_status.h>:
  *
- * Declaring the symbol here would either conflict with the static-inline
- * permissive-mode definition or be redundant with the strict-mode extern
- * declaration; <ngx_http_status.h> is the single source of truth.
+ *   - Permissive mode (default): defined as `static ngx_inline` in
+ *     <ngx_http_status.h>, so every translation unit that includes
+ *     <ngx_http.h> (which pulls in <ngx_http_status.h> at line 35
+ *     above) gets a fully-inlined copy.  This realizes AAP D-004's
+ *     compile-time inlining promise and AAP §0.7.6's "no CALL
+ *     instruction for NGX_HTTP_OK-style literals" disassembly
+ *     criterion.
+ *
+ *   - Strict mode (--with-http_status_validation): declared extern in
+ *     <ngx_http_status.h>; defined out-of-line in
+ *     src/http/ngx_http_status.c with the full RFC 9110 validation
+ *     logic.
  */
-ngx_int_t ngx_http_status_validate(ngx_uint_t status);
-const ngx_str_t *ngx_http_status_reason(ngx_uint_t status);
-ngx_uint_t ngx_http_status_is_cacheable(ngx_uint_t status);
-ngx_int_t ngx_http_status_register(ngx_http_status_def_t *def);
 
 
 ngx_int_t ngx_http_discard_request_body(ngx_http_request_t *r);

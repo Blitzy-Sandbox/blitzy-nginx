@@ -181,6 +181,50 @@ ngx_int_t ngx_http_status_init_registry(ngx_cycle_t *cycle);
 
 
 /*
+ * Public status-code API prototypes (ngx_http_status_validate,
+ * ngx_http_status_reason, ngx_http_status_is_cacheable,
+ * ngx_http_status_register).
+ *
+ * These four prototypes are declared HERE — inside <ngx_http_status.h> —
+ * rather than in the umbrella <ngx_http.h>, because the permissive-mode
+ * inline body of ngx_http_status_set() (defined further below in this
+ * file) calls ngx_http_status_reason() from inside its ngx_log_debug4
+ * trace.  The compiler must therefore see the prototype before it sees
+ * the inline body.
+ *
+ * Background on the original placement and the reason it could not be
+ * preserved:
+ *
+ *   - AAP D-002 originally placed all five public prototypes in
+ *     <ngx_http.h> for "discoverability" (every HTTP module already
+ *     includes <ngx_http.h>, so the API surface is reachable with no
+ *     extra include).
+ *
+ *   - Once ngx_http_status_set() became `static ngx_inline` in permissive
+ *     mode (D-004 / §0.7.6 zero-overhead requirement), its inline body
+ *     started referencing ngx_http_status_reason() at translation time.
+ *     With the prototypes in <ngx_http.h> and <ngx_http_status.h>
+ *     included earlier (see <ngx_http.h>'s include block), the body saw
+ *     ngx_http_status_reason() before its declaration and triggered
+ *     -Werror=implicit-function-declaration in the
+ *     `--with-debug` + permissive-mode build (NGX_DEBUG defined, so the
+ *     ngx_log_debug4 macro retains the call to ngx_http_status_reason()
+ *     at preprocessing time, exposing the missing prototype).
+ *
+ * Discoverability is preserved because <ngx_http.h> includes
+ * <ngx_http_status.h>; every HTTP module that includes <ngx_http.h>
+ * still receives all four prototypes transitively.  A translation unit
+ * that includes <ngx_http_status.h> directly (without <ngx_http.h>) now
+ * also gets the full public API surface, which is a strict improvement
+ * over the previous arrangement.
+ */
+ngx_int_t ngx_http_status_validate(ngx_uint_t status);
+const ngx_str_t *ngx_http_status_reason(ngx_uint_t status);
+ngx_uint_t ngx_http_status_is_cacheable(ngx_uint_t status);
+ngx_int_t ngx_http_status_register(ngx_http_status_def_t *def);
+
+
+/*
  * ngx_http_status_set: status-code assignment facade — dual-mode dispatch.
  *
  * The two build modes split the implementation strategy to satisfy AAP
