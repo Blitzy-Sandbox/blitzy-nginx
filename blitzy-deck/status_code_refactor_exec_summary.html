@@ -563,14 +563,14 @@
         <p class="lead">A surgical refactor of the NGINX 1.29.5 HTTP subsystem: a centralized status-code registry and unified API replace 15 in-scope direct field assignments across 12 source files &mdash; without disturbing a single existing constant or wire byte.</p>
         <div class="kpi-grid">
           <div class="kpi-card">
-            <p class="kpi-value">58</p>
+            <p class="kpi-value">45</p>
             <p class="kpi-label">Constants Preserved</p>
-            <p class="kpi-caption">Every NGX_HTTP_* macro retained byte-for-byte</p>
+            <p class="kpi-caption">43 NGX_HTTP_* + 2 NGX_HTTPS_* macros, byte-for-byte</p>
           </div>
           <div class="kpi-card">
-            <p class="kpi-value">21</p>
-            <p class="kpi-label">Files Modified</p>
-            <p class="kpi-caption">5 core + 16 modules touched in src/http/</p>
+            <p class="kpi-value">14</p>
+            <p class="kpi-label">Source Files Touched</p>
+            <p class="kpi-caption">5 core + 9 modules in src/http/ (plus 2 new)</p>
           </div>
           <div class="kpi-card">
             <p class="kpi-value">0</p>
@@ -594,7 +594,7 @@
         <pre class="mermaid">
 flowchart LR
     subgraph Constants["Scattered Constants"]
-      A1["~58 NGX_HTTP_* defines<br/>in ngx_http_request.h"]
+      A1["43 NGX_HTTP_* + 2 NGX_HTTPS_*<br/>defines in ngx_http_request.h"]
     end
     subgraph Consumers["Direct Field Assignments"]
       B1["12 in-scope files<br/>15 assignment sites"]
@@ -687,10 +687,10 @@ flowchart LR
       D2["ngx_http_status.c<br/>static registry array"]
     end
     subgraph Constants["Preserved Constants"]
-      A1["~58 NGX_HTTP_* defines<br/>retained verbatim"]
+      A1["43 NGX_HTTP_* + 2 NGX_HTTPS_*<br/>defines retained verbatim"]
     end
     subgraph Consumers["Refactored Consumers"]
-      B1["21 files via API<br/>ngx_http_status_set()"]
+      B1["12 files via API<br/>ngx_http_status_set()"]
     end
     subgraph Wire["Preserved Wire Tables"]
       C1["ngx_http_status_lines<br/>byte-for-byte"]
@@ -737,19 +737,19 @@ flowchart LR
               <td class="num-col">2</td>
               <td>Modified core HTTP files</td>
               <td class="count-col">5</td>
-              <td><code>ngx_http.h</code>, <code>ngx_http_request.c</code>, <code>ngx_http_core_module.c</code>, <code>ngx_http_special_response.c</code>, <code>ngx_http_upstream.c</code></td>
+              <td><code>ngx_http.c</code>, <code>ngx_http.h</code>, <code>ngx_http_request.c</code>, <code>ngx_http_core_module.c</code>, <code>ngx_http_upstream.c</code></td>
             </tr>
             <tr>
               <td class="num-col">3</td>
               <td>Modified HTTP modules</td>
-              <td class="count-col">16</td>
-              <td><code>ngx_http_static_module.c</code>, <code>ngx_http_dav_module.c</code>, <code>ngx_http_range_filter_module.c</code>, &hellip;</td>
+              <td class="count-col">9</td>
+              <td><code>ngx_http_static_module.c</code>, <code>ngx_http_dav_module.c</code>, <code>ngx_http_range_filter_module.c</code>, &hellip; (autoindex, flv, gzip_static, mp4, not_modified, stub_status)</td>
             </tr>
             <tr>
               <td class="num-col">4</td>
               <td>Modified build scripts</td>
-              <td class="count-col">4</td>
-              <td><code>auto/modules</code>, <code>auto/options</code>, <code>auto/summary</code>, <code>auto/define</code></td>
+              <td class="count-col">3</td>
+              <td><code>auto/modules</code>, <code>auto/options</code>, <code>auto/summary</code></td>
             </tr>
             <tr>
               <td class="num-col">5</td>
@@ -824,9 +824,9 @@ flowchart LR
 pie showData
     title Status Codes Registered by Class
     "1xx Informational" : 4
-    "2xx Successful" : 5
+    "2xx Successful" : 6
     "3xx Redirection" : 7
-    "4xx Client Error" : 26
+    "4xx Client Error" : 25
     "5xx Server Error" : 11
     "NGINX-specific 4xx" : 6
         </pre>
@@ -946,7 +946,7 @@ pie showData
           </div>
           <div class="closing-card">
             <div class="closing-eyebrow">PRESERVED</div>
-            <p>58 macros, the wire tables, the error-page table &mdash; every byte intact.</p>
+            <p>Every NGX_HTTP_* macro, the wire tables, the error-page table &mdash; every byte intact.</p>
           </div>
           <div class="closing-card">
             <div class="closing-eyebrow">VALIDATED</div>

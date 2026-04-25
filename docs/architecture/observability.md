@@ -48,7 +48,7 @@ The refactor leverages the following facilities already present in NGINX 1.29.5.
 
 | Gap | Fill | AAP Reference |
 |---|---|---|
-| No structured trace of status-code decisions | `ngx_http_status_set()` emits a single debug-level log line via `ngx_log_debug3(NGX_LOG_DEBUG_HTTP, ...)` for every call: `"http status set: %ui %V (strict=%s upstream=%s)"` — encoding the numeric code, the registered reason phrase (as `ngx_str_t`), the build-mode flag (`yes`/`no` per `NGX_HTTP_STATUS_VALIDATION`), and upstream presence (`yes` if `r->upstream != NULL` for pass-through classification). Activated globally by `error_log /path/to/error.log debug;` or per-connection via `debug_connection ip_or_cidr;`. The minimal example shape from AAP § 0.8.7 is `"http status set: 404 Not Found (valid)"`. | § 0.7.1.B, § 0.8.7 |
+| No structured trace of status-code decisions | `ngx_http_status_set()` emits a single debug-level log line via `ngx_log_debug4(NGX_LOG_DEBUG_HTTP, ...)` for every call: `"http status set: %ui %V (strict=%s upstream=%s)"` — encoding the numeric code, the registered reason phrase (as `ngx_str_t`), the build-mode flag (`yes`/`no` per `NGX_HTTP_STATUS_VALIDATION`), and upstream presence (`yes` if `r->upstream != NULL` for pass-through classification). The format string carries four substitutions, hence the `ngx_log_debug4` arity. Activated globally by `error_log /path/to/error.log debug;` or per-connection via `debug_connection ip_or_cidr;`. The minimal example shape from AAP § 0.8.7 is `"http status set: 404 Not Found (valid)"`. | § 0.7.1.B, § 0.8.7 |
 | No per-status-code call counter | **Intentionally NOT filled in-core.** Per AAP § 0.8.2 ("Never introduce caching mechanisms for status code lookups beyond direct array indexing"), no auxiliary data structure is added. The existing `$status` access-log variable enables post-hoc per-code rate analysis via log aggregation tooling. See the Grafana Dashboard Template below for the canonical log-aggregation approach. | § 0.7.1.B, § 0.8.2 |
 | No RFC-9110 violation counter | **Intentionally NOT filled in-core.** Instead, strict-mode violations are logged at `NGX_LOG_WARN` / `NGX_LOG_ERR`. Operators grep the error log (`grep 'ngx_http_status_set: invalid status' error.log \| wc -l`) to derive the count. Same rationale as above: zero runtime overhead in the hot path. | § 0.7.1.B, § 0.8.2 |
 
@@ -62,7 +62,7 @@ The single new debug line emitted by `ngx_http_status_set()` follows AAP § 0.8.
 - **Example output (permissive build, no upstream):** `http status set: 404 Not Found (strict=no upstream=no)`
 - **Example output (strict build, upstream pass-through):** `http status set: 502 Bad Gateway (strict=yes upstream=yes)`
 
-The debug line carries the request's correlation ID via the standard NGINX log prefix (`ngx_log_debug3` automatically prepends the connection log context, which includes `r->connection->log->connection` and the configured request-ID variable when the `error_log` format is set up to include it).
+The debug line carries the request's correlation ID via the standard NGINX log prefix (`ngx_log_debug4` automatically prepends the connection log context, which includes `r->connection->log->connection` and the configured request-ID variable when the `error_log` format is set up to include it).
 
 ## Recommended `log_format` for Status-Code Observability
 

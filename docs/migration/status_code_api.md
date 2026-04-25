@@ -53,7 +53,7 @@ The refactor is **strictly additive**. The following invariants are contractual 
 | Direct field assignment (`r->headers_out.status = X;`) continues to compile | AAP R-6 | Existing modules that have not migrated still compile. The field is not deprecated, hidden, or renamed. |
 | `NGX_MODULE_V1` ABI unchanged | AAP R-2 | Pre-compiled `.so` modules built against pristine NGINX 1.29.5 headers continue to load against the refactored binary. No recompilation required to keep modules functional. |
 | `ngx_http_output_header_filter_pt`, `ngx_http_output_body_filter_pt` signatures unchanged | AAP R-4 | Filter modules retain their function signatures. No filter-chain reordering or registration-call-shape changes. |
-| `nginx.conf` directive behavior unchanged for `error_page`, `return`, `proxy_intercept_errors` | AAP § 0.8.5 preservation mandate | Configuration files that reference these directives need NO changes. The `error_page` parser at `ngx_http_core_module.c:4888-5003` is preserved byte-for-byte. |
+| `nginx.conf` directive behavior unchanged for `error_page`, `return`, `proxy_intercept_errors` | AAP § 0.8.5 preservation mandate | Configuration files that reference these directives need NO changes. The `error_page` parser (function `ngx_http_core_error_page`) at `ngx_http_core_module.c:4914-5029` is preserved byte-for-byte. |
 | Wire format unchanged: `ngx_http_status_lines[]` table preserved byte-for-byte | AAP D-008 | HTTP/1.1 reason phrases on the wire are unchanged. Browsers and HTTP clients see exactly the same status lines as before. |
 | `$status`, `$upstream_status` access-log variables preserved | AAP § 0.3.2 | Log-analysis tools and dashboards continue to work without changes. The `$status` variable still emits the post-masquerade wire status (e.g., 400 for an internal 497). |
 | HTTP/2 and HTTP/3 numeric `:status` pseudo-header unchanged | AAP § 0.3.2 | HPACK-encoded HTTP/2 responses and QPACK-encoded HTTP/3 responses are byte-for-byte identical to the pre-refactor binary on identical inputs. |
@@ -584,7 +584,7 @@ Instead, emit `503` with the canonical phrase and surface the operational distin
 
 ### Pitfall 8: Modifying the `error_page` Directive Behavior
 
-The AAP § 0.8.5 preservation mandate forbids any modification to `error_page`, `return`, or `proxy_intercept_errors` directive parsing or behavior. The `error_page` parser at `src/http/ngx_http_core_module.c:4888-5003` is preserved byte-for-byte. Do NOT attempt to extend `error_page` semantics by hooking into the new API; the registry is for status-code metadata only, not for error-page mapping. If your module needs custom error-page handling, write your own directive that delegates to your own table.
+The AAP § 0.8.5 preservation mandate forbids any modification to `error_page`, `return`, or `proxy_intercept_errors` directive parsing or behavior. The `error_page` parser (function `ngx_http_core_error_page`) at `src/http/ngx_http_core_module.c:4914-5029` is preserved byte-for-byte. Do NOT attempt to extend `error_page` semantics by hooking into the new API; the registry is for status-code metadata only, not for error-page mapping. If your module needs custom error-page handling, write your own directive that delegates to your own table.
 
 ## Verification Checklist
 
@@ -685,8 +685,8 @@ A: No plans. Per the project's permanent backward-compatibility commitment (AAP 
   - `src/http/modules/ngx_http_not_modified_filter_module.c:94` — Pattern 1 (`NGX_HTTP_NOT_MODIFIED` 304 constant)
   - `src/http/modules/ngx_http_range_filter_module.c:234` — Pattern 1 (`NGX_HTTP_PARTIAL_CONTENT` 206 constant)
   - `src/http/modules/ngx_http_range_filter_module.c:618` — Pattern 1 (`NGX_HTTP_RANGE_NOT_SATISFIABLE` 416 constant)
-  - `src/http/ngx_http_core_module.c:1781` — Pattern 2 (runtime variable `status`)
-  - `src/http/ngx_http_core_module.c:1859` — Pattern 2 (runtime variable `r->err_status`)
+  - `src/http/ngx_http_core_module.c:1781` — Pattern 2 (runtime variable `status`; canonical early-return AAP § 0.1.2 R3 pattern)
+  - `src/http/ngx_http_core_module.c:1883` — Pattern 2 variant (runtime variable `r->err_status`; uses fallback-assign of `NGX_HTTP_INTERNAL_SERVER_ERROR` per AAP § 0.8.7 instead of early-return because the calling context — `ngx_http_send_header()` — must continue to invoke `ngx_http_top_header_filter(r)`)
   - `src/http/ngx_http_request.c:2838` — Pattern 2 (runtime variable in subrequest copy-through)
   - `src/http/ngx_http_request.c:3915` — Pattern 2 (runtime variable in lifecycle finalize)
   - `src/http/ngx_http_upstream.c:3165` — Pattern 5 (upstream pass-through `u->headers_in.status_n`)

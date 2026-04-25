@@ -18,7 +18,7 @@ The five public functions:
 | [`ngx_http_status_is_cacheable`](#ngx_http_status_is_cacheable) | Query the cacheability flag (RFC 9111 § 3) for a status code. |
 | [`ngx_http_status_register`](#ngx_http_status_register) | Register a custom status code (init-phase only). |
 
-The registry contains approximately **58 entries** spanning RFC 9110 standard codes (1xx through 5xx) and 6 NGINX-specific 4xx extensions (444, 494, 495, 496, 497, 499). Each entry carries the numeric code, the canonical RFC 9110 reason phrase, a class/flag bitmask, and a textual RFC section reference for compliance auditing. The exact count varies by ±1 depending on whether the registry includes 203 Non-Authoritative Information as a registry-only entry; see the [Status Code Registry](#status-code-registry) section for the complete enumeration.
+The registry contains **59 entries** spanning RFC 9110 standard codes (1xx through 5xx) and 6 NGINX-specific 4xx extensions (444, 494, 495, 496, 497, 499). Each entry carries the numeric code, the canonical RFC 9110 reason phrase, a class/flag bitmask, and a textual RFC section reference for compliance auditing. Of these, 44 numeric codes are backed by `NGX_HTTP_*` or `NGX_HTTPS_*` macros declared in `src/http/ngx_http_request.h` (43 `NGX_HTTP_*` macros plus 2 `NGX_HTTPS_*` macros, with one shared 494 value reducing the unique count by one); the remaining entries — most notably 203 Non-Authoritative Information — are registry-only and have no corresponding macro. See the [Status Code Registry](#status-code-registry) section for the complete enumeration.
 
 This document is the **definitive API contract reference** — the "what" of the API. It enumerates every public symbol, every parameter, every return value, every side effect, every error condition, every behavioral mode, and every registered status code. For migration guidance (the "how" of adopting the API), see the [migration guide](../migration/status_code_api.md). For architectural decisions and rationale, see the [decision log](../architecture/decision_log.md).
 
@@ -618,7 +618,7 @@ Final responses indicating that the server is aware that it has erred or is inca
 
 **Registry total:** 4 (1xx) + 6 (2xx) + 7 (3xx) + 25 (4xx standard) + 6 (NGINX 4xx) + 11 (5xx) = **59 entries**.
 
-**Note on count:** The registry includes 203 Non-Authoritative Information (RFC 9110 § 15.3.4) as a registry-only entry without a corresponding `NGX_HTTP_*` macro. Including this code yields 59 entries; excluding it (matching only the macros declared in `src/http/ngx_http_request.h`) yields 58. The registry initialization code in `src/http/ngx_http_status.c` is the source of truth for the precise count in any given build.
+**Note on count:** The registry includes several entries that have no corresponding `NGX_HTTP_*` or `NGX_HTTPS_*` macro in `src/http/ngx_http_request.h`, most prominently 203 Non-Authoritative Information (RFC 9110 § 15.3.4). The 59-entry registry total comprises 44 unique numeric codes that are macro-backed (43 `NGX_HTTP_*` status-code macros declared in lines 74–145 of `ngx_http_request.h` — two of which share value 494 — plus 2 `NGX_HTTPS_*` extensions for 495 and 496) plus 15 registry-only entries that exist purely as compliance metadata. The registry initialization code in `src/http/ngx_http_status.c` is the source of truth for the precise count in any given build.
 
 
 ## Wire Phrase vs Registry Phrase Divergences
@@ -672,7 +672,7 @@ The optional `--with-threads` AIO threadpool (used for large-file IO) does NOT t
 Per [decision D-004](../architecture/decision_log.md#architectural-decisions), the registry is statically initialized at compile time via C aggregate initializers and stored in the `.rodata` section of the NGINX binary. Implications:
 
 - **Zero per-worker heap allocation.** The registry is mapped read-only and shared across all worker processes via the kernel's copy-on-write page sharing.
-- **Estimated `.rodata` footprint:** approximately 1.4 KB for the 58-entry array plus reason-phrase string literals. Per [AAP § 0.7.6 Memory Footprint](../architecture/decision_log.md#performance-impact), this exceeds the <1 KB per-worker target in raw size but is effectively 0 bytes per-worker incrementally because of page sharing.
+- **Estimated `.rodata` footprint:** approximately 1.4 KB for the 59-entry array plus reason-phrase string literals. Per [AAP § 0.7.6 Memory Footprint](../architecture/decision_log.md#performance-impact), this exceeds the <1 KB per-worker target in raw size but is effectively 0 bytes per-worker incrementally because of page sharing.
 - **No dangling pointers.** All `ngx_str_t` reason phrases reference compile-time string literals with static storage duration; they are never freed.
 - **No initialization-order bugs.** Static initialization happens before `main()`; the registry is ready before any module's `init_module` callback runs.
 
@@ -793,7 +793,7 @@ my_module_preconfiguration(ngx_conf_t *cf)
 ## See Also
 
 - [`../migration/status_code_api.md`](../migration/status_code_api.md) — Migration guide for third-party module authors (the "how" of adopting the API)
-- [`../architecture/decision_log.md`](../architecture/decision_log.md) — Architectural decisions D-001 through D-009 and bidirectional traceability matrix
+- [`../architecture/decision_log.md`](../architecture/decision_log.md) — Architectural decisions D-001 through D-010 and bidirectional traceability matrix
 - [`../architecture/status_code_refactor.md`](../architecture/status_code_refactor.md) — Mermaid before/after architecture diagrams (Fig-1 through Fig-5)
 - [`../architecture/observability.md`](../architecture/observability.md) — Observability integration: log format, Grafana dashboard template, local verifiability checklist
 - [`../../CODE_REVIEW.md`](../../CODE_REVIEW.md) — Six-phase segmented PR review artifact

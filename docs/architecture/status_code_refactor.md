@@ -10,7 +10,7 @@ This document visualizes the architectural change introduced by the centralized 
 
 | Figure | Topic | Purpose |
 |---|---|---|
-| [Fig-1](#fig-1--status-code-handling-before-refactor) | Before-refactor status-code flow | Shows the pre-refactor pattern where ~20 modules directly mutate `r->headers_out.status`, with wire-table and error-page lookups occurring as parallel side effects downstream. |
+| [Fig-1](#fig-1--status-code-handling-before-refactor) | Before-refactor status-code flow | Shows the pre-refactor pattern where direct `r->headers_out.status` mutations are spread across 20 source files containing 33 assignments (per AAP §0.2.1 empirical inventory), with wire-table and error-page lookups occurring as parallel side effects downstream. |
 | [Fig-2](#fig-2--status-code-handling-after-refactor) | After-refactor status-code flow | Shows the post-refactor unified API facade (`ngx_http_status_set`) mediating all nginx-originated status-code assignments; preserved constants and wire tables are shown in muted styling. |
 | [Fig-3](#fig-3--request-lifecycle-status-code-flow) | End-to-end status-code flow | Traces the status-code journey from configuration load to worker fork to request arrival to API call to wire emission (HTTP/1.1 + HTTP/2 + HTTP/3 branches). |
 | [Fig-4](#fig-4--strict-mode-validation-decision-tree) | Strict-mode validation decision tree | Depicts the conditional checks applied when `--with-http_status_validation` is enabled: range check, upstream bypass, 1xx-after-final detection, single-final-code enforcement. |
@@ -28,16 +28,16 @@ The pre-refactor architecture has scattered `NGX_HTTP_*` macro constants flowing
 flowchart LR
     subgraph Constants["Scattered Constants"]
         direction TB
-        A1["src/http/ngx_http_request.h<br/>#define NGX_HTTP_OK 200<br/>#define NGX_HTTP_NOT_FOUND 404<br/>~58 codes total"]
+        A1["src/http/ngx_http_request.h<br/>#define NGX_HTTP_OK 200<br/>#define NGX_HTTP_NOT_FOUND 404<br/>43 NGX_HTTP_* + 2 NGX_HTTPS_* macros"]
     end
 
-    subgraph Consumers["Consumer Modules - 20 files, 19 direct assignments"]
+    subgraph Consumers["Consumer Modules - 20 files, ~33 direct assignments (AAP §0.2.1 inventory)"]
         direction TB
         B1["ngx_http_static_module.c<br/>r->headers_out.status = NGX_HTTP_OK"]
         B2["ngx_http_core_module.c<br/>r->headers_out.status = status"]
         B3["ngx_http_request.c<br/>r->headers_out.status = rc"]
         B4["ngx_http_upstream.c<br/>pass-through from upstream"]
-        B5["16 other modules<br/>direct assignments"]
+        B5["~16 other modules<br/>(many filter/index modules)<br/>direct assignments"]
     end
 
     subgraph WireTables["Wire Tables - Parallel Side Effects"]
@@ -81,21 +81,21 @@ flowchart LR
     subgraph API["Unified API Layer - NEW"]
         direction TB
         D1["ngx_http_status.h<br/>ngx_http_status_set<br/>ngx_http_status_validate<br/>ngx_http_status_reason<br/>ngx_http_status_is_cacheable<br/>ngx_http_status_register"]
-        D2["ngx_http_status.c<br/>static ngx_http_status_def_t<br/>ngx_http_status_registry&#91;58&#93;"]
+        D2["ngx_http_status.c<br/>static ngx_http_status_def_t<br/>ngx_http_status_registry&#91;59&#93;"]
     end
 
     subgraph Constants["Preserved Constants - UNCHANGED"]
         direction TB
-        A1["src/http/ngx_http_request.h<br/>#define NGX_HTTP_OK 200<br/>#define NGX_HTTP_NOT_FOUND 404<br/>all 58 retained verbatim"]
+        A1["src/http/ngx_http_request.h<br/>#define NGX_HTTP_OK 200<br/>#define NGX_HTTP_NOT_FOUND 404<br/>43 NGX_HTTP_* + 2 NGX_HTTPS_* retained verbatim"]
     end
 
-    subgraph Consumers["Refactored Consumers - 20 files, 19 conversions"]
+    subgraph Consumers["Refactored Consumers - 12 files, 15 conversions"]
         direction TB
         B1["ngx_http_static_module.c<br/>ngx_http_status_set&#40;r, NGX_HTTP_OK&#41;"]
         B2["ngx_http_core_module.c<br/>ngx_http_status_set&#40;r, status&#41;"]
         B3["ngx_http_request.c<br/>ngx_http_status_set&#40;r, rc&#41;"]
         B4["ngx_http_upstream.c<br/>upstream bypass via r->upstream"]
-        B5["16 other modules<br/>all via API"]
+        B5["8 other modules<br/>autoindex, dav, flv, gzip_static,<br/>mp4, not_modified_filter,<br/>range_filter, stub_status<br/>all via API"]
     end
 
     subgraph WireTables["Preserved Wire Tables - UNCHANGED"]
@@ -132,7 +132,7 @@ flowchart LR
     class E1 buildBox
 ```
 
-**Figure 2 depicts:** the new architecture with the API facade as a single choke point. Green boxes are new or modified (API layer + 20 refactored consumers). Grey boxes are explicitly preserved (constants + wire tables + error-page table). Blue indicates the new optional build flag.
+**Figure 2 depicts:** the new architecture with the API facade as a single choke point. Green boxes are new or modified (API layer + 12 refactored consumer files containing 15 call sites: 3 core HTTP files contributing 5 calls — `ngx_http_core_module.c` (2), `ngx_http_request.c` (2), `ngx_http_upstream.c` (1) — plus 9 modules contributing 10 calls — `ngx_http_range_filter_module.c` (2) and 1 each in autoindex, dav, flv, gzip_static, mp4, not_modified_filter, static, stub_status). Grey boxes are explicitly preserved (constants + wire tables + error-page table). Blue indicates the new optional build flag.
 
 **What Fig-2 does NOT show:** the internal implementation of `ngx_http_status_set` (see Fig-4), the HTTP/2 and HTTP/3 wire-emission paths (see Fig-3), and the compile-time inlining behavior (see [decision log](./decision_log.md) Performance Impact section).
 
@@ -204,7 +204,7 @@ flowchart TD
     InformCheck -->|Yes - 1xx-after-final violation| InformFail["Log LOG_ERR:<br/>1xx after final response<br/>return NGX_ERROR"]
     InformCheck -->|No| FinalCheck{"new is final 200-599 AND<br/>existing is non-200 final 200-599 AND<br/>existing != new?<br/>filter-chain exception:<br/>existing == 200 is allowed"}
     FinalCheck -->|Yes - genuine override conflict| FinalFail["Log LOG_ERR:<br/>final response N after final M<br/>single-final-code rule violated<br/>return NGX_ERROR"]
-    FinalCheck -->|No - allowed transition| LookupReason["ngx_http_status_reason&#40;status&#41;<br/>linear scan of 58-entry registry"]
+    FinalCheck -->|No - allowed transition| LookupReason["ngx_http_status_reason&#40;status&#41;<br/>linear scan of 59-entry registry"]
     LookupReason --> LogDbg["Log LOG_DEBUG_HTTP:<br/>http status set: N reason<br/>strict=yes upstream=no"]
     LogDbg --> Assign["r->headers_out.status = status<br/>return NGX_OK"]
     Bypass --> Assign
@@ -227,7 +227,7 @@ flowchart TD
 4. **Single-final-code enforcement with filter-chain exception.** A new final (200–599) code that overrides a different existing _non-200_ final code is rejected (e.g., a 404 erroneously overridden by a 500 indicates a logic bug). However, transitions FROM `NGX_HTTP_OK` (200) to any other final code are **always permitted** because NGINX's filter chain is fundamentally override-based: content handlers set an initial 200 OK and downstream header filters (`range_filter`, `not_modified_filter`, `error_page` handler) override it to the request-appropriate final code (206/304/416/4xx/5xx). These overrides happen in-memory before any byte is transmitted, so exactly ONE final status reaches the client. Filter modules guard their overrides with explicit `r->headers_out.status == NGX_HTTP_OK` checks before calling `ngx_http_status_set()` (see `range_filter_module.c:156`, `not_modified_filter_module.c:57`). Identical reassignment of the same code is also permitted.
 5. **Debug logging** is unconditional in strict mode — every successful `ngx_http_status_set` call emits a `NGX_LOG_DEBUG_HTTP` line. This line is the observability anchor per the [observability document](./observability.md).
 
-**What Fig-4 does NOT show:** the permissive-mode equivalent (simpler — only the range check logs at DEBUG; see Fig-3), the caller's error-handling contract (the caller should fall back to `NGX_HTTP_INTERNAL_SERVER_ERROR` on `NGX_ERROR` per the AAP error-handling protocol), and the registry-lookup internals (linear scan over 58 entries; see [decision D-007](./decision_log.md)).
+**What Fig-4 does NOT show:** the permissive-mode equivalent (simpler — only the range check logs at DEBUG; see Fig-3), the caller's error-handling contract (the caller should fall back to `NGX_HTTP_INTERNAL_SERVER_ERROR` on `NGX_ERROR` per the AAP error-handling protocol), and the registry-lookup internals (linear scan over 59 entries; see [decision D-007](./decision_log.md)).
 
 **Reader takeaway:** Strict-mode validation is opt-in, fails closed (returns `NGX_ERROR`) on violations, and logs richly for post-mortem analysis. Default builds retain permissive behavior for backward compatibility.
 
@@ -252,29 +252,31 @@ graph TD
 
     subgraph CoreModified["Modified - Core HTTP Files - 5"]
         direction TB
-        M1["src/http/ngx_http.h"]
-        M2["src/http/ngx_http_request.c"]
-        M3["src/http/ngx_http_core_module.c"]
-        M4["src/http/ngx_http_special_response.c"]
+        M1["src/http/ngx_http.c"]
+        M2["src/http/ngx_http.h"]
+        M3["src/http/ngx_http_request.c"]
+        M4["src/http/ngx_http_core_module.c"]
         M5["src/http/ngx_http_upstream.c"]
     end
 
-    subgraph ModuleModified["Modified - HTTP Modules - up to 16"]
+    subgraph ModuleModified["Modified - HTTP Modules - 9"]
         direction TB
-        ML1["static, autoindex, index"]
-        ML2["dav, gzip_static, random_index"]
-        ML3["stub_status, mirror, empty_gif"]
-        ML4["flv, mp4, range_filter"]
-        ML5["not_modified_filter, ssi_filter"]
-        ML6["addition_filter, gunzip_filter"]
+        ML1["ngx_http_static_module.c"]
+        ML2["ngx_http_autoindex_module.c"]
+        ML3["ngx_http_dav_module.c"]
+        ML4["ngx_http_gzip_static_module.c"]
+        ML5["ngx_http_stub_status_module.c"]
+        ML6["ngx_http_flv_module.c"]
+        ML7["ngx_http_mp4_module.c"]
+        ML8["ngx_http_range_filter_module.c"]
+        ML9["ngx_http_not_modified_filter_module.c"]
     end
 
-    subgraph BuildModified["Modified - Build System - 4"]
+    subgraph BuildModified["Modified - Build System - 3"]
         direction TB
         B1["auto/modules"]
         B2["auto/options"]
         B3["auto/summary"]
-        B4["auto/define"]
     end
 
     subgraph DocsModified["Modified - Changelog - 1"]
@@ -283,7 +285,7 @@ graph TD
 
     subgraph Preserved["Preserved Byte-for-Byte - key files"]
         direction TB
-        P1["src/http/ngx_http_request.h<br/>all 58 NGX_HTTP_* macros retained"]
+        P1["src/http/ngx_http_request.h<br/>43 NGX_HTTP_* + 2 NGX_HTTPS_* macros retained"]
         P2["src/http/ngx_http_header_filter_module.c<br/>ngx_http_status_lines&#91;&#93; wire table"]
         P3["src/http/ngx_http_special_response.c<br/>error_pages table + security handlers"]
         P4["src/http/v2/<br/>HTTP/2 codepath - numeric pass-through"]
@@ -303,7 +305,7 @@ graph TD
     classDef modifiedBox fill:#dce9f7,stroke:#2a5a8a,color:#0b2a4a
     classDef preservedBox fill:#e8e8e8,stroke:#666666,color:#333333
     class N1,N2,N3,N4,N5,N6,N7,N8,N9 newBox
-    class M1,M2,M3,M4,M5,ML1,ML2,ML3,ML4,ML5,ML6,B1,B2,B3,B4,D1 modifiedBox
+    class M1,M2,M3,M4,M5,ML1,ML2,ML3,ML4,ML5,ML6,ML7,ML8,ML9,B1,B2,B3,D1 modifiedBox
     class P1,P2,P3,P4,P5,P6,P7 preservedBox
 ```
 
@@ -314,11 +316,11 @@ graph TD
 | Category | File Count | Character of Change |
 |---|---|---|
 | NEW files | 9 | `src/http/ngx_http_status.{c,h}` (API implementation + header); 7 documentation/review artifacts |
-| MODIFIED core HTTP files | 5 | Direct-assignment conversions in `ngx_http.h`, `ngx_http_request.c`, `ngx_http_core_module.c`, `ngx_http_special_response.c`, `ngx_http_upstream.c` |
-| MODIFIED HTTP module files | up to 16 | Direct-assignment conversions; 1–3 lines each |
-| MODIFIED build-system scripts | 4 | `auto/modules`, `auto/options`, `auto/summary`, `auto/define` |
+| MODIFIED core HTTP files | 5 | Direct-assignment conversions and registry initializer wiring in `ngx_http.c`, `ngx_http.h`, `ngx_http_request.c`, `ngx_http_core_module.c`, `ngx_http_upstream.c` |
+| MODIFIED HTTP module files | 9 | Direct-assignment conversions; 1–3 lines each. Files: `ngx_http_static_module.c`, `ngx_http_autoindex_module.c`, `ngx_http_dav_module.c`, `ngx_http_gzip_static_module.c`, `ngx_http_stub_status_module.c`, `ngx_http_flv_module.c`, `ngx_http_mp4_module.c`, `ngx_http_range_filter_module.c`, `ngx_http_not_modified_filter_module.c` |
+| MODIFIED build-system scripts | 3 | `auto/modules`, `auto/options`, `auto/summary` (no change to `auto/define` was required because the `--with-http_status_validation` flag is exposed via `auto/options` and emitted via `auto/feature` indirection) |
 | MODIFIED changelog | 1 | `docs/xml/nginx/changes.xml` entry |
-| PRESERVED byte-for-byte | dozens | `src/http/ngx_http_request.h` (58 macros), `ngx_http_header_filter_module.c` (wire table), `ngx_http_special_response.c` (error-pages table + security handler logic), HTTP/2, HTTP/3, Perl module, and all non-HTTP subsystems |
+| PRESERVED byte-for-byte | dozens | `src/http/ngx_http_request.h` (43 NGX_HTTP_* + 2 NGX_HTTPS_* macros), `ngx_http_header_filter_module.c` (wire table), `ngx_http_special_response.c` (error-pages table + security handler logic), HTTP/2, HTTP/3, Perl module, and all non-HTTP subsystems |
 
 **What Fig-5 does NOT show:** file-level line counts or diff magnitudes (see [decision log](./decision_log.md) for conversion-by-conversion detail), the cross-file dependency graph (implicit via `#include` — `ngx_http_status.h` is included by `ngx_http.h`, which is included by every modified consumer transitively), and the tests/validation artifacts (external `nginx-tests` per AAP § 0.3.2, not committed to this repository).
 
