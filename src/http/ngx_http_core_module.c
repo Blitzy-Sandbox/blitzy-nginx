@@ -1778,7 +1778,9 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
         return rc;
     }
 
-    r->headers_out.status = status;
+    if (ngx_http_status_set(r, status) != NGX_OK) {
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
 
     if (ngx_http_complex_value(r, cv, &val) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -1856,7 +1858,7 @@ ngx_http_send_header(ngx_http_request_t *r)
     }
 
     if (r->err_status) {
-        r->headers_out.status = r->err_status;
+        (void) ngx_http_status_set(r, r->err_status);
         r->headers_out.status_line.len = 0;
     }
 
