@@ -255,7 +255,7 @@ ngx_http_autoindex_handler(ngx_http_request_t *r)
         return ngx_http_autoindex_error(r, &dir, &path);
     }
 
-    r->headers_out.status = NGX_HTTP_OK;
+    (void) ngx_http_status_set(r, NGX_HTTP_OK);
 
     switch (format) {
 
