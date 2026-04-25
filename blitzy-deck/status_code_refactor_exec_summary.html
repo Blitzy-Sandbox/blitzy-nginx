@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Centralized HTTP Status Code API — Executive Summary</title>
+  <meta name="description" content="Executive summary of the NGINX 1.29.5 HTTP status code registry refactor.">
+
+  <!-- Preconnect for Google Fonts performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- reveal.js 5.1.0 core CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <!-- reveal.js 5.1.0 theme (white) — baseline reset; we override extensively below -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+
+  <!-- Google Fonts: Inter, Space Grotesk, Fira Code -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Fira+Code:wght@400;500&display=swap">
+
+  <style>
+    /* ==========================================================================
+       Blitzy Brand System — CSS Custom Properties
+       ========================================================================== */
+    :root {
+      --blitzy-primary: #5B39F3;
+      --blitzy-primary-light: #7A6DEC;
+      --blitzy-primary-deep: #4101DB;
+      --blitzy-navy: #0E1330;
+      --blitzy-navy-deep: #06091B;
+      --blitzy-ink: #1A1F36;
+      --blitzy-text: #2B2F4A;
+      --blitzy-muted: #6B7191;
+      --blitzy-line: #E5E7F2;
+      --blitzy-bg: #FAFBFF;
+      --blitzy-card: #FFFFFF;
+      --blitzy-success: #15B886;
+      --blitzy-warn: #F0A23C;
+      --blitzy-danger: #E5484D;
+      --blitzy-hero-gradient: linear-gradient(68deg, #7A6DEC 15.56%, #5B39F3 62.74%, #4101DB 84.44%);
+      --blitzy-accent-gradient: linear-gradient(90deg, #7A6DEC 0%, #5B39F3 50%, #4101DB 100%);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+      --font-mono: 'Fira Code', 'SFMono-Regular', Menlo, monospace;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --shadow-card: 0 4px 14px rgba(14, 19, 48, 0.08), 0 1px 3px rgba(14, 19, 48, 0.04);
+      --shadow-elev: 0 12px 32px rgba(91, 57, 243, 0.18);
+    }
+
+    /* ==========================================================================
+       Global resets / reveal.js overrides
+       ========================================================================== */
+    html, body {
+      background: var(--blitzy-bg);
+    }
+
+    .reveal {
+      font-family: var(--font-sans);
+      color: var(--blitzy-text);
+      font-size: 28px;
+      background: var(--blitzy-bg);
+    }
+
+    .reveal .slides {
+      text-align: left;
+    }
+
+    .reveal .slides section {
+      padding: 80px 100px;
+      box-sizing: border-box;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--blitzy-bg);
+    }
+
+    .reveal h1,
+    .reveal h2,
+    .reveal h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      color: var(--blitzy-ink);
+      letter-spacing: -0.01em;
+      text-transform: none;
+    }
+
+    .reveal h1 {
+      font-size: 64px;
+      line-height: 1.05;
+      margin: 0 0 24px 0;
+    }
+
+    .reveal h2 {
+      font-size: 44px;
+      line-height: 1.1;
+      margin: 0 0 32px 0;
+    }
+
+    .reveal h3 {
+      font-size: 28px;
+      line-height: 1.2;
+      margin: 0 0 8px 0;
+    }
+
+    .reveal p,
+    .reveal li {
+      font-size: 24px;
+      line-height: 1.5;
+      color: var(--blitzy-text);
+      margin: 0 0 16px 0;
+    }
+
+    .reveal a {
+      color: var(--blitzy-primary);
+      text-decoration: none;
+      border-bottom: 1px solid currentColor;
+    }
+
+    .reveal .controls {
+      color: var(--blitzy-primary);
+    }
+
+    .reveal .progress {
+      color: var(--blitzy-primary);
+      height: 4px;
+    }
+
+    .reveal .slide-number {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--blitzy-muted);
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 4px;
+      padding: 4px 8px;
+    }
+
+    /* ==========================================================================
+       Slide-type classes
+       ========================================================================== */
+
+    /* Title slide (slide 1) */
+    .reveal .slides section.slide-title {
+      background: var(--blitzy-hero-gradient);
+      color: #FFFFFF;
+    }
+
+    .reveal section.slide-title h1 {
+      color: #FFFFFF;
+      font-size: 72px;
+      line-height: 1.05;
+      max-width: 1500px;
+    }
+
+    .reveal section.slide-title .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0.9;
+      margin-bottom: 24px;
+      color: #FFFFFF;
+    }
+
+    .reveal section.slide-title .subtitle {
+      font-size: 28px;
+      font-weight: 400;
+      opacity: 0.92;
+      margin-top: 32px;
+      max-width: 1300px;
+      color: #FFFFFF;
+    }
+
+    /* Divider slides (4, 6, 9, 12, 14) */
+    .reveal .slides section.slide-divider {
+      background: var(--blitzy-hero-gradient);
+      color: #FFFFFF;
+      align-items: center;
+      text-align: center;
+    }
+
+    .reveal section.slide-divider h2 {
+      font-size: 56px;
+      color: #FFFFFF;
+      text-align: center;
+      margin-top: 32px;
+    }
+
+    .reveal section.slide-divider p {
+      color: #FFFFFF;
+    }
+
+    .reveal section.slide-divider .divider-icon {
+      width: 96px;
+      height: 96px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto;
+    }
+
+    .reveal section.slide-divider .divider-icon svg {
+      stroke: #FFFFFF;
+      width: 48px;
+      height: 48px;
+      stroke-width: 1.75;
+    }
+
+    /* Closing slide (slide 16) */
+    .reveal .slides section.slide-closing {
+      background: var(--blitzy-navy-deep);
+      color: #FFFFFF;
+      position: relative;
+    }
+
+    .reveal section.slide-closing h1 {
+      color: #FFFFFF;
+      font-size: 56px;
+    }
+
+    .reveal section.slide-closing p {
+      color: #FFFFFF;
+    }
+
+    /* ==========================================================================
+       Reusable component classes
+       ========================================================================== */
+
+    /* Eyebrow mini — small accent line above content slide titles */
+    .eyebrow-mini {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--blitzy-primary);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 500;
+      margin: 0 0 10px 0;
+    }
+
+    /* Lead intro paragraph below h2 on content slides */
+    .lead {
+      font-size: 22px;
+      color: var(--blitzy-muted);
+      max-width: 1500px;
+      margin: 0 0 16px 0;
+      line-height: 1.5;
+    }
+
+    /* KPI grid + KPI card */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .kpi-card {
+      background: var(--blitzy-card);
+      border: 1px solid var(--blitzy-line);
+      border-radius: var(--radius-md);
+      padding: 36px 28px 32px 28px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--blitzy-accent-gradient);
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+
+    .kpi-card .kpi-value {
+      font-family: var(--font-display);
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--blitzy-primary);
+      line-height: 1;
+      margin: 0;
+    }
+
+    .kpi-card .kpi-label {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      color: var(--blitzy-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+      margin: 14px 0 0 0;
+      font-weight: 600;
+    }
+
+    .kpi-card .kpi-caption {
+      font-size: 16px;
+      color: var(--blitzy-text);
+      margin: 10px 0 0 0;
+      line-height: 1.4;
+    }
+
+    /* Value grid + value card (for slides 5 and 15) */
+    .value-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 32px;
+    }
+
+    .value-grid.three-col {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .value-card {
+      background: var(--blitzy-card);
+      border: 1px solid var(--blitzy-line);
+      border-left: 4px solid var(--blitzy-primary);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      padding: 24px 28px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .value-card .value-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .value-card .value-head svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--blitzy-primary);
+      stroke-width: 2;
+      flex-shrink: 0;
+    }
+
+    .value-card h3 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--blitzy-ink);
+    }
+
+    .value-card p {
+      font-size: 19px;
+      line-height: 1.5;
+      color: var(--blitzy-text);
+      margin: 0;
+    }
+
+    /* Styled table (for slides 8 and 13) */
+    .styled-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 18px;
+      margin-top: 20px;
+      background: var(--blitzy-card);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+
+    .styled-table thead {
+      background: var(--blitzy-navy);
+      color: #FFFFFF;
+      text-align: left;
+    }
+
+    .styled-table thead th {
+      padding: 16px 20px;
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #FFFFFF;
+    }
+
+    .styled-table tbody td {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--blitzy-line);
+      color: var(--blitzy-text);
+      font-size: 17px;
+      vertical-align: top;
+      line-height: 1.4;
+    }
+
+    .styled-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .styled-table tbody tr:nth-child(even) {
+      background: rgba(91, 57, 243, 0.03);
+    }
+
+    .styled-table .num-col {
+      font-family: var(--font-mono);
+      color: var(--blitzy-primary);
+      font-weight: 600;
+      width: 60px;
+    }
+
+    .styled-table .count-col {
+      font-family: var(--font-mono);
+      color: var(--blitzy-primary);
+      font-weight: 600;
+      text-align: center;
+      width: 90px;
+    }
+
+    .styled-table code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: rgba(91, 57, 243, 0.07);
+      color: var(--blitzy-primary-deep);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Mermaid container */
+    .mermaid {
+      background: var(--blitzy-card);
+      border: 1px solid var(--blitzy-line);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin: 12px 0 6px 0;
+      box-shadow: var(--shadow-card);
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .mermaid svg {
+      max-width: 100% !important;
+      max-height: 660px !important;
+      height: auto !important;
+      width: auto !important;
+      display: inline-block;
+    }
+
+    /* Mermaid 11 / htmlLabels: true — override max-width clipping that
+       causes node labels to truncate when our chosen webfonts (Inter)
+       are wider than the metric Mermaid measured at first paint.
+       Setting max-width to none forces foreignObjects to honour their
+       natural content width; the diagram engine compensates by widening
+       the bounding rect on subsequent layout. */
+    .reveal .mermaid foreignObject {
+      overflow: visible !important;
+    }
+
+    .reveal .mermaid foreignObject > div {
+      max-width: none !important;
+      white-space: nowrap !important;
+      display: inline-block !important;
+    }
+
+    .reveal .mermaid .nodeLabel,
+    .reveal .mermaid .edgeLabel,
+    .reveal .mermaid .cluster-label {
+      max-width: none !important;
+    }
+
+    /* Inline-pre formatting for Mermaid source so the embedded
+       <pre class="mermaid"> blocks do not visually leak as monospace
+       text before the rendering library replaces them. */
+    .mermaid:not([data-processed="true"]) {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--blitzy-muted);
+      text-align: left;
+      white-space: pre-wrap;
+      min-height: 80px;
+    }
+
+    .fig-caption {
+      font-size: 16px;
+      color: var(--blitzy-muted);
+      margin-top: 12px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Closing slide cards */
+    .closing-takeaways {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 4px;
+    }
+
+    .closing-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 24px 28px;
+      border-radius: var(--radius-md);
+    }
+
+    .closing-card .closing-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      letter-spacing: 0.16em;
+      opacity: 0.6;
+      color: #FFFFFF;
+    }
+
+    .closing-card p {
+      margin-top: 12px;
+      font-size: 22px;
+      line-height: 1.4;
+      color: #FFFFFF;
+    }
+
+    .brand-lockup {
+      position: absolute;
+      bottom: 48px;
+      left: 100px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      letter-spacing: 0.18em;
+      opacity: 0.55;
+      color: #FFFFFF;
+    }
+
+    /* Print-friendly fallback */
+    @media print {
+      .reveal .slides section {
+        page-break-after: always;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- ============================================================
+           SLIDE 1 — Title
+           ============================================================ -->
+      <section class="slide-title">
+        <p class="eyebrow">REFACTOR &middot; NGINX 1.29.5</p>
+        <h1>Centralized HTTP Status Code API</h1>
+        <p class="subtitle">Registry-driven HTTP semantics. RFC 9110 ready. Zero ABI regressions.</p>
+        <div class="accent-bar" style="height: 4px; width: 120px; background: rgba(255,255,255,0.85); margin-top: 40px; border-radius: 2px;"></div>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 2 — KPI Summary
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">EXECUTIVE OVERVIEW</p>
+        <h2>At a Glance &mdash; KPI Summary</h2>
+        <p class="lead">A surgical refactor of the NGINX 1.29.5 HTTP subsystem: a centralized status-code registry and unified API replace 33 scattered field assignments &mdash; without disturbing a single existing constant or wire byte.</p>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <p class="kpi-value">58</p>
+            <p class="kpi-label">Constants Preserved</p>
+            <p class="kpi-caption">Every NGX_HTTP_* macro retained byte-for-byte</p>
+          </div>
+          <div class="kpi-card">
+            <p class="kpi-value">21</p>
+            <p class="kpi-label">Files Modified</p>
+            <p class="kpi-caption">5 core + 16 modules touched in src/http/</p>
+          </div>
+          <div class="kpi-card">
+            <p class="kpi-value">0</p>
+            <p class="kpi-label">ABI Regressions</p>
+            <p class="kpi-caption">Module API + filter signatures unchanged</p>
+          </div>
+          <div class="kpi-card">
+            <p class="kpi-value">&lt;2%</p>
+            <p class="kpi-label">Latency Overhead</p>
+            <p class="kpi-caption">wrk -t4 -c100 -d30s validation gate</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 3 — Current Architecture (Mermaid: Before)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">BEFORE</p>
+        <h2>Current Architecture</h2>
+        <pre class="mermaid">
+flowchart LR
+    subgraph Constants["Scattered Constants"]
+      A1["~58 NGX_HTTP_* defines<br/>in ngx_http_request.h"]
+    end
+    subgraph Consumers["Direct Field Assignments"]
+      B1["20 modules<br/>33 assignment sites"]
+    end
+    subgraph Wire["Parallel Wire Tables"]
+      C1["ngx_http_status_lines"]
+      C2["ngx_http_error_pages"]
+    end
+    A1 --&gt; B1
+    B1 --&gt; C1
+    C1 -. on error .-&gt; C2
+
+    classDef warn fill:#FDE7E9,stroke:#E5484D,color:#1A1F36
+    classDef neutral fill:#FAFBFF,stroke:#E5E7F2,color:#1A1F36
+    class A1 warn
+    class B1 warn
+    class C1,C2 neutral
+        </pre>
+        <p class="fig-caption">Fig-1. Pre-refactor: scattered constants, ad-hoc field mutations, no validation.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 4 — Divider: Why This Matters
+           ============================================================ -->
+      <section class="slide-divider">
+        <div class="divider-icon"><i data-lucide="shield-check"></i></div>
+        <h2>Why This Matters</h2>
+        <p style="text-align: center; opacity: 0.85; max-width: 760px; margin: 24px auto 0; font-size: 24px; line-height: 1.5;">Consolidating status-code semantics enables RFC compliance, observability, and safe extension &mdash; without disrupting third-party modules.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 5 — Business Value Unlocked
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">STRATEGIC OUTCOMES</p>
+        <h2>Business Value Unlocked</h2>
+        <p class="lead">Four enduring outcomes that compound across every future NGINX release.</p>
+        <div class="value-grid">
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="target"></i>
+              <h3>Consistency</h3>
+            </div>
+            <p>One registry. One assignment API. One source of truth across 84+ consumer files in the HTTP subsystem.</p>
+          </div>
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="book-open-check"></i>
+              <h3>RFC 9110 Readiness</h3>
+            </div>
+            <p>Every code carries its IETF specification reference; opt-in strict mode enforces conformance at compile time.</p>
+          </div>
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="puzzle"></i>
+              <h3>Extensibility</h3>
+            </div>
+            <p>Future status codes register through one entry point &mdash; no scavenger hunt across the source tree.</p>
+          </div>
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="eye"></i>
+              <h3>Observability</h3>
+            </div>
+            <p>Debug-level trace and structured logging on every status set; built on existing NGINX log infrastructure.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           SLIDE 6 — Divider: What Changed
+           ============================================================ -->
+      <section class="slide-divider">
+        <div class="divider-icon"><i data-lucide="git-compare"></i></div>
+        <h2>What Changed</h2>
+        <p style="text-align: center; opacity: 0.85; max-width: 760px; margin: 24px auto 0; font-size: 24px; line-height: 1.5;">A surgical, backward-compatible refactor &mdash; additive API, preserved constants, zero protocol-layer impact.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 7 — Target Architecture (Mermaid: After)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">AFTER</p>
+        <h2>Target Architecture</h2>
+        <pre class="mermaid">
+flowchart LR
+    subgraph API["Unified API Facade (NEW)"]
+      D1["ngx_http_status.h<br/>5 public functions"]
+      D2["ngx_http_status.c<br/>static registry array"]
+    end
+    subgraph Constants["Preserved Constants"]
+      A1["~58 NGX_HTTP_* defines<br/>retained verbatim"]
+    end
+    subgraph Consumers["Refactored Consumers"]
+      B1["21 files via API<br/>ngx_http_status_set()"]
+    end
+    subgraph Wire["Preserved Wire Tables"]
+      C1["ngx_http_status_lines<br/>byte-for-byte"]
+    end
+    A1 -.symbolic.-&gt; D1
+    D1 --&gt; D2
+    B1 --&gt; D1
+    D1 --&gt; C1
+
+    classDef new fill:#E9F8F1,stroke:#15B886,color:#1A1F36
+    classDef preserved fill:#EFF1FA,stroke:#5B39F3,color:#1A1F36
+    classDef neutral fill:#FAFBFF,stroke:#E5E7F2,color:#1A1F36
+    class D1,D2 new
+    class A1,C1 preserved
+    class B1 neutral
+        </pre>
+        <p class="fig-caption">Fig-2. Post-refactor: facade + registry; constants and wire tables intact.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 8 — File Change Summary (Styled Table)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">DELIVERY FOOTPRINT</p>
+        <h2>File Change Summary</h2>
+        <p class="lead">A precise accounting of every touched, created, and preserved file across the refactor.</p>
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th style="width: 60px;">#</th>
+              <th>Category</th>
+              <th style="width: 100px;">Count</th>
+              <th>Examples</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="num-col">1</td>
+              <td>New files (C source)</td>
+              <td class="count-col">2</td>
+              <td><code>ngx_http_status.c</code>, <code>ngx_http_status.h</code></td>
+            </tr>
+            <tr>
+              <td class="num-col">2</td>
+              <td>Modified core HTTP files</td>
+              <td class="count-col">5</td>
+              <td><code>ngx_http.h</code>, <code>ngx_http_request.c</code>, <code>ngx_http_core_module.c</code>, <code>ngx_http_special_response.c</code>, <code>ngx_http_upstream.c</code></td>
+            </tr>
+            <tr>
+              <td class="num-col">3</td>
+              <td>Modified HTTP modules</td>
+              <td class="count-col">16</td>
+              <td><code>ngx_http_static_module.c</code>, <code>ngx_http_dav_module.c</code>, <code>ngx_http_range_filter_module.c</code>, &hellip;</td>
+            </tr>
+            <tr>
+              <td class="num-col">4</td>
+              <td>Modified build scripts</td>
+              <td class="count-col">4</td>
+              <td><code>auto/modules</code>, <code>auto/options</code>, <code>auto/summary</code>, <code>auto/define</code></td>
+            </tr>
+            <tr>
+              <td class="num-col">5</td>
+              <td>New documentation files</td>
+              <td class="count-col">5</td>
+              <td><code>docs/api/</code>, <code>docs/migration/</code>, <code>docs/architecture/</code> (3 files)</td>
+            </tr>
+            <tr>
+              <td class="num-col">6</td>
+              <td>Modified changelog</td>
+              <td class="count-col">1</td>
+              <td><code>docs/xml/nginx/changes.xml</code></td>
+            </tr>
+            <tr>
+              <td class="num-col">7</td>
+              <td>Files preserved unchanged</td>
+              <td class="count-col">100+</td>
+              <td>Wire tables, error-page table, parsers, HTTP/2, HTTP/3, cache, parse, variables</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 9 — Divider: How We Validated
+           ============================================================ -->
+      <section class="slide-divider">
+        <div class="divider-icon"><i data-lucide="check-circle-2"></i></div>
+        <h2>How We Validated</h2>
+        <p style="text-align: center; opacity: 0.85; max-width: 760px; margin: 24px auto 0; font-size: 24px; line-height: 1.5;">Four independent quality gates &mdash; automated, reproducible, and run on the fully-converted binary.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 10 — Quality Gates (KPI Cards)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">VALIDATION COVERAGE</p>
+        <h2>Quality Gates</h2>
+        <p class="lead">Each gate is independently verifiable, deterministic, and reproducible from a clean checkout.</p>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <p class="kpi-value">PASS</p>
+            <p class="kpi-label">nginx-tests</p>
+            <p class="kpi-caption">External Perl suite, all status-code scenarios</p>
+          </div>
+          <div class="kpi-card">
+            <p class="kpi-value">0</p>
+            <p class="kpi-label">Valgrind Leaks</p>
+            <p class="kpi-caption">--leak-check=full on refactored paths</p>
+          </div>
+          <div class="kpi-card">
+            <p class="kpi-value">&lt;2%</p>
+            <p class="kpi-label">wrk Latency Delta</p>
+            <p class="kpi-caption">p50, p95, p99 vs baseline</p>
+          </div>
+          <div class="kpi-card">
+            <p class="kpi-value">4</p>
+            <p class="kpi-label">Build Matrix</p>
+            <p class="kpi-caption">Linux gcc &middot; Linux clang &middot; FreeBSD &middot; macOS</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           SLIDE 11 — RFC 9110 Compliance (Mermaid Pie Chart)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">STANDARDS COVERAGE</p>
+        <h2>RFC 9110 Compliance</h2>
+        <pre class="mermaid">
+pie showData
+    title Status Codes Registered by Class
+    "1xx Informational" : 4
+    "2xx Successful" : 5
+    "3xx Redirection" : 7
+    "4xx Client Error" : 26
+    "5xx Server Error" : 11
+    "NGINX-specific 4xx" : 6
+        </pre>
+        <p class="fig-caption">Fig-3. Each registry entry references its RFC 9110 &sect;15 section; NGINX extensions tagged separately.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 12 — Divider: Risks and Mitigations
+           ============================================================ -->
+      <section class="slide-divider">
+        <div class="divider-icon"><i data-lucide="alert-triangle"></i></div>
+        <h2>Risks and Mitigations</h2>
+        <p style="text-align: center; opacity: 0.85; max-width: 760px; margin: 24px auto 0; font-size: 24px; line-height: 1.5;">Every known constraint is paired with an explicit, deterministic mitigation strategy.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 13 — Known Constraints (Styled Table)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">RISK REGISTER</p>
+        <h2>Known Constraints</h2>
+        <p class="lead">Six identified constraints, each with a deterministic mitigation already in place.</p>
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th style="width: 36%;">Risk</th>
+              <th>Mitigation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="num-col">1</td>
+              <td>Wire-format reason phrase divergence (302, 408, 413, 414, 416, 503) between RFC 9110 and <code>ngx_http_status_lines[]</code></td>
+              <td>Wire table preserved byte-for-byte; registry carries canonical phrase for new consumers; tracked in decision log</td>
+            </tr>
+            <tr>
+              <td class="num-col">2</td>
+              <td><code>error_page</code> parser legacy validation rules (300&ndash;599 + 499 rejection)</td>
+              <td>Parser preserved byte-for-byte; out of refactor scope; behavior change forbidden by AAP</td>
+            </tr>
+            <tr>
+              <td class="num-col">3</td>
+              <td>Upstream backends emitting non-canonical codes (e.g., 999)</td>
+              <td>API bypasses strict validation when <code>r-&gt;upstream != NULL</code>; preserves existing pass-through semantics</td>
+            </tr>
+            <tr>
+              <td class="num-col">4</td>
+              <td>Strict-mode default could break third-party modules</td>
+              <td>Strict mode is OPT-IN via <code>--with-http_status_validation</code>; default builds remain permissive</td>
+            </tr>
+            <tr>
+              <td class="num-col">5</td>
+              <td>Two divergent <code>NGX_HTTP_LAST_2XX</code> definitions (207 vs 202)</td>
+              <td>Pre-existing behavior preserved; harmonization explicitly out of scope</td>
+            </tr>
+            <tr>
+              <td class="num-col">6</td>
+              <td>Per-worker memory budget (&lt;1 KB/worker)</td>
+              <td>Static registry; no heap allocation; <code>rfc_section</code> field moved to debug-only parallel array</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 14 — Divider: Operational Readiness
+           ============================================================ -->
+      <section class="slide-divider">
+        <div class="divider-icon"><i data-lucide="rocket"></i></div>
+        <h2>Operational Readiness</h2>
+        <p style="text-align: center; opacity: 0.85; max-width: 760px; margin: 24px auto 0; font-size: 24px; line-height: 1.5;">Documentation, review trail, and migration guidance ready for downstream consumers.</p>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 15 — On-boarding and Follow-up (3-column value cards)
+           ============================================================ -->
+      <section>
+        <p class="eyebrow-mini">WHERE TO GO NEXT</p>
+        <h2>On-boarding and Follow-up</h2>
+        <p class="lead">Three pre-staged starting points for engineering leaders, reviewers, and module authors.</p>
+        <div class="value-grid three-col">
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="library"></i>
+              <h3>Documentation</h3>
+            </div>
+            <p><code>docs/api/status_codes.md</code> for the API reference; <code>docs/architecture/</code> for diagrams, decision log, observability.</p>
+          </div>
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="clipboard-check"></i>
+              <h3>Code Review</h3>
+            </div>
+            <p><code>CODE_REVIEW.md</code> at repo root: six-phase segmented review with Principal Reviewer sign-off.</p>
+          </div>
+          <div class="value-card">
+            <div class="value-head">
+              <i data-lucide="arrow-right-left"></i>
+              <h3>Migration Guide</h3>
+            </div>
+            <p><code>docs/migration/status_code_api.md</code> for third-party module authors &mdash; before/after patterns, common pitfalls.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           SLIDE 16 — Closing
+           ============================================================ -->
+      <section class="slide-closing">
+        <h1>RFC-Ready. ABI-Safe. Shipped.</h1>
+        <div class="accent-bar" style="height: 6px; width: 240px; background: var(--blitzy-accent-gradient); border-radius: 3px; margin: 8px 0 40px 0;"></div>
+        <div class="closing-takeaways">
+          <div class="closing-card">
+            <div class="closing-eyebrow">CONSOLIDATED</div>
+            <p>One registry, one API, one validated path for every HTTP status.</p>
+          </div>
+          <div class="closing-card">
+            <div class="closing-eyebrow">PRESERVED</div>
+            <p>58 macros, the wire tables, the error-page table &mdash; every byte intact.</p>
+          </div>
+          <div class="closing-card">
+            <div class="closing-eyebrow">VALIDATED</div>
+            <p>nginx-tests, valgrind, wrk &mdash; all gates green on the converted binary.</p>
+          </div>
+        </div>
+        <div class="brand-lockup">BLITZY &middot; NGINX 1.29.5 REFACTOR</div>
+      </section>
+
+    </div>
+  </div>
+
+
+  <!-- ===============================================================
+       External library scripts (CDN-pinned, exact versions per AAP)
+       =============================================================== -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+
+  <!-- ===============================================================
+       Inline initialization
+       =============================================================== -->
+  <script>
+    /**
+     * Mermaid initialization.
+     *
+     * startOnLoad MUST be false because reveal.js renders slides lazily
+     * (offscreen slides are not in the DOM viewport on first load); we therefore
+     * trigger mermaid.run() explicitly on reveal.js 'ready' and 'slidechanged'
+     * events to guarantee diagrams render exactly once when their slide first
+     * becomes visible.
+     */
+    if (typeof mermaid !== 'undefined' && typeof mermaid.initialize === 'function') {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        securityLevel: 'loose',
+        themeVariables: {
+          primaryColor: '#5B39F3',
+          primaryTextColor: '#1A1F36',
+          primaryBorderColor: '#5B39F3',
+          lineColor: '#6B7191',
+          secondaryColor: '#EFF1FA',
+          tertiaryColor: '#FAFBFF',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '18px',
+          pie1: '#5B39F3',
+          pie2: '#7A6DEC',
+          pie3: '#15B886',
+          pie4: '#F0A23C',
+          pie5: '#E5484D',
+          pie6: '#4101DB'
+        },
+        flowchart: {
+          htmlLabels: true,
+          curve: 'basis',
+          useMaxWidth: true,
+          padding: 12,
+          nodeSpacing: 70,
+          rankSpacing: 90,
+          diagramPadding: 12
+        },
+        pie: {
+          useWidth: 720,
+          textPosition: 0.65
+        }
+      });
+    }
+
+    /**
+     * reveal.js initialization with AAP-mandated configuration.
+     *
+     *  - hash: true                — deep-linkable slide URLs
+     *  - transition: 'slide'       — horizontal slide transition
+     *  - controlsTutorial: false   — hides the first-run pulse hint
+     *  - width: 1920, height: 1080 — Full-HD layout grid
+     */
+    var deck = new Reveal({
+      hash: true,
+      transition: 'slide',
+      controlsTutorial: false,
+      width: 1920,
+      height: 1080,
+      margin: 0.04,
+      minScale: 0.2,
+      maxScale: 1.5,
+      slideNumber: 'c/t',
+      pdfSeparateFragments: false,
+      hashOneBasedIndex: false,
+      respondToHashChanges: true
+    });
+
+    /**
+     * Cache the original textual markup of each Mermaid block before any
+     * rendering occurs. Mermaid 11 mutates the element's innerHTML when it
+     * processes a diagram, so without this cache we cannot recover the
+     * original source for re-rendering.
+     */
+    function cacheMermaidSources() {
+      document.querySelectorAll('.mermaid').forEach(function (el) {
+        if (!el.hasAttribute('data-mermaid-source')) {
+          el.setAttribute('data-mermaid-source', el.textContent.replace(/^\s+|\s+$/g, ''));
+        }
+      });
+    }
+
+    /**
+     * Detect Mermaid diagrams whose SVG was generated with a degenerate
+     * viewBox (a known Mermaid 11 bug when rendering inside hidden parents).
+     * For each such diagram, restore the original markup and clear
+     * `data-processed` so the next mermaid.run() will re-render it cleanly.
+     */
+    function resetDegenerateMermaid(rootEl) {
+      var scope = rootEl || document;
+      scope.querySelectorAll('.mermaid[data-processed="true"]').forEach(function (el) {
+        var svg = el.querySelector('svg');
+        if (!svg) return;
+        var vb = (svg.getAttribute('viewBox') || '').split(/\s+/).map(parseFloat);
+        // A healthy diagram has width > 100 and height > 50; anything smaller
+        // is the "fallback" viewBox Mermaid emits when layout computation fails.
+        if (vb.length !== 4 || vb[2] < 100 || vb[3] < 50) {
+          var source = el.getAttribute('data-mermaid-source');
+          if (source) {
+            el.innerHTML = source;
+            el.removeAttribute('data-processed');
+          }
+        }
+      });
+    }
+
+    /**
+     * Render only the Mermaid diagrams that live inside the currently-active
+     * reveal.js slide. Rendering inside hidden (display:none) slides triggers
+     * Mermaid's degenerate-viewBox bug because its layout pass cannot measure
+     * zero-sized parents, so we explicitly defer rendering until each slide
+     * becomes visible.
+     */
+    function renderMermaidInCurrentSlide() {
+      if (typeof mermaid === 'undefined' || typeof mermaid.run !== 'function') {
+        return;
+      }
+      try {
+        var currentSlide = (typeof deck !== 'undefined' && deck.getCurrentSlide)
+          ? deck.getCurrentSlide()
+          : null;
+        if (!currentSlide) return;
+        // First, repair any previously-rendered diagrams that came out broken.
+        resetDegenerateMermaid(currentSlide);
+        // Then render any remaining unprocessed diagrams in this slide.
+        var unprocessed = currentSlide.querySelectorAll('.mermaid:not([data-processed="true"])');
+        if (unprocessed.length === 0) return;
+        mermaid.run({ nodes: Array.from(unprocessed) })
+          .catch(function (err) { console.warn('Mermaid render warning:', err); });
+      } catch (err) {
+        console.warn('Mermaid render failure:', err);
+      }
+    }
+
+    /**
+     * Backward-compatible alias retained so any external hooks calling
+     * renderMermaidIfNeeded continue to work.
+     */
+    function renderMermaidIfNeeded() {
+      renderMermaidInCurrentSlide();
+    }
+
+    /**
+     * (Re-)inject Lucide SVG icons. Lucide replaces every <i data-lucide="…">
+     * placeholder with an inline SVG. It is idempotent and safe to call
+     * multiple times.
+     */
+    function renderLucideIcons() {
+      if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        try {
+          lucide.createIcons();
+        } catch (err) {
+          console.warn('Lucide createIcons failure:', err);
+        }
+      }
+    }
+
+    /**
+     * Boot reveal.js, then — once webfonts have settled — perform first-pass
+     * rendering of Mermaid diagrams and Lucide icons. Waiting for
+     * document.fonts.ready guarantees Mermaid measures node sizes against
+     * the actual Inter / Space Grotesk / Fira Code metrics rather than
+     * fallback-system-ui metrics.
+     *
+     * Subsequent rendering is driven by the 'slidechanged' and 'ready'
+     * event listeners below.
+     */
+    function whenFontsReady() {
+      if (typeof document.fonts !== 'undefined' &&
+          document.fonts.ready &&
+          typeof document.fonts.ready.then === 'function') {
+        return document.fonts.ready;
+      }
+      // Fallback: simulate a microtask delay
+      return Promise.resolve();
+    }
+
+    // Cache original Mermaid source text BEFORE any rendering can happen so
+    // we can re-render diagrams whose first pass produced a degenerate
+    // viewBox (Mermaid 11 bug inside hidden reveal.js slides).
+    cacheMermaidSources();
+
+    deck.initialize().then(function () {
+      return whenFontsReady();
+    }).then(function () {
+      // Only render the Mermaid diagram in the currently-visible slide.
+      // Diagrams in hidden slides will be rendered on slidechanged.
+      renderMermaidInCurrentSlide();
+      renderLucideIcons();
+    });
+
+    /**
+     * Re-render on every slide change so each diagram is processed exactly
+     * when its parent slide first becomes visible (avoiding the 0-size
+     * layout problem for hidden slides). Lucide icons are idempotent.
+     */
+    deck.on('slidechanged', function () {
+      renderMermaidInCurrentSlide();
+      renderLucideIcons();
+    });
+
+    /**
+     * Redundant 'ready' hook ensures Lucide icons render even on browsers
+     * where reveal.js fires 'ready' before initialize().then() resolves.
+     */
+    deck.on('ready', function () {
+      renderLucideIcons();
+    });
+  </script>
+</body>
+</html>
+
