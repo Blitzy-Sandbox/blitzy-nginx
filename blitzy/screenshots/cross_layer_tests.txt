@@ -1,0 +1,24 @@
+==== Cross-Layer Tests (proxy_intercept_errors + error_page) ====
+
+Path 1: proxy_intercept_errors OFF (pass-through)
+  GET /backend_pass/      → HTTP/1.1 200 OK,            body="backend ok"     ✓
+  GET /backend_pass/502   → HTTP/1.1 502 Bad Gateway,   body="backend 502"    ✓
+  GET /backend_pass/418   → HTTP/1.1 418 (non-canonical), body="backend 418"  ✓ 
+                            Note: 418 from registry returns "Unknown" reason phrase
+
+Path 2: proxy_intercept_errors ON (with error_page)
+  GET /backend_intercept/502 → HTTP/1.1 200 OK, body="Intercepted 502"  ✓
+  GET /backend_intercept/503 → HTTP/1.1 200 OK, body="Intercepted 503"  ✓
+  GET /backend_intercept/500 → HTTP/1.1 200 OK, body="Intercepted 500"  ✓ (Connection: close inherited from 500)
+  GET /backend_intercept/    → HTTP/1.1 200 OK, body="backend ok"       ✓ (no interception for 2xx)
+
+Access log captures both $status and $upstream_status:
+  /backend_pass/502:        status=502, us=502  ✓
+  /backend_intercept/502:   status=200, us=502  ✓ (intercepted but upstream code preserved)
+  /backend_intercept/500:   status=200, us=500  ✓
+  /backend_pass/418:        status=418, us=418  ✓ (non-canonical pass-through)
+
+CONCLUSION:
+- Upstream pass-through preserved (AAP I3) ✓
+- proxy_intercept_errors → error_page redirection works (line 1861 R2 conversion) ✓
+- $upstream_status variable preserved with original backend status ✓

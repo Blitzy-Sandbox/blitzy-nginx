@@ -1,0 +1,16 @@
+==== error_page parser invariant verification ====
+
+Function: ngx_http_core_error_page() in src/http/ngx_http_core_module.c
+
+HEAD line range:     4890-5005 (116 lines)
+Baseline line range: 4888-5003 (116 lines)
+(Function shifted by 2 lines due to 2 added lines in ngx_http_send_response at 1781)
+
+SHA256 of HEAD function:     e97c1beca3e3656ef63eaa6df916bec11c5017ad0fa854288d4be31ed62c594a
+SHA256 of baseline function: e97c1beca3e3656ef63eaa6df916bec11c5017ad0fa854288d4be31ed62c594a
+
+✓ HASHES MATCH — error_page parser is byte-for-byte IDENTICAL to baseline NGINX 1.29.5
+✓ AAP I8 invariant PRESERVED: ngx_http_core_error_page() validation rules unchanged
+  - Range 300-599 enforcement preserved
+  - Code 499 explicit rejection preserved
+  - Default 494/495/496/497 → 400 mapping preserved

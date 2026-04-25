@@ -1,0 +1,22 @@
+==== Wire-level TCP capture (permissive mode) ====
+Method: Python socket — raw HTTP/1.1 request, capture status line bytes
+
+PATH            EXPECTED                              ACTUAL                                 PASS
+/test_200       200 OK                                200 OK                                 ✓
+/test_204       204 No Content                        204 No Content                         ✓
+/test_206       206 Partial Content                   206 Partial Content                    ✓
+/test_404       404 Not Found                         404 Not Found                          ✓
+/test_500       500 Internal Server Error             500 Internal Server Error              ✓
+/test_503       503 Service Temporarily Unavailable   503 Service Temporarily Unavailable    ✓ (NGINX legacy phrase per D-008)
+/test_302       302 Moved Temporarily                 302 Moved Temporarily                  ✓ (NGINX legacy phrase per D-008)
+/test_301       301 Moved Permanently                 301 Moved Permanently                  ✓
+/test_307       307 Temporary Redirect                307 Temporary Redirect                 ✓
+/test_308       308 Permanent Redirect                308 Permanent Redirect                 ✓
+
+CONCLUSION: 
+- All 10 status lines match baseline NGINX 1.29.5 wire-format precisely
+- NGINX legacy phrases preserved on the wire (per AAP D-008):
+  - 302 "Moved Temporarily" instead of RFC 9110 "Found"
+  - 503 "Service Temporarily Unavailable" instead of RFC 9110 "Service Unavailable"
+- ngx_http_status_lines[] wire table is the source of truth for HTTP/1.1 reason phrases
+- Registry's reason phrases (RFC 9110 canonical) are NOT used on the wire — only by API consumers

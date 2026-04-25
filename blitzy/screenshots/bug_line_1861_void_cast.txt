@@ -1,0 +1,81 @@
+==== CRITICAL FINDING: Line 1861 (void) cast pattern fails-open in strict mode ====
+
+SOURCE CODE EVIDENCE
+====================
+
+Line 1860-1863 of src/http/ngx_http_core_module.c:
+  1860:     if (r->err_status) {
+  1861:         (void) ngx_http_status_set(r, r->err_status);
+  1862:         r->headers_out.status_line.len = 0;
+  1863:     }
+
+Compare with line 1779-1783 (Pattern R3 with proper error handling):
+  1779:     }
+  1780: 
+  1781:     if (ngx_http_status_set(r, status) != NGX_OK) {
+  1782:         return NGX_HTTP_INTERNAL_SERVER_ERROR;
+  1783:     }
+
+REPRODUCTION (in STRICT mode, --with-http_status_validation):
+=============================================================
+
+Config:
+  location /bug { return 999; }       # No body — bypasses line 1781
+  location /no_bug { return 999 "x"; } # With body — uses line 1781 R3
+
+Test A — return 999; (NO body, uses line 1861):
+  Wire output: b'HTTP/1.1 000 \r\nServer: nginx/1.29.5\r\n...Content-Length: 0\r\nConnection: close\r\n\r\n'
+  Access log: $status=999 (from ngx_http_variable_status which reads r->err_status)
+  Error log: WARN "invalid status 999 (out of RFC 9110 range 100-599)"
+
+Test B — return 999 "x"; (WITH body, uses line 1781 R3):
+  Wire output: HTTP/1.1 500 Internal Server Error
+  Access log: $status=500 (proper fallback)
+  Error log: WARN "invalid status 999 (out of RFC 9110 range 100-599)"
+
+ROOT CAUSE
+==========
+
+In ngx_http_status.c lines 944-984:
+  In strict mode, when r->upstream == NULL and status is out-of-range:
+  - WARN is logged
+  - Function returns NGX_ERROR before reaching line 1036 (the assignment)
+  - r->headers_out.status remains at 0 (initial value)
+
+The (void) cast at line 1861 discards the NGX_ERROR return.
+The header filter then emits HTTP/1.1 000 because headers_out.status=0.
+
+AAP §0.8.7 VIOLATION
+====================
+
+Per AAP §0.8.7 "Error-handling protocol":
+  "ngx_http_status_set() returns NGX_ERROR for invalid status"
+  "Calling module should fall back to NGX_HTTP_INTERNAL_SERVER_ERROR (500)"
+  "Do not terminate request processing (fail gracefully)"
+
+Line 1861 violates the fallback-to-500 protocol because:
+- The (void) cast pattern is unconditional and doesn't react to NGX_ERROR
+- AAP example pattern explicitly shows the proper R3 pattern with fallback
+
+SEVERITY: MAJOR
+===============
+
+- Manifests only in strict-mode opt-in builds (NGX_HTTP_STATUS_VALIDATION)
+- Triggered only by misconfiguration: return CODE; with CODE out of 100-599 range
+- Result: Malformed HTTP/1.1 response with status 0 — protocol violation
+- Default permissive builds are NOT affected
+- Valid codes in strict mode are NOT affected (only out-of-range)
+
+SUGGESTED FIX
+=============
+
+Replace line 1860-1863:
+  if (r->err_status) {
+      if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
+          r->headers_out.status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+      }
+      r->headers_out.status_line.len = 0;
+  }
+
+This implements the AAP §0.8.7 fallback-to-500 protocol consistently
+with the Pattern R3 approach used at line 1781.

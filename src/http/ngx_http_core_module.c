@@ -1858,7 +1858,31 @@ ngx_http_send_header(ngx_http_request_t *r)
     }
 
     if (r->err_status) {
-        (void) ngx_http_status_set(r, r->err_status);
+        /*
+         * Translate the request's internal error status field into the
+         * outgoing response status code.  In strict mode
+         * (--with-http_status_validation), ngx_http_status_set() may
+         * return NGX_ERROR for an out-of-range r->err_status (e.g., a
+         * misconfigured "return CODE;" with CODE outside 100..599), in
+         * which case the assignment to r->headers_out.status does NOT
+         * occur inside the API and r->headers_out.status would remain
+         * zero on the wire ("HTTP/1.1 000 \r\n").  Per AAP §0.8.7's
+         * Error-handling protocol ("Calling module should fall back to
+         * NGX_HTTP_INTERNAL_SERVER_ERROR (500); Do not terminate
+         * request processing (fail gracefully)"), fall back to a
+         * direct field assignment of 500 so the wire response remains
+         * a well-formed HTTP/1.1 status line.  The fallback uses
+         * direct field assignment because (a) 500 is a known-valid
+         * code that needs no further validation, (b) re-entering
+         * ngx_http_status_set() could in principle trip the
+         * single-final-code rule if r->headers_out.status had already
+         * been recorded earlier in the request lifecycle, and (c) the
+         * QA-recommended fix (Checkpoint 4 finding) prescribes this
+         * exact pattern for consistency with Pattern R3 at line 1781.
+         */
+        if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
+            r->headers_out.status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+        }
         r->headers_out.status_line.len = 0;
     }
 

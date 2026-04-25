@@ -1,0 +1,37 @@
+==== Debug Log NGX_LOG_DEBUG_HTTP Verification (AAP §0.7.1, §0.8.7) ====
+
+Format specifier: "http status set: %ui %V (strict=%s upstream=%s)"
+  %ui = code (numeric)
+  %V  = reason phrase (ngx_str_t)
+  strict = "yes" / "no" (preprocessor-determined build mode)
+  upstream = "yes" / "no" (r->upstream != NULL check)
+
+==== PERMISSIVE MODE (default build, no --with-http_status_validation) ====
+2026/04/25 14:31:24 [debug] *1 http status set: 200 OK (strict=no upstream=no)
+2026/04/25 14:31:39 [debug] *2 http status set: 200 OK (strict=no upstream=no)
+2026/04/25 14:31:39 [debug] *2 http status set: 404 Not Found (strict=no upstream=no)
+
+==== STRICT MODE (built with --with-http_status_validation) ====
+2026/04/25 14:38:30 [debug] *1 http status set: 200 OK (strict=yes upstream=no)
+2026/04/25 14:38:30 [debug] *2 http status set: 404 Not Found (strict=yes upstream=no)
+2026/04/25 14:38:30 [debug] *5 http status set: 200 OK (strict=yes upstream=no)
+2026/04/25 14:38:30 [debug] *3 http status set: 200 OK (strict=yes upstream=yes)
+2026/04/25 14:38:30 [debug] *8 http status set: 418 Unknown (strict=yes upstream=no)
+2026/04/25 14:38:30 [debug] *6 http status set: 418 Unknown (strict=yes upstream=yes)
+
+==== Verifications ====
+[debug] level: ALL traces at [debug] level (expected, AAP §0.7.1)
+[warn/error/etc] level: 0 (expected, would be incorrect to emit at higher level for normal traces)
+
+Distinct (strict, upstream) combinations seen:
+  - (strict=yes upstream=no) ← strict mode, nginx-originated response
+  - (strict=yes upstream=yes) ← strict mode, upstream pass-through (registry bypassed)
+  - (strict=no upstream=no) ← permissive mode, nginx-originated
+  (strict=no upstream=yes) ← would appear with permissive build + proxy
+
+Reason phrase resolution:
+  - "OK" for 200 ← ngx_http_status_lines[] / registry
+  - "Not Found" for 404 ← registry
+  - "Unknown" for 418 ← AAP D-007 sentinel for unregistered codes
+
+CONCLUSION: AAP §0.7.1 (Observability) and §0.8.7 (Debug logging protocol) PASS

@@ -1,0 +1,26 @@
+==== error_page directive runtime flow tests ====
+
+Server 1 (simple redirection — status PRESERVED through line 1861 conversion):
+  GET /test_404 → /custom_404.html
+    Wire: HTTP/1.1 404 Not Found
+    Body: "Custom 404 page"  ✓
+  GET /test_500 → /custom_5xx.html
+    Wire: HTTP/1.1 500 Internal Server Error
+    Body: "Custom 5xx page"  Connection: close ✓
+  GET /test_502 → /custom_5xx.html
+    Wire: HTTP/1.1 502 Bad Gateway
+    Body: "Custom 5xx page" ✓
+
+Server 2 (status override via =NEWCODE syntax — line 1861 translation):
+  GET /test_404 (with: error_page 404 =200 /override_to_200.html;)
+    Wire: HTTP/1.1 200 OK
+    Body: "Overridden to 200"  ✓
+  GET /test_500 (with: error_page 500 =410 /override_5xx_to_410.html;)
+    Wire: HTTP/1.1 410 Gone
+    Body: "Overridden to 410 status"  ✓
+  GET /test_503 (with: error_page 503 = /redirect_with_inherit_status.html;)
+    Wire: HTTP/1.1 200 OK
+    Body: "Inherited status" ✓ (inherits status from response handler)
+
+All baseline NGINX error_page redirection behaviors preserved through the
+line 1861 (Pattern R2 — r->err_status → r->headers_out.status) conversion.
