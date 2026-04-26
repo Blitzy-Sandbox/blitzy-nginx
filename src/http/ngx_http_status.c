@@ -907,7 +907,7 @@ ngx_http_status_register(ngx_http_status_def_t *def)
  *   3. Single-final-code enforcement per AAP §0.1.1 G4: detects a
  *      different final (>= 200 and <= 599) status assignment that
  *      overrides a non-200 final response already recorded on the
- *      request.  Such attempts are rejected with NGX_LOG_ERR.  Two
+ *      request.  Such attempts are rejected with NGX_LOG_ERR.  Three
  *      categories of override are permitted:
  *
  *        (a) Identical reassignment (e.g., a phase handler re-emitting
@@ -930,9 +930,31 @@ ngx_http_status_register(ngx_http_status_def_t *def)
  *            documented filter-chain override rather than a genuine
  *            protocol violation.
  *
+ *        (c) Override during an internal redirect chain (r->internal
+ *            == 1) is permitted because the error_page directive,
+ *            try_files, X-Accel-Redirect, and named locations all
+ *            re-run the request through phase handlers after clearing
+ *            module contexts.  The new content handler may legitimately
+ *            replace the previously-recorded status — the documented
+ *            NGINX semantic for `error_page CODE /uri` is that the
+ *            redirect target's response status SUPERSEDES the original
+ *            code in transitional cases (see ngx_http_send_header() in
+ *            ngx_http_core_module.c lines 1860-1887, which translates
+ *            r->err_status into the wire response, and the test
+ *            expectations documented in nginx-tests' rewrite.t test
+ *            18 "error 405 return 302 text" and http_error_page.t
+ *            test 8 "error 302 directory redirect - old location
+ *            cleared", both of which require a non-200-to-non-200
+ *            transition mid-chain).  Only ONE final status reaches
+ *            the client because send_header() is the single sink for
+ *            wire emission.  This exception was added to resolve QA
+ *            Final-7 Issues #1-#4 (4 strict-mode subtest regressions
+ *            in http_error_page.t and rewrite.t).
+ *
  *      The forbidden case is therefore a transition between two
- *      different non-200 final codes (e.g., 404 -> 500), which always
- *      signals a logic bug in the calling module.
+ *      different non-200 final codes (e.g., 404 -> 500) outside an
+ *      internal redirect chain, which always signals a logic bug in
+ *      the calling module.
  *
  *   4. Bypasses strict validation when r->upstream is non-NULL (per AAP
  *      §0.1.1 I3 + §0.7.2 D-006).  Upstream pass-through must preserve
@@ -1032,16 +1054,72 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
          * emit RFC-malformed responses (200 with Content-Range, 200 with
          * full body for a matched If-Modified-Since, etc.).
          *
-         * The check therefore applies only when the previously-recorded
+         * INTERNAL-REDIRECT EXCEPTION (r->internal == 1):
+         *
+         * When NGINX is processing an internal redirect — the documented
+         * mechanism behind the error_page directive, try_files, named
+         * locations (`@name`), and X-Accel-Redirect — the request's
+         * `r->internal` flag is set to 1 by ngx_http_internal_redirect()
+         * and ngx_http_named_location() (in ngx_http_core_module.c lines
+         * 2619 and 2676) BEFORE the new request is dispatched through
+         * ngx_http_handler() to re-run the phase pipeline.  Module
+         * contexts are zeroed and a fresh content handler runs, which
+         * may legitimately produce a status code that differs from the
+         * one originally set by the request that triggered the redirect.
+         *
+         * Concrete documented test expectations from the upstream
+         * nginx-tests Perl integration suite (HEAD c11519c at the time
+         * this exception was added):
+         *
+         *   - rewrite.t test 11 "error 405 return 204": the new handler
+         *     sets 204 inside the redirect chain; ngx_http_send_header()
+         *     subsequently calls ngx_http_status_set(r, 405) to apply
+         *     r->err_status (the original 405) over the recorded 204
+         *     so the wire response is 405 with body length headers.
+         *
+         *   - rewrite.t test 17 "error 302 return 200 text": the new
+         *     handler legitimately replaces the prior 302 with 200 so
+         *     the redirect's custom body can be rendered; send_header
+         *     then re-applies r->err_status (302) to keep the wire
+         *     status as 302 with the new body.
+         *
+         *   - http_error_page.t tests 8/9 "error 302 directory/auto
+         *     redirect - old location cleared": the redirect target
+         *     (a directory served by static_module / a proxy_pass with
+         *     an auto-added trailing slash) emits 301 to override the
+         *     prior 302, and the test explicitly asserts the wire
+         *     response is 301 (NOT 302), proving the override is the
+         *     intended NGINX semantic.
+         *
+         * Treating any of these transitions as protocol violations
+         * causes a 500 Internal Server Error in strict mode, which is
+         * the QA Final-7 regression that this exception resolves.
+         * Only ONE final status reaches the client because
+         * ngx_http_send_header() is the single sink for wire emission;
+         * any number of in-memory reassignments before that sink is
+         * called are by definition wire-irrelevant.
+         *
+         * Subrequests (sr->internal = 1 from ngx_http_subrequest at line
+         * 2533) have their own private headers_out.status that begins
+         * at 0, so the exception does not change subrequest behavior.
+         *
+         * The check therefore applies only when (a) we are NOT in an
+         * internal redirect chain AND (b) the previously-recorded
          * status is a non-200 final code.  Permitted transitions:
          *
          *   - 0      -> any final         (initial assignment)
          *   - 200    -> any final         (filter chain override)
          *   - C      -> C                 (idempotent reassignment)
+         *   - any    -> any final         (during r->internal == 1 —
+         *                                  internal redirect chain
+         *                                  via error_page, try_files,
+         *                                  named location, X-Accel-
+         *                                  Redirect)
          *
          * Forbidden transitions (true protocol-violation patterns):
          *
-         *   - 4xx/5xx (other than 200) -> different non-equal final
+         *   - 4xx/5xx (other than 200) -> different non-equal final,
+         *     OUTSIDE an internal redirect chain
          *     (e.g., a 404 erroneously overridden by a 500 from a
          *     separate code path is a genuine logic bug)
          *
@@ -1054,7 +1132,8 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
          * it operates on a disjoint slice of the (status, prior status)
          * domain (1xx new code vs. any final prior).
          */
-        if (status >= 200 && status <= 599
+        if (!r->internal
+            && status >= 200 && status <= 599
             && r->headers_out.status >= 200 && r->headers_out.status <= 599
             && r->headers_out.status != NGX_HTTP_OK
             && r->headers_out.status != status)
