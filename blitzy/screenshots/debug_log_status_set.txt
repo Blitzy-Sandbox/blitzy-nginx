@@ -1,0 +1,3 @@
+2026/04/25 14:31:24 [debug] 716552#0: *1 http status set: 200 OK (strict=no upstream=no)
+2026/04/25 14:31:39 [debug] 716552#0: *2 http status set: 200 OK (strict=no upstream=no)
+2026/04/25 14:31:39 [debug] 716552#0: *2 http status set: 404 Not Found (strict=no upstream=no)

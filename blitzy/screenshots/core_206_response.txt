@@ -1,0 +1,4 @@
+HTTP/1.1 206
+< HTTP/1.1 206 Partial Content
+< Server: nginx/1.29.5
+< Content-Length: 0

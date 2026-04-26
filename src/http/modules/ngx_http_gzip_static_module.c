@@ -224,7 +224,7 @@ ngx_http_gzip_static_handler(ngx_http_request_t *r)
 
     log->action = "sending response to client";
 
-    r->headers_out.status = NGX_HTTP_OK;
+    (void) ngx_http_status_set(r, NGX_HTTP_OK);
     r->headers_out.content_length_n = of.size;
     r->headers_out.last_modified_time = of.mtime;
 

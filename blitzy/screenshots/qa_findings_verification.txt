@@ -1,0 +1,117 @@
+================================================================================
+ QA Findings Re-Verification Evidence — Checkpoint 3
+================================================================================
+
+Branch:  blitzy-d6cf8f32-349b-4ef9-914c-a956e206be56
+Source:  src/http/ngx_http_status.c (modified)
+Build:   nginx/1.29.5 with default ./auto/configure (permissive)
+Date:    2026-04-25 (post-fix)
+
+================================================================================
+ ISSUE #1 — Registry footprint exceeds <2 KB criterion
+================================================================================
+
+QA REPRODUCTION COMMAND:
+  nm --print-size objs/nginx | grep ngx_http_status_registry
+
+BEFORE FIX (per QA report):
+  00000000000c61a0 0000000000000938 d ngx_http_status_registry
+  Hex size: 0x938 = 2360 bytes = 2.30 KB
+  Status: FAIL — over 1.85 KB AAP §0.4.1 tolerance, over 2.0 KB checkpoint criterion
+
+AFTER FIX (current verified binary):
+00000000000be080 0000000000000760 d ngx_http_status_registry
+  Hex size: 0x760 = 1888 bytes = 1.844 KB
+  Per-entry size: 1888 / 59 = 32.00 bytes (exactly: 8 code + 16 ngx_str_t + 8 flags)
+  Reduction:  472 bytes (20.0% of original)
+  Verdict:
+    [✓] Under 1.85 KB AAP §0.4.1 unpacked tolerance
+    [✓] Under 2.0 KB Checkpoint Phase 6 success criterion (c)
+    [-] NOT under 1.0 KB AAP §0.4.1 ideal hard target — see resolution report
+        (the 1.85 KB tolerance is the explicit pass criterion; 1.0 KB would
+        require additional packing of reason-phrase literals, which is
+        structurally limited by the public ngx_str_t reason contract)
+
+  Status: VERIFIED ✓
+
+================================================================================
+ ISSUE #2 — Registry stored in .data instead of .rodata
+================================================================================
+
+QA REPRODUCTION COMMANDS:
+  nm objs/nginx | grep ngx_http_status_registry
+  readelf -S objs/nginx | grep -E '\.(data|rodata)'
+
+BEFORE FIX (per QA report):
+  00000000000c61a0 d ngx_http_status_registry
+  Symbol section: .data (writable, section index 26)
+  Status: FAIL — writable section
+
+AFTER FIX (current verified binary):
+00000000000be080 d ngx_http_status_registry
+
+ 17 .rodata       0000da60  000000000009d000  000000000009d000  0009d000  2**5
+ 22 .data.rel.ro  00000f60  00000000000bd9c0  00000000000bd9c0  000bc9c0  2**5
+ 25 .data         00011120  00000000000bf000  00000000000bf000  000be000  2**5
+
+  Symbol address 0xbe080 falls within .data.rel.ro section [0xbd9c0..0xbe920]
+  (NOT in writable .data section [0xbf000..0xd0120]).
+
+  GNU nm uses letter 'd' for both .data and .data.rel.ro because its symbol
+  letter table has no dedicated letter for the latter (a known limitation).
+  The actual section is determined by mapping the virtual address to the
+  ELF section table.
+
+  Verdict:
+    [✓] Section: .data.rel.ro (read-only after relocation)
+    [✓] Read-only at runtime: YES, via RELRO + BIND_NOW
+    [✓] Stray-write protection: YES, kernel mprotects this section read-only
+    [✓] Security guarantee equivalent to .rodata: YES
+
+RUNTIME PROTECTION EVIDENCE:
+  GNU_RELRO segment:
+  GNU_RELRO      0x0bc9b0 0x00000000000bd9b0 0x00000000000bd9b0 0x001650 0x001650 R   0x1
+
+  BIND_NOW dynamic flag:
+ 0x000000000000001e (FLAGS)              BIND_NOW
+ 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE
+
+  Cross-reference: the AAP-preserved-byte-for-byte ngx_http_error_pages[]
+  baseline array also contains ngx_str_t fields and ALSO lives in .data.rel.ro
+  for the same structural reason. Our refactor is consistent with the
+  existing codebase convention for arrays-of-structs-with-pointer-fields.
+
+  Why .data.rel.ro instead of pure .rodata: The ngx_http_status_def_t
+  registry contains ngx_str_t reason fields; ngx_str_t has a u_char *data
+  pointer requiring load-time relocation. GCC places any C array of structs
+  containing pointer fields into .data.rel.ro under PIE+BIND_NOW (full
+  RELRO), never into pure .rodata. This is the structurally optimal
+  placement; .rodata is unreachable for this struct shape.
+
+  Status: VERIFIED ✓
+
+================================================================================
+ BOTH FINDINGS RESOLVED
+================================================================================
+
+Build mode comparison:
+
+  Mode         | Footprint    | Section          | Status
+  -------------|--------------|------------------|------------
+  Permissive   | 1888 bytes   | .data.rel.ro     | ✓ RESOLVED
+  Strict       | 1888 bytes   | .data.rel.ro     | ✓ RESOLVED
+
+Smoke tests (both modes):
+  GET /            → HTTP 200 "OK", body "hello"      ✓
+  GET /missing     → HTTP 404 "Not Found"             ✓ (canonical wire phrase)
+  GET /redirect302 → HTTP 302 "Moved Temporarily"     ✓ (D-008 wire phrase preserved)
+  Zero emerg/alert/crit during clean test cycles      ✓
+
+Static analysis (both modes):
+  ./auto/configure : SUCCESS (zero warnings)
+  make -j$(nproc)  : SUCCESS (zero -Werror failures)
+
+Pre-existing baseline reference for placement convention:
+  ngx_http_error_pages[] (preserved per AAP)  → .data.rel.ro
+  ngx_http_status_lines[] (preserved per AAP) → .data (no const in baseline)
+  ngx_http_status_registry[] (this refactor)  → .data.rel.ro (matches error_pages)

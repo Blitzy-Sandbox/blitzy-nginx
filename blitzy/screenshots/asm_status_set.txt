@@ -1,0 +1,66 @@
+=== ngx_http_status_set DISASSEMBLY ===
+
+--- PERMISSIVE MODE (NGX_HTTP_STATUS_VALIDATION undefined) ---
+Function size: 17 bytes (5 instructions)
+
+000000000006b610 <ngx_http_status_set>:
+   6b610:	f3 0f 1e fa          	endbr64
+   6b614:	48 89 b7 10 02 00 00 	mov    %rsi,0x210(%rdi)
+   6b61b:	b8 00 00 00 00       	mov    $0x0,%eax
+   6b620:	c3                   	ret
+
+
+
+--- STRICT MODE (NGX_HTTP_STATUS_VALIDATION=1) ---
+Function size: 214 bytes (~70 instructions)
+
+000000000006b610 <ngx_http_status_set>:
+   6b610:	f3 0f 1e fa          	endbr64
+   6b614:	48 83 7f 48 00       	cmpq   $0x0,0x48(%rdi)
+   6b619:	74 0d                	je     6b628 <ngx_http_status_set+0x18>
+   6b61b:	48 89 b7 10 02 00 00 	mov    %rsi,0x210(%rdi)
+   6b622:	b8 00 00 00 00       	mov    $0x0,%eax
+   6b627:	c3                   	ret
+   6b628:	48 83 ec 08          	sub    $0x8,%rsp
+   6b62c:	48 8d 46 9c          	lea    -0x64(%rsi),%rax
+   6b630:	48 3d f3 01 00 00    	cmp    $0x1f3,%rax
+   6b636:	77 2d                	ja     6b665 <ngx_http_status_set+0x55>
+   6b638:	48 83 f8 63          	cmp    $0x63,%rax
+   6b63c:	77 16                	ja     6b654 <ngx_http_status_set+0x44>
+   6b63e:	4c 8b 8f 10 02 00 00 	mov    0x210(%rdi),%r9
+   6b645:	49 8d 81 38 ff ff ff 	lea    -0xc8(%r9),%rax
+   6b64c:	48 3d 8f 01 00 00    	cmp    $0x18f,%rax
+   6b652:	76 50                	jbe    6b6a4 <ngx_http_status_set+0x94>
+   6b654:	48 89 b7 10 02 00 00 	mov    %rsi,0x210(%rdi)
+   6b65b:	b8 00 00 00 00       	mov    $0x0,%eax
+   6b660:	48 83 c4 08          	add    $0x8,%rsp
+   6b664:	c3                   	ret
+   6b665:	48 8b 47 08          	mov    0x8(%rdi),%rax
+   6b669:	48 8b 78 50          	mov    0x50(%rax),%rdi
+   6b66d:	48 c7 c0 ff ff ff ff 	mov    $0xffffffffffffffff,%rax
+   6b674:	48 83 3f 04          	cmpq   $0x4,(%rdi)
+   6b678:	76 e6                	jbe    6b660 <ngx_http_status_set+0x50>
+   6b67a:	49 89 f0             	mov    %rsi,%r8
+   6b67d:	48 8d 0d dc cb 03 00 	lea    0x3cbdc(%rip),%rcx        # a8260 <_IO_stdin_used+0xa260>
+   6b684:	ba 00 00 00 00       	mov    $0x0,%edx
+   6b689:	48 89 fe             	mov    %rdi,%rsi
+   6b68c:	bf 05 00 00 00       	mov    $0x5,%edi
+   6b691:	b8 00 00 00 00       	mov    $0x0,%eax
+   6b696:	e8 b2 1d fb ff       	call   1d44d <ngx_log_error_core>
+   6b69b:	48 c7 c0 ff ff ff ff 	mov    $0xffffffffffffffff,%rax
+   6b6a2:	eb bc                	jmp    6b660 <ngx_http_status_set+0x50>
+   6b6a4:	48 8b 47 08          	mov    0x8(%rdi),%rax
+   6b6a8:	48 8b 78 50          	mov    0x50(%rax),%rdi
+   6b6ac:	48 c7 c0 ff ff ff ff 	mov    $0xffffffffffffffff,%rax
+   6b6b3:	48 83 3f 03          	cmpq   $0x3,(%rdi)
+   6b6b7:	76 a7                	jbe    6b660 <ngx_http_status_set+0x50>
+   6b6b9:	49 89 f0             	mov    %rsi,%r8
+   6b6bc:	48 8d 0d e5 cb 03 00 	lea    0x3cbe5(%rip),%rcx        # a82a8 <_IO_stdin_used+0xa2a8>
+   6b6c3:	ba 00 00 00 00       	mov    $0x0,%edx
+   6b6c8:	48 89 fe             	mov    %rdi,%rsi
+   6b6cb:	bf 04 00 00 00       	mov    $0x4,%edi
+   6b6d0:	b8 00 00 00 00       	mov    $0x0,%eax
+   6b6d5:	e8 73 1d fb ff       	call   1d44d <ngx_log_error_core>
+   6b6da:	48 c7 c0 ff ff ff ff 	mov    $0xffffffffffffffff,%rax
+   6b6e1:	e9 7a ff ff ff       	jmp    6b660 <ngx_http_status_set+0x50>
+

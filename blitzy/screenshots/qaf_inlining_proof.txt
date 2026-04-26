@@ -1,0 +1,42 @@
+========================================================================
+QA-FIX INLINING PROOF — AAP D-004 Compliance Verification
+========================================================================
+Branch: blitzy-d6cf8f32-349b-4ef9-914c-a956e206be56
+Build: permissive mode (no --with-http_status_validation)
+Compiler: gcc 13.3.0
+CFLAGS: -pipe -O -W -Wall -Wpointer-arith -Wno-unused-parameter -Werror -g
+
+=== nm symbol table check (PRE-FIX evidence from final4_phase2_2): ===
+000000000006b7ad 0000000000000011 T ngx_http_status_set
+(symbol exported, 17 bytes — body inline-able but not actually inlined)
+
+=== nm symbol table check (POST-FIX): ===
+(empty — symbol fully eliminated; inlined at every call site)
+
+=== call instruction count for ngx_http_status_set (PRE-FIX): ===
+6 (per QA report final4_phase2_2_inlining_evidence.txt)
+
+=== call instruction count for ngx_http_status_set (POST-FIX): ===
+0
+
+=== Per-handler direct-store verification (POST-FIX): ===
+--- ngx_http_static_handler ---
+   7bca1:	48 c7 83 30 02 00 00 	movq   $0xc8,0x230(%rbx)
+--- ngx_http_autoindex_handler ---
+   7e512:	49 c7 86 30 02 00 00 	movq   $0xc8,0x230(%r14)
+--- ngx_http_stub_status_handler ---
+   a53e9:	48 c7 83 30 02 00 00 	movq   $0xc8,0x230(%rbx)
+--- ngx_http_range_header_filter ---
+   71698:	48 c7 83 30 02 00 00 	movq   $0xce,0x230(%rbx)
+--- ngx_http_not_modified_header_filter ---
+   7b95e:	48 c7 83 30 02 00 00 	movq   $0x130,0x230(%rbx)
+--- ngx_http_mp4_handler ---
+   9f760:	48 c7 85 30 02 00 00 	movq   $0xc8,0x230(%rbp)
+--- ngx_http_flv_handler ---
+   9bdc7:	48 c7 83 30 02 00 00 	movq   $0xc8,0x230(%rbx)
+--- ngx_http_gzip_static_handler ---
+   7c3a2:	48 c7 83 30 02 00 00 	movq   $0xc8,0x230(%rbx)
+
+=== Strict mode call count (out-of-line, as designed): ===
+15
+(strict mode keeps function out-of-line on purpose; design is dual-mode dispatch)

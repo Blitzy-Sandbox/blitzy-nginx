@@ -1,0 +1,21 @@
+==== error_page parser runtime rejection tests ====
+
+Test 1: error_page 499 /foo.html;
+  Result: nginx: [emerg] invalid value "499" in test.conf:7
+  ✓ REJECTED as expected (AAP I8: 499 explicitly rejected)
+
+Test 2: error_page 600 /foo.html;
+  Result: nginx: [emerg] value "600" must be between 300 and 599
+  ✓ REJECTED as expected (out-of-range)
+
+Test 3: error_page 200 /foo.html;
+  Result: nginx: [emerg] value "200" must be between 300 and 599
+  ✓ REJECTED as expected (out-of-range)
+
+Test 4: error_page 494/495/496/497 = /foo.html;
+  Result: nginx: the configuration file syntax is ok
+  ✓ ACCEPTED as expected (TLS masquerade codes allowed)
+
+Test 5: error_page 404 =200 /override.html;
+  Result: nginx: the configuration file syntax is ok
+  ✓ ACCEPTED as expected (status override syntax)

@@ -11,6 +11,10 @@ if [ $USE_THREADS = YES ]; then
     echo "  + using threads"
 fi
 
+if [ $HTTP_STATUS_VALIDATION = YES ]; then
+    echo "  + using HTTP status code validation (RFC 9110 strict mode)"
+fi
+
 if [ $USE_PCRE = DISABLED ]; then
     echo "  + PCRE library is disabled"
 

@@ -1,0 +1,29 @@
+==============================================================================
+ISSUE #1 RE-VERIFICATION — POST-FIX
+Source: src/http/ngx_http_core_module.c lines 1860-1887
+Fix: (void) cast → error-checked pattern with NGX_HTTP_INTERNAL_SERVER_ERROR fallback
+Captured: 2026-04-25T14:51:14.722563
+Build: nginx-strict (--with-debug --with-http_status_validation)
+==============================================================================
+
+--- REPRODUCTION STEP (from QA report Issue #1) ---
+location /bug { return 999; }
+Raw socket: GET /bug HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n
+
+--- WIRE BYTES (raw) ---
+b'HTTP/1.1 500 Internal Server Error\r\nServer: nginx/1.29.5\r\nDate: Sat, 25 Apr 2026 14:51:14 GMT\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+
+--- WIRE BYTES (formatted) ---
+HTTP/1.1 500 Internal Server Error
+Server: nginx/1.29.5
+Date: Sat, 25 Apr 2026 14:51:14 GMT
+Content-Length: 0
+Connection: close
+
+
+
+--- STATUS LINE: 'HTTP/1.1 500 Internal Server Error' ---
+
+--- VERDICT ---
+✓✓✓ VERIFIED — wire emits HTTP/1.1 500 (AAP §0.8.7 fallback-to-500 implemented correctly)
+    Previously (BEFORE FIX): HTTP/1.1 000 (malformed status line, MAJOR bug)

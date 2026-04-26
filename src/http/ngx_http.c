@@ -135,6 +135,22 @@ ngx_http_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return "is duplicate";
     }
 
+    /*
+     * Initialize the centralized HTTP status code registry per AAP §0.4.1.
+     * The registry is populated by C static initializers at compile time so
+     * the call is effectively a no-op aside from a defensive consistency
+     * check, but the documented call site is kept here so future per-cycle
+     * registry work has a stable hook.  Per AAP §0.8.3 the registry must be
+     * initialized "during configuration parsing phase only" — invoking the
+     * routine here, before any HTTP module main_conf allocation, satisfies
+     * that constraint and the AAP §0.8.4 ordering rule that "registry array
+     * population must occur before first worker process fork".
+     */
+
+    if (ngx_http_status_init_registry(cf->cycle) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
     /* the main http context */
 
     ctx = ngx_pcalloc(cf->pool, sizeof(ngx_http_conf_ctx_t));

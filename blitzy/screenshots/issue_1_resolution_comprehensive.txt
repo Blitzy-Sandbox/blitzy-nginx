@@ -1,0 +1,181 @@
+==========================================================================================
+QA ISSUE #1 RESOLUTION — COMPREHENSIVE EVIDENCE
+==========================================================================================
+Captured: 2026-04-25T15:08
+Source fix: src/http/ngx_http_core_module.c lines 1860-1887
+AAP §0.8.7 fallback-to-500 protocol implemented
+Branch: blitzy-d6cf8f32-349b-4ef9-914c-a956e206be56
+HEAD before fix: 0f3b08f678bd49e8d06b27c5b59d9dc5b144bc80
+==========================================================================================
+
+==========================================================================================
+PART 1: BUG REPRODUCTION — POST-FIX VERIFICATION
+==========================================================================================
+
+PRE-FIX (BEFORE my changes — captured by previous QA agent):
+  GET /bug HTTP/1.1 (return 999;) ->
+  WIRE: HTTP/1.1 000 \r\nServer: nginx/1.29.5\r\n... [MALFORMED]
+  Evidence: blitzy/screenshots/bug_line_1861_void_cast.txt
+
+POST-FIX (current build, STRICT MODE: --with-http_status_validation):
+  GET /bug HTTP/1.1 (return 999;) ->
+  WIRE: b'HTTP/1.1 500 Internal Server Error\r\nServer: nginx/1.29.5\r\nDate: Sat, 25 Apr 2026 15:07:37 GMT\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+  ✓✓✓ VERIFIED — AAP §0.8.7 fallback-to-500 is correctly implemented
+
+==========================================================================================
+PART 2: STRICT-MODE COMPREHENSIVE TEST BATTERY
+==========================================================================================
+
+Build: nginx-strict (--with-debug --with-http_status_validation)
+
+  ✓ PASS  /bug            ISSUE #1 BUG REPRO: return 999; (no body)
+          expected: HTTP/1.1 500 Internal Server Error
+          actual:   'HTTP/1.1 500 Internal Server Error'
+  ✓ PASS  /no_bug         PATTERN R3 control: return 999 "text";
+          expected: HTTP/1.1 500 Internal Server Error
+          actual:   'HTTP/1.1 500 Internal Server Error'
+  ✓ PASS  /code_99        BOUNDARY: return 99 (below 100)
+          expected: HTTP/1.1 500 Internal Server Error
+          actual:   'HTTP/1.1 500 Internal Server Error'
+  ✓ PASS  /code_100       BOUNDARY: return 100 (lower boundary, accepted)
+          expected: HTTP/1.1 100
+          actual:   'HTTP/1.1 100'
+  ✓ PASS  /code_599       BOUNDARY: return 599 (upper boundary, accepted)
+          expected: HTTP/1.1 599
+          actual:   'HTTP/1.1 599'
+  ✓ PASS  /code_600       BOUNDARY: return 600 (above 599)
+          expected: HTTP/1.1 500 Internal Server Error
+          actual:   'HTTP/1.1 500 Internal Server Error'
+  ✓ PASS  /test_200       HEALTHY CONTROL: return 200
+          expected: HTTP/1.1 200 OK
+          actual:   'HTTP/1.1 200 OK'
+  ✓ PASS  /test_404       HEALTHY CONTROL: return 404
+          expected: HTTP/1.1 404 Not Found
+          actual:   'HTTP/1.1 404 Not Found'
+  ✓ PASS  /test_500       HEALTHY CONTROL: return 500
+          expected: HTTP/1.1 500 Internal Server Error
+          actual:   'HTTP/1.1 500 Internal Server Error'
+
+STRICT-MODE RESULT: 9/9 tests passed
+
+==========================================================================================
+PART 3: PERMISSIVE-MODE REGRESSION CHECK
+==========================================================================================
+
+Build: nginx-perm (no flags = permissive default)
+Goal: confirm fix has ZERO impact on default builds
+
+  ✓ PASS  /bug            PASSES THROUGH: return 999; (no validation)
+          expected: HTTP/1.1 999
+          actual:   'HTTP/1.1 999'
+  ✓ PASS  /no_bug         PASSES THROUGH: return 999 "text";
+          expected: HTTP/1.1 999
+          actual:   'HTTP/1.1 999'
+  ✓ PASS  /code_99        PASSES THROUGH: 99 zero-padded (baseline NGINX format)
+          expected: HTTP/1.1 099
+          actual:   'HTTP/1.1 099'
+  ✓ PASS  /code_100       BOUNDARY accepted
+          expected: HTTP/1.1 100
+          actual:   'HTTP/1.1 100'
+  ✓ PASS  /code_599       BOUNDARY accepted
+          expected: HTTP/1.1 599
+          actual:   'HTTP/1.1 599'
+  ✓ PASS  /code_600       PASSES THROUGH
+          expected: HTTP/1.1 600
+          actual:   'HTTP/1.1 600'
+  ✓ PASS  /test_200       HEALTHY CONTROL
+          expected: HTTP/1.1 200 OK
+          actual:   'HTTP/1.1 200 OK'
+  ✓ PASS  /test_404       HEALTHY CONTROL
+          expected: HTTP/1.1 404 Not Found
+          actual:   'HTTP/1.1 404 Not Found'
+  ✓ PASS  /test_500       HEALTHY CONTROL
+          expected: HTTP/1.1 500 Internal Server Error
+          actual:   'HTTP/1.1 500 Internal Server Error'
+
+PERMISSIVE-MODE RESULT: 9/9 tests passed
+
+==========================================================================================
+FINAL VERDICT
+==========================================================================================
+
+  STRICT MODE: 9/9 tests passed (Issue #1 RESOLVED)
+  PERMISSIVE MODE: 9/9 tests passed (ZERO REGRESSION)
+
+✓✓✓ Issue #1 (MAJOR) is RESOLVED.
+    - Source: src/http/ngx_http_core_module.c lines 1860-1887
+    - Strict mode: out-of-range r->err_status now triggers AAP §0.8.7 fallback-to-500
+    - Permissive mode: zero behavioral change, all baseline tests pass
+    - Both binaries compile cleanly with -Werror
+    - Build artifacts: /tmp/nginx-strict, /tmp/nginx-perm
+
+==========================================================================================
+
+==========================================================================================
+EVIDENCE FILES INDEX
+==========================================================================================
+  PRE-FIX (bug demonstration): blitzy/screenshots/bug_line_1861_void_cast.txt
+  POST-FIX (initial verification): blitzy/screenshots/issue_1_line_1861_fixed.txt
+  POST-FIX (comprehensive): blitzy/screenshots/issue_1_resolution_comprehensive.txt (this file)
+
+==========================================================================================
+SOURCE-CODE DIFF SUMMARY
+==========================================================================================
+File: src/http/ngx_http_core_module.c
+Lines changed: +25 / -1 (single hunk)
+Diff range: 1860-1887
+
+BEFORE (lines 1860-1862):
+    if (r->err_status) {
+        (void) ngx_http_status_set(r, r->err_status);
+        r->headers_out.status_line.len = 0;
+    }
+
+AFTER (lines 1860-1887):
+    if (r->err_status) {
+        /*
+         * Translate the request's internal error status field into the
+         * outgoing response status code.  In strict mode
+         * (--with-http_status_validation), ngx_http_status_set() may
+         * return NGX_ERROR for an out-of-range r->err_status (e.g., a
+         * misconfigured "return CODE;" with CODE outside 100..599), in
+         * which case the assignment to r->headers_out.status does NOT
+         * occur inside the API and r->headers_out.status would remain
+         * zero on the wire ("HTTP/1.1 000 \r\n").  Per AAP §0.8.7's
+         * Error-handling protocol ("Calling module should fall back to
+         * NGX_HTTP_INTERNAL_SERVER_ERROR (500); Do not terminate
+         * request processing (fail gracefully)"), fall back to a
+         * direct field assignment of 500 so the wire response remains
+         * a well-formed HTTP/1.1 status line.  The fallback uses
+         * direct field assignment because (a) 500 is a known-valid
+         * code that needs no further validation, (b) re-entering
+         * ngx_http_status_set() could in principle trip the
+         * single-final-code rule if r->headers_out.status had already
+         * been recorded earlier in the request lifecycle, and (c) the
+         * QA-recommended fix (Checkpoint 4 finding) prescribes this
+         * exact pattern for consistency with Pattern R3 at line 1781.
+         */
+        if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
+            r->headers_out.status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+        }
+        r->headers_out.status_line.len = 0;
+    }
+
+==========================================================================================
+BUILD VALIDATION SUMMARY
+==========================================================================================
+  Permissive build: ./auto/configure && make
+    - Exit: 0 (success)
+    - CFLAGS: -pipe -O -W -Wall -Wpointer-arith -Wno-unused-parameter -Werror -g
+    - Warnings: 0
+    - Binary: /tmp/nginx-perm (4109624 bytes)
+    - Configure args: (none)
+
+  Strict build: ./auto/configure --with-debug --with-http_status_validation && make
+    - Exit: 0 (success)
+    - CFLAGS: -pipe -O -W -Wall -Wpointer-arith -Wno-unused-parameter -Werror -g
+    - Warnings: 0
+    - Binary: /tmp/nginx-strict (4256888 bytes)
+    - Configure args: --with-debug --with-http_status_validation
+
+==========================================================================================

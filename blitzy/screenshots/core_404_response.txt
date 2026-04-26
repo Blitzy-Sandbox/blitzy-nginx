@@ -1,0 +1,25 @@
+* Host localhost:8080 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying [::1]:8080...
+* Immediate connect fail for ::1: Cannot assign requested address
+*   Trying 127.0.0.1:8080...
+* Connected to localhost (127.0.0.1) port 8080
+> GET /test_404 HTTP/1.1
+> Host: localhost:8080
+> User-Agent: curl/8.5.0
+> Accept: */*
+> 
+< HTTP/1.1 404 Not Found
+< Server: nginx/1.29.5
+< Date: Sat, 25 Apr 2026 14:20:48 GMT
+< Content-Type: text/html
+< Content-Length: 11
+< Connection: keep-alive
+< 
+{ [11 bytes data]
+100    11  100    11    0     0  22177      0 --:--:-- --:--:-- --:--:-- 11000
+* Connection #0 to host localhost left intact
+Custom 404
