@@ -198,7 +198,7 @@ In the default build this is identical to the old field write. In the validation
 build the setter assigns a valid code and the path continues regardless; the
 `(void)` cast deliberately ignores the return value because these teardown paths
 must never abort on a status check. (For proxied requests the setter passes the
-code through unchanged — see [Section 4](#4-upstream--proxied-pass-through-exception).)
+code through unchanged — see [Section 4](#4-upstream-proxied-pass-through-exception).)
 
 ## 4. Upstream / proxied pass-through exception
 

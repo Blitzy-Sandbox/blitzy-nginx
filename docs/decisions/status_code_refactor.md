@@ -48,7 +48,7 @@ that mediates every assignment. The descriptor type is defined in
 ```c
 typedef struct {
     ngx_uint_t   code;        /* e.g. 404 */
-    ngx_str_t    reason;      /* "Not Found" (or empty for numeric-only) */
+    ngx_str_t    reason;      /* "404 Not Found" (or empty for numeric-only) */
     ngx_uint_t   flags;       /* class + cacheability bitmask */
     const char  *rfc_section; /* "15.5.5" */
 } ngx_http_status_def_t;
