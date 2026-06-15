@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NGINX HTTP Status-Code Registry Refactor &mdash; Executive Summary</title>
+
+  <!-- Pinned CDN: reveal.js 5.1.0 core stylesheet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <!-- ============================================================
+       BLITZY BRAND THEME (INLINED — no external repo assets).
+       Canonical blitzy-deck/references/blitzy-reveal-theme.css is
+       not present in this repository (AAP 0.8); theme inlined here.
+       ============================================================ -->
+  <style>
+    :root{
+      --blz-bg:#0b1020;
+      --blz-bg-2:#111a2e;
+      --blz-panel:#16203a;
+      --blz-ink:#eef2ff;
+      --blz-muted:#9fb0d0;
+      --blz-indigo:#8b5cf6;
+      --blz-indigo-2:#7c8cff;
+      --blz-teal:#2dd4bf;
+      --blz-green:#34d399;
+      --blz-red:#f87171;
+      --blz-amber:#fbbf24;
+      --blz-border:#26324f;
+      --blz-code:#0e1730;
+    }
+    .reveal{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      font-size:30px;
+      color:var(--blz-ink);
+    }
+    .reveal .slides{ text-align:left; }
+    .reveal .slides section{
+      background:linear-gradient(160deg,var(--blz-bg) 0%,var(--blz-bg-2) 100%);
+      height:100%;
+      padding:36px 56px;
+      box-sizing:border-box;
+      border-radius:6px;
+    }
+    .reveal h1,.reveal h2,.reveal h3,.reveal h4{
+      color:#ffffff; font-weight:700; text-transform:none; letter-spacing:-0.01em; line-height:1.15;
+    }
+    .reveal h1{ font-size:1.7em; }
+    .reveal h2{ font-size:1.25em; margin-bottom:0.4em; }
+    .reveal h3{ font-size:0.92em; color:var(--blz-indigo-2); }
+    .reveal p,.reveal li{ color:var(--blz-ink); line-height:1.35; }
+    .reveal em{ color:var(--blz-teal); font-style:normal; font-weight:600; }
+    .reveal strong{ color:#ffffff; }
+    .reveal a{ color:var(--blz-indigo-2); }
+    .reveal ul,.reveal ol{ margin-left:1.1em; }
+    .reveal li{ margin:0.18em 0; }
+    .reveal section>.kicker{
+      color:var(--blz-indigo-2); font-size:0.5em; font-weight:700; letter-spacing:0.18em;
+      text-transform:uppercase; margin:0 0 0.2em 0;
+    }
+    .reveal .lead{ color:var(--blz-muted); font-size:0.78em; }
+    .reveal .footer{
+      position:absolute; bottom:14px; left:56px; right:56px;
+      display:flex; justify-content:space-between; align-items:center;
+      color:var(--blz-muted); font-size:0.42em; border-top:1px solid var(--blz-border); padding-top:8px;
+    }
+    .reveal .brandmark{ display:inline-flex; align-items:center; gap:8px; color:#fff; font-weight:700; }
+    .reveal .brandmark .dot{ width:12px; height:12px; border-radius:3px; background:linear-gradient(135deg,var(--blz-indigo),var(--blz-teal)); }
+
+    /* Cards / grids */
+    .grid{ display:grid; gap:18px; }
+    .grid.cols-2{ grid-template-columns:1fr 1fr; }
+    .grid.cols-3{ grid-template-columns:1fr 1fr 1fr; }
+    .grid.cols-4{ grid-template-columns:repeat(4,1fr); }
+    .card{
+      background:var(--blz-panel); border:1px solid var(--blz-border);
+      border-radius:12px; padding:18px 18px; box-shadow:0 6px 18px rgba(0,0,0,0.25);
+    }
+    .card h3{ margin:0 0 6px 0; display:flex; align-items:center; gap:10px; }
+    .card p{ font-size:0.62em; color:var(--blz-muted); margin:0; }
+    .stat{ display:flex; flex-direction:column; gap:2px; }
+    .stat .num{ font-size:1.5em; font-weight:800; color:#fff; }
+    .stat .lbl{ font-size:0.5em; color:var(--blz-muted); text-transform:uppercase; letter-spacing:0.08em; }
+    .accent-red .num{ color:var(--blz-red); }
+    .accent-green .num{ color:var(--blz-green); }
+    .accent-teal .num{ color:var(--blz-teal); }
+    .accent-amber .num{ color:var(--blz-amber); }
+
+    .pill{ display:inline-block; padding:3px 12px; border-radius:999px; font-size:0.5em; font-weight:700;
+      border:1px solid var(--blz-border); color:var(--blz-muted); }
+    .pill.good{ color:var(--blz-green); border-color:rgba(52,211,153,0.5); background:rgba(52,211,153,0.08); }
+    .pill.bad{ color:var(--blz-red); border-color:rgba(248,113,113,0.5); background:rgba(248,113,113,0.08); }
+
+    .reveal pre{ box-shadow:none; width:100%; font-size:0.46em; }
+    .reveal pre code{
+      display:block;
+      background:var(--blz-code); color:#dbe4ff; border:1px solid var(--blz-border);
+      border-radius:10px; padding:16px 18px; max-height:none; line-height:1.45;
+      white-space:pre; overflow:auto;
+    }
+    .reveal pre code .c-old{ color:var(--blz-red); }
+    .reveal pre code .c-new{ color:var(--blz-green); }
+    .reveal pre code .c-cmt{ color:#7f8db3; }
+
+    /* Lucide icon sizing */
+    .reveal i[data-lucide]{ width:1em; height:1em; vertical-align:-0.12em; stroke-width:2; }
+    .ic-lg i[data-lucide]{ width:1.6em; height:1.6em; }
+    .ic-indigo i[data-lucide]{ color:var(--blz-indigo-2); }
+    .ic-teal i[data-lucide]{ color:var(--blz-teal); }
+    .ic-green i[data-lucide]{ color:var(--blz-green); }
+    .ic-red i[data-lucide]{ color:var(--blz-red); }
+    .ic-amber i[data-lucide]{ color:var(--blz-amber); }
+
+    /* Mermaid containers */
+    .mermaid{ background:transparent; text-align:center; }
+    .diagram-title{ font-size:0.6em; font-weight:700; color:#fff; margin:0 0 4px 0; }
+    .diagram-legend{ font-size:0.4em; color:var(--blz-muted); margin:8px auto 0; max-width:90%; }
+
+    .reveal .controls{ color:var(--blz-indigo-2); }
+    .reveal .progress{ color:var(--blz-indigo); }
+    .reveal .slide-number{ background:transparent; color:var(--blz-muted); font-size:14px; }
+
+    .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+    .muted{ color:var(--blz-muted); }
+    .small{ font-size:0.66em; }
+    .xsmall{ font-size:0.55em; }
+    table.tbl{ width:100%; border-collapse:collapse; font-size:0.56em; }
+    table.tbl th,table.tbl td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--blz-border); }
+    table.tbl th{ color:var(--blz-indigo-2); text-transform:uppercase; letter-spacing:0.06em; font-size:0.85em; }
+    table.tbl td code{ color:#cdd8ff; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- 1. TITLE -->
+      <section data-auto-animate>
+        <p class="kicker">Blitzy Engineering Brief</p>
+        <h1>NGINX HTTP Status-Code<br>Registry Refactor</h1>
+        <p class="lead">From scattered constant-based assignments to a centralized, registry-backed API with optional RFC 9110 validation &mdash; full backward compatibility, byte-identical wire output.</p>
+        <p style="margin-top:26px;" class="ic-lg ic-teal">
+          <i data-lucide="server"></i>
+          <i data-lucide="git-merge" style="margin-left:18px;"></i>
+          <i data-lucide="shield-check" style="margin-left:18px;"></i>
+        </p>
+        <div class="footer">
+          <span class="brandmark"><span class="dot"></span>Blitzy</span>
+          <span>NGINX 1.29.5 &nbsp;|&nbsp; Executive Summary</span>
+        </div>
+      </section>
+
+      <!-- 2. EXECUTIVE SUMMARY -->
+      <section>
+        <p class="kicker">Executive Summary</p>
+        <h2>One authoritative model for every HTTP status code</h2>
+        <div class="grid cols-3" style="margin-top:14px;">
+          <div class="card">
+            <h3 class="ic-indigo"><i data-lucide="target"></i> Goal</h3>
+            <p>Consolidate three unlinked status definitions and 33 scattered field writes behind a single registry and a five-function API.</p>
+          </div>
+          <div class="card">
+            <h3 class="ic-teal"><i data-lucide="layers"></i> Approach</h3>
+            <p>Introduce <code>ngx_http_status_def_t</code> and <code>ngx_http_status_*()</code>; route reason-phrase and error-page lookups through it.</p>
+          </div>
+          <div class="card">
+            <h3 class="ic-green"><i data-lucide="shield-check"></i> Guarantee</h3>
+            <p>Byte-identical status lines and error pages; preserved ABI, filter signatures, and upstream pass-through.</p>
+          </div>
+        </div>
+        <p class="small muted" style="margin-top:16px;">Refactor &mdash; not a runtime bug fix. The "defect" is a set of architectural deficiencies addressed at their source.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Executive Summary</span></div>
+      </section>
+
+      <!-- 3. THE PROBLEM -->
+      <section>
+        <p class="kicker">The Problem</p>
+        <h2>A single fact, declared three times</h2>
+        <p class="small muted">"Status code N has reason R, class C, cacheability F" is duplicated across three artifacts that no compiler cross-checks.</p>
+        <pre class="mermaid" style="margin-top:6px;">
+graph LR
+    FACT["One logical fact:<br/>code + reason + class + cacheability"]:::src
+    A["#define constants<br/>ngx_http_request.h"]:::dup
+    B["Reason-phrase table<br/>ngx_http_status_lines[]"]:::dup
+    C["Error-page table<br/>ngx_http_error_pages[]"]:::dup
+    FACT -.manual copy.-> A
+    FACT -.manual copy.-> B
+    FACT -.manual copy.-> C
+    classDef src fill:#16203a,stroke:#7c8cff,color:#eef2ff;
+    classDef dup fill:#ffe0e0,stroke:#c0392b,color:#333333;
+        </pre>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>The Problem</span></div>
+      </section>
+
+      <!-- 4. EVIDENCE -->
+      <section>
+        <p class="kicker">Evidence &mdash; Reproducible from the repo root</p>
+        <h2>The fragmentation is measurable</h2>
+        <div class="grid cols-4" style="margin-top:14px;">
+          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="files"></i></span><span class="num">20</span><span class="lbl">files assign status</span></div>
+          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="hash"></i></span><span class="num">33</span><span class="lbl">assignment sites</span></div>
+          <div class="card stat accent-amber"><span class="ic-amber ic-lg"><i data-lucide="table-2"></i></span><span class="num">3</span><span class="lbl">unlinked tables</span></div>
+          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="triangle-alert"></i></span><span class="num">207 / 202</span><span class="lbl">divergent macro</span></div>
+        </div>
+        <pre style="margin-top:18px;"><code class="language-bash"><span class="c-cmt"># 20 files assign the status field directly; 33 total sites</span>
+grep -rln 'headers_out\.status *=' src/http | wc -l   <span class="c-cmt"># -&gt; 20</span>
+grep -rho 'headers_out\.status *=' src/http | wc -l    <span class="c-cmt"># -&gt; 33</span>
+
+<span class="c-cmt"># The SAME offset macro carries two different values</span>
+grep -rn 'define NGX_HTTP_LAST_2XX' src/http
+<span class="c-cmt">#   header_filter_module.c:70: ... 207</span>
+<span class="c-cmt">#   special_response.c:344:    ... 202</span></code></pre>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Evidence</span></div>
+      </section>
+
+      <!-- 5. ROOT CAUSES -->
+      <section>
+        <p class="kicker">Root Cause Analysis</p>
+        <h2>Five interlocking deficiencies</h2>
+        <div class="grid cols-2" style="margin-top:10px;">
+          <div class="card"><h3 class="ic-red"><i data-lucide="copy"></i> RC-1 Triple definition</h3><p>The same code set declared in three compiler-unlinked artifacts.</p></div>
+          <div class="card"><h3 class="ic-red"><i data-lucide="git-branch"></i> RC-2 No chokepoint</h3><p>Direct <code>r-&gt;headers_out.status =</code> writes; nowhere to validate or instrument.</p></div>
+          <div class="card"><h3 class="ic-red"><i data-lucide="triangle-alert"></i> RC-3 Divergent macros</h3><p><code>NGX_HTTP_LAST_2XX</code> = 207 vs 202 &mdash; a concrete latent defect.</p></div>
+          <div class="card"><h3 class="ic-amber"><i data-lucide="shield-off"></i> RC-4 No validation seam</h3><p>No API to validate against RFC 9110 or register new codes.</p></div>
+        </div>
+        <div class="card" style="margin-top:14px;"><h3 class="ic-amber"><i data-lucide="list"></i> RC-5 Sparse metadata</h3><p>Many codes carry <code>ngx_null_string</code> reasons and no class / cacheability fields.</p></div>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Root Causes</span></div>
+      </section>
+
+      <!-- 6. THE CONCRETE DEFECT -->
+      <section>
+        <p class="kicker">RC-3 &mdash; The Concrete Latent Defect</p>
+        <h2>Two files disagree on the 2xx boundary</h2>
+        <pre class="mermaid" style="margin-top:8px;">
+graph TB
+    RLT["ngx_http_header_filter_module.c:70<br/>#define NGX_HTTP_LAST_2XX 207"]:::bad
+    EPT["ngx_http_special_response.c:344<br/>#define NGX_HTTP_LAST_2XX 202"]:::bad
+    SKEW{{"Divergent macros<br/>207 vs 202<br/>cannot both be correct"}}:::bad
+    RLT --> SKEW
+    EPT --> SKEW
+    classDef bad fill:#ffe0e0,stroke:#c0392b,color:#333333;
+        </pre>
+        <p class="xsmall muted" style="margin-top:8px;">Two translation units cannot both be right about where the 2xx reason-phrase region ends. The registry removes both macros entirely.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>RC-3</span></div>
+      </section>
+
+      <!-- 7. TARGET ARCHITECTURE -->
+      <section>
+        <p class="kicker">Target Architecture</p>
+        <h2>One registry feeds one API</h2>
+        <pre class="mermaid" style="margin-top:6px;">
+graph LR
+    REG["ngx_http_status_def_t<br/>single static const registry<br/>ngx_http_status.c"]:::good
+    API["ngx_http_status_*() API"]:::good
+    M["20 modules / 33 sites"]:::neutral
+    R["reason lookup"]:::neutral
+    E["error-page lookup"]:::neutral
+    REG --> API
+    API --> M
+    REG --> R
+    REG --> E
+    classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
+    classDef neutral fill:#16203a,stroke:#7c8cff,color:#eef2ff;
+        </pre>
+        <p class="xsmall muted" style="margin-top:6px;">Read-only after worker init, O(1) class-offset indexing, under 1 KB per worker.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Target Architecture</span></div>
+      </section>
+
+      <!-- 8. DIAGRAM 0.1-A (REQUIRED, with title + legend) -->
+      <section>
+        <p class="diagram-title">Diagram 0.1-A: Status-Code Handling &mdash; Current (Before) vs Target (After) Architecture</p>
+        <pre class="mermaid">
+graph TB
+    legend["LEGEND: solid arrow = compile/runtime data path; dashed arrow = manual (unchecked) duplication; red = duplicated/divergent source of truth; green = single source of truth"]
+
+    subgraph BEFORE["BEFORE — Fragmented (NGINX 1.29.5)"]
+        direction TB
+        DEF["#define constants<br/>ngx_http_request.h:74-145"]:::bad
+        RLT["Reason-phrase table<br/>ngx_http_status_lines[]<br/>header_filter_module.c:58-136"]:::bad
+        EPT["Error-page table<br/>ngx_http_error_pages[]<br/>special_response.c:340-410"]:::bad
+        MODS["20 modules / 33 sites<br/>r->headers_out.status = NGX_HTTP_*"]:::bad
+        DEF -.manual sync.-> RLT
+        DEF -.manual sync.-> EPT
+        DEF -.no validation.-> MODS
+        RLT -. LAST_2XX=207 .-> SKEW{{"divergent macros<br/>207 vs 202"}}:::bad
+        EPT -. LAST_2XX=202 .-> SKEW
+    end
+
+    subgraph AFTER["AFTER — Centralized registry-backed API"]
+        direction TB
+        REG["ngx_http_status_def_t registry<br/>ngx_http_status.c (single static array)"]:::good
+        API["API: ngx_http_status_set / validate /<br/>reason / register / is_cacheable<br/>declared via ngx_http.h"]:::good
+        MODS2["20 modules / 33 sites<br/>ngx_http_status_set(r, code)"]:::good
+        RLT2["reason lookup -> ngx_http_status_reason()"]:::good
+        EPT2["error-page lookup (registry-aligned)"]:::good
+        REG --> API
+        API --> MODS2
+        REG --> RLT2
+        REG --> EPT2
+    end
+
+    classDef bad fill:#ffe0e0,stroke:#c0392b,color:#333333;
+    classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
+        </pre>
+        <p class="diagram-legend">Legend: solid arrow = compile/runtime data path &nbsp;&bull;&nbsp; dashed arrow = manual (unchecked) duplication &nbsp;&bull;&nbsp; red = duplicated/divergent source of truth &nbsp;&bull;&nbsp; green = single source of truth.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Before / After</span></div>
+      </section>
+
+      <!-- 9. REGISTRY TYPE & FLAGS -->
+      <section>
+        <p class="kicker">The Model</p>
+        <h2 class="ic-indigo"><i data-lucide="database"></i> Registry descriptor and flag bits</h2>
+        <pre style="margin-top:8px;"><code class="language-c">typedef struct {
+    ngx_uint_t   code;        <span class="c-cmt">/* e.g. 404 */</span>
+    ngx_str_t    reason;      <span class="c-cmt">/* "Not Found" (or empty -&gt; numeric-only) */</span>
+    ngx_uint_t   flags;       <span class="c-cmt">/* class + cacheability bitmask */</span>
+    const char  *rfc_section; <span class="c-cmt">/* "15.5.5" */</span>
+} ngx_http_status_def_t;
+
+#define NGX_HTTP_STATUS_CACHEABLE      0x0001
+#define NGX_HTTP_STATUS_CLIENT_ERROR   0x0002
+#define NGX_HTTP_STATUS_SERVER_ERROR   0x0004
+#define NGX_HTTP_STATUS_INFORMATIONAL  0x0008</code></pre>
+        <p class="xsmall muted">Cacheable-by-default metadata set: 200, 203, 204, 206, 300, 301, 308, 404, 405, 410, 414, 501 (exposes RFC 9111 heuristic cacheability; no new caching behavior).</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>The Model</span></div>
+      </section>
+
+      <!-- 10. API SURFACE -->
+      <section>
+        <p class="kicker">The API Surface</p>
+        <h2>Five functions, each &le; 50 lines</h2>
+        <table class="tbl" style="margin-top:10px;">
+          <thead><tr><th>Function</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><span class="ic-teal"><i data-lucide="log-in"></i></span> <code>ngx_http_status_set()</code></td><td>The assignment chokepoint (replaces direct field writes).</td></tr>
+            <tr><td><span class="ic-teal"><i data-lucide="check"></i></span> <code>ngx_http_status_validate()</code></td><td>RFC 9110 conformance check (100&ndash;599).</td></tr>
+            <tr><td><span class="ic-teal"><i data-lucide="message-square"></i></span> <code>ngx_http_status_reason()</code></td><td>Reason-phrase accessor (replaces table arithmetic).</td></tr>
+            <tr><td><span class="ic-teal"><i data-lucide="plus-circle"></i></span> <code>ngx_http_status_register()</code></td><td>Worker-init extensibility seam.</td></tr>
+            <tr><td><span class="ic-teal"><i data-lucide="database"></i></span> <code>ngx_http_status_is_cacheable()</code></td><td>Cacheability flag test.</td></tr>
+          </tbody>
+        </table>
+        <p class="xsmall muted" style="margin-top:10px;">Declared via <code>ngx_http.h</code>; implemented in <code>ngx_http_status.c</code>. An idempotent <code>ngx_http_status_init()</code> hook populates the registry before worker fork.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>API Surface</span></div>
+      </section>
+
+      <!-- 11. MIGRATION PATTERN -->
+      <section>
+        <p class="kicker">Migration Pattern</p>
+        <h2>Same wire output, one mechanical change</h2>
+        <div class="two-col" style="margin-top:8px;">
+          <pre><code class="language-c"><span class="c-cmt">/* OLD */</span>
+<span class="c-old">r-&gt;headers_out.status = NGX_HTTP_NOT_FOUND;</span></code></pre>
+          <pre><code class="language-c"><span class="c-cmt">/* NEW */</span>
+<span class="c-new">if (ngx_http_status_set(r, 404) != NGX_OK) {
+    ngx_log_error(NGX_LOG_ERR, r-&gt;connection-&gt;log, 0,
+                  "invalid HTTP status %ui",
+                  (ngx_uint_t) 404);
+    return NGX_HTTP_INTERNAL_SERVER_ERROR;
+}</span></code></pre>
+        </div>
+        <pre class="mermaid" style="margin-top:6px;">
+graph LR
+    OLD["33 direct writes"]:::bad --> API["ngx_http_status_set(r, code)"]:::good --> OUT["identical status field"]:::good
+    classDef bad fill:#ffe0e0,stroke:#c0392b,color:#333333;
+    classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
+        </pre>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Migration</span></div>
+      </section>
+
+      <!-- 12. BACKWARD COMPATIBILITY -->
+      <section>
+        <p class="kicker">Backward Compatibility</p>
+        <h2 class="ic-green"><i data-lucide="shield-check"></i> Non-negotiable invariants preserved</h2>
+        <div class="grid cols-2" style="margin-top:12px;">
+          <div class="card"><h3 class="ic-green"><i data-lucide="equal"></i> Byte-identical wire</h3><p>Status lines and error-page bodies diff to empty before/after, including numeric-only placeholder codes.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="lock"></i> Security rewrites</h3><p>494/495/496/497 &rarr; 400 wire-rewrite and 498 &rarr; error_404_page mapping unchanged.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="git-branch"></i> Upstream pass-through</h3><p>Proxied status is copied, never strict-validated.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="puzzle"></i> Stable ABI</h3><p><code>NGX_MODULE_V1</code> and all filter-chain signatures untouched; bodies only.</p></div>
+        </div>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Compatibility</span></div>
+      </section>
+
+      <!-- 13. OPTIONAL VALIDATION MODE -->
+      <section>
+        <p class="kicker">Opt-in RFC 9110 Mode</p>
+        <h2>--with-http_status_validation</h2>
+        <pre class="mermaid" style="margin-top:6px;">
+graph TB
+    S["ngx_http_status_set(r, code)"]:::neutral
+    Q{"validation<br/>compiled in?"}:::neutral
+    U{"r->upstream set?"}:::neutral
+    PASS["assign status<br/>(zero overhead)"]:::good
+    VAL["validate vs RFC 9110<br/>fallback 500 + log on fail"]:::good
+    S --> Q
+    Q -- "no (default)" --> PASS
+    Q -- "yes" --> U
+    U -- "yes (proxied)" --> PASS
+    U -- "no" --> VAL
+    classDef neutral fill:#16203a,stroke:#7c8cff,color:#eef2ff;
+    classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
+        </pre>
+        <p class="xsmall muted">Default build: <code>ngx_http_status_set()</code> is a static-inline that constant-folds to the original field write.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Validation Mode</span></div>
+      </section>
+
+      <!-- 14. PERFORMANCE -->
+      <section>
+        <p class="kicker">Performance Envelope</p>
+        <h2 class="ic-amber"><i data-lucide="gauge"></i> Bounds the refactor must hold</h2>
+        <div class="grid cols-4" style="margin-top:14px;">
+          <div class="card stat accent-teal"><span class="num">&lt; 2%</span><span class="lbl">latency p50/p95/p99</span></div>
+          <div class="card stat accent-teal"><span class="num">&lt; 10</span><span class="lbl">CPU cycles / assign</span></div>
+          <div class="card stat accent-teal"><span class="num">&lt; 1 KB</span><span class="lbl">registry per worker</span></div>
+          <div class="card stat accent-green"><span class="num">O(1)</span><span class="lbl">array indexing</span></div>
+        </div>
+        <p class="small muted" style="margin-top:16px;"><span class="ic-green"><i data-lucide="zap"></i></span> With validation disabled, overhead is exactly zero via compile-time constant propagation; the registry lives in read-only <code>.rodata</code>, shared copy-on-write across workers.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Performance</span></div>
+      </section>
+
+      <!-- 15. VERIFICATION & GOVERNANCE -->
+      <section>
+        <p class="kicker">Verification &amp; Governance</p>
+        <h2>Proven correct, fully documented</h2>
+        <div class="two-col" style="margin-top:8px;">
+          <div>
+            <h3 class="ic-teal"><i data-lucide="flask-conical"></i> Verification</h3>
+            <ul class="small">
+              <li>Byte-parity <code>diff</code> of status lines &amp; error pages</li>
+              <li>External nginx-tests <code>prove -r t/</code> (clone-only)</li>
+              <li><code>wrk</code> latency within bounds; graceful binary upgrade</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="ic-indigo"><i data-lucide="clipboard-check"></i> Governance deliverables</h3>
+            <ul class="small">
+              <li>Decision log + 100% traceability matrix</li>
+              <li>Observability dashboard + notes</li>
+              <li>This deck &amp; segmented <code>CODE_REVIEW.md</code></li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Verification &amp; Governance</span></div>
+      </section>
+
+      <!-- 16. SUMMARY -->
+      <section data-auto-animate>
+        <p class="kicker">Definition of Done</p>
+        <h2 class="ic-green"><i data-lucide="circle-check"></i> One source of truth, zero wire change</h2>
+        <div class="grid cols-2" style="margin-top:12px;">
+          <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Consolidated</h3><p>Core modules use <code>ngx_http_status_set()</code> exclusively; divergent macros removed.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Compatible</h3><p>Byte-identical output; ABI, security rewrites, and upstream pass-through intact.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Validated</h3><p>RFC 9110 codes registered; optional strict mode; nginx-tests pass.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Governed</h3><p>Every rule-mandated artifact present at its specified path.</p></div>
+        </div>
+        <p class="lead" style="margin-top:18px;">NGINX 1.29.5 &mdash; status handling, centralized.</p>
+        <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Thank you</span></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Pinned CDN: reveal.js 5.1.0 (UMD) and Lucide 0.460.0 (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+
+  <!-- Pinned CDN: Mermaid 11.4.0 (ESM) + initialization -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs';
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      theme: 'base',
+      themeVariables: {
+        fontFamily: 'Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+        fontSize: '16px',
+        primaryColor: '#16203a',
+        primaryTextColor: '#eef2ff',
+        primaryBorderColor: '#7c8cff',
+        lineColor: '#9fb0d0',
+        tertiaryColor: '#0e1730'
+      },
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+
+    // Render all mermaid diagrams BEFORE Reveal hides non-active slides.
+    // reveal.css already sets non-active `.slides > section { display:none }`,
+    // so measuring Mermaid's HTML edge labels in a hidden container yields NaN
+    // transforms and zero-size SVGs. Force every slide into layout (block +
+    // hidden) for the one-time up-front render, then restore so Reveal alone
+    // controls slide visibility. suppressErrors + try/finally guarantee that a
+    // single diagram hiccup can never reject the await and abort the Lucide and
+    // Reveal initialization that follows.
+    const __slides = Array.from(document.querySelectorAll('.reveal .slides > section'));
+    const __prevStyle = __slides.map(function (s) { return s.getAttribute('style'); });
+    __slides.forEach(function (s) {
+      s.style.setProperty('display', 'block', 'important');
+      s.style.setProperty('visibility', 'hidden', 'important');
+      s.style.setProperty('position', 'static', 'important');
+    });
+    try {
+      await mermaid.run({ querySelector: '.mermaid', suppressErrors: true });
+    } catch (e) {
+      console.warn('mermaid render issue (non-fatal):', e);
+    } finally {
+      __slides.forEach(function (s, i) {
+        if (__prevStyle[i] === null) { s.removeAttribute('style'); }
+        else { s.setAttribute('style', __prevStyle[i]); }
+      });
+    }
+
+    // Initialize Lucide icons (UMD global).
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+
+    // Initialize reveal.js after diagrams + icons are in the DOM.
+    Reveal.initialize({
+      hash: true,
+      slideNumber: 'c/t',
+      controls: true,
+      progress: true,
+      center: false,
+      width: 1280,
+      height: 720,
+      margin: 0.04,
+      transition: 'slide'
+    });
+
+    // Re-assert icons after first layout (defensive).
+    Reveal.on('ready', () => { if (window.lucide) window.lucide.createIcons(); });
+  </script>
+</body>
+</html>
