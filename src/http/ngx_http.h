@@ -32,6 +32,7 @@ typedef u_char *(*ngx_http_log_handler_pt)(ngx_http_request_t *r,
 #include <ngx_http_variables.h>
 #include <ngx_http_config.h>
 #include <ngx_http_request.h>
+#include <ngx_http_status.h>
 #include <ngx_http_script.h>
 #include <ngx_http_upstream.h>
 #include <ngx_http_upstream_round_robin.h>
