@@ -5,8 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>NGINX HTTP Status-Code Registry Refactor &mdash; Executive Summary</title>
 
-  <!-- Pinned CDN: reveal.js 5.1.0 core stylesheet -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <!-- Pinned CDN: reveal.js 5.1.0 core stylesheet.
+       Hardened with Subresource Integrity (SRI): the browser refuses to apply
+       the stylesheet unless its bytes hash to the pinned sha384 digest, so a
+       CDN compromise or MITM cannot substitute altered CSS. crossorigin is
+       required for SRI on cross-origin resources (jsdelivr sends ACAO:*). -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"
+        integrity="sha384-YgvgKeZJykuztG+iQPoZHNZENTFZvOcOJ/uRzmJTje6GHYN9zAw+y5rx/L8MQKA/"
+        crossorigin="anonymous">
 
   <!-- ============================================================
        BLITZY BRAND THEME (INLINED — no external repo assets).
@@ -459,13 +465,30 @@ graph TB
     </div>
   </div>
 
-  <!-- Pinned CDN: reveal.js 5.1.0 (UMD) and Lucide 0.460.0 (UMD) -->
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <!-- Pinned CDN: reveal.js 5.1.0 (UMD) and Lucide 0.460.0 (UMD).
+       Both carry Subresource Integrity (SRI) sha384 digests + crossorigin so
+       the browser executes them only if their bytes are unaltered. -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"
+          integrity="sha384-M/JtqCVlLcK9lwVnBnMXP0V577CBULkjodKsR/PITOe4MSKNbbwqCemEyluOw0+5"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"
+          integrity="sha384-ieG+IKD0d/ZPXyCBTMVAbqsQdns8QGJR/e26WMw7M4fkaI/rHcS/YIoi+ah9WGge"
+          crossorigin="anonymous"></script>
 
-  <!-- Pinned CDN: Mermaid 11.4.0 (ESM) + initialization -->
+  <!-- Pinned CDN: Mermaid 11.15.0 (ESM) + initialization.
+       Security pin: 11.15.0 clears CVE-2025-54881 (KaTeX label XSS, fixed in
+       11.10.0) and CVE-2026-41149 (state-diagram classDef DOM injection, fixed
+       in 11.15.0). The bump is API-compatible (initialize()/run() are stable
+       across the 11.x line).
+       SRI limitation (documented, by design): Subresource Integrity is NOT
+       applied to this module specifier. A bare ES-module `import` cannot carry
+       an integrity attribute, and the mermaid ESM entrypoint dynamically
+       imports 20+ sub-chunks at runtime (chunk-*.mjs, flowDiagram-*.mjs,
+       dagre-*.mjs) that a hash on the entrypoint could not cover. The
+       mitigation is the exact, immutable version pin fetched over HTTPS from a
+       CORS-enabled CDN path. -->
   <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs';
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs';
 
     mermaid.initialize({
       startOnLoad: false,
