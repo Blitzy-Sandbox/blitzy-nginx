@@ -46,11 +46,18 @@ variable, implemented entirely in `src/http/ngx_http_variables.c`:
   (`ngx_hex_dump`), i.e. randomized; without OpenSSL it falls back to a
   deterministic `ngx_sprintf(id, "%08xD%08xD%08xD%08xD", ...)` (still 32 chars).
 
-This refactor **reuses `$request_id` as the correlation id** across all
-status-set log lines, so a dashboard spike can be pivoted to the exact request in
-`error.log`/`access.log`. The numeric response code is likewise already exposed
-via the `$status` variable (`src/http/ngx_http_variables.c:319-320`), which is the
-value the dashboard's class-count and top-codes panels conceptually aggregate.
+This refactor **reuses `$request_id` as the correlation id for the strict-mode
+invalid-status error records**. Those records are emitted through the core
+module's `ngx_http_log_invalid_status()` helper
+(`src/http/ngx_http_core_module.c`), which embeds the id directly in the
+`error.log` line (`"invalid HTTP status %ui, request_id: \"%V\""`, falling back to
+`-` when the variable is unavailable), so a validation failure can be pivoted to
+the exact request. The status-set **debug traces** (`"http status set: %ui"`) are
+correlated by **connection** via `r->connection->log` at `NGX_LOG_DEBUG_HTTP`,
+not by `$request_id` — see the per-build table below for the precise contract.
+The numeric response code is likewise already exposed via the `$status` variable
+(`src/http/ngx_http_variables.c:319-320`), which is the value the dashboard's
+class-count and top-codes panels conceptually aggregate.
 
 > Recommended log format: include `$request_id` (and `$status`) so the
 > correlation id is present on every line, e.g.
@@ -102,8 +109,15 @@ defined in exactly one place:
 | **Strict build, invalid code** | Emits a single `NGX_LOG_ERR` line `"invalid HTTP status %ui"`, then falls back to `NGX_HTTP_INTERNAL_SERVER_ERROR` (500). This is the one event the dashboard's validation-failure panels count. |
 | **Strict build, upstream/permissive path** | Proxied/upstream status is passed through (never strict-validated); unknown codes are traced at `NGX_LOG_DEBUG_HTTP`, not errored. |
 
-Every such line carries the `$request_id` correlation id (REUSED above), so a
-validation failure is traceable to a specific request.
+The **strict-build invalid-status error line** carries the `$request_id`
+correlation id when it is emitted through the core module's
+`ngx_http_log_invalid_status()` helper (used by the core write sites in
+`ngx_http_send_response` and the header-send path), so that validation failure is
+traceable to a specific request. The per-module invalid-status fallbacks (the
+`ngx_log_error(... "invalid HTTP status %ui")` form in the migrated modules) and
+the status-set **debug traces** in both builds are correlated by **connection**
+(`r->connection->log`), not by `$request_id`; operators who want `$request_id` on
+every line add it to their `log_format` as recommended above.
 
 ### 2. Status-code metrics dashboard
 

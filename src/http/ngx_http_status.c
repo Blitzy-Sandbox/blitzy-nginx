@@ -151,13 +151,20 @@ static ngx_uint_t             ngx_http_status_initialized = 0;
 
 
 /*
- * Map a status code to its index in ngx_http_status_defs[].  The branches are
- * arranged so that each supported region resolves with a single comparison and
- * a subtraction (O(1)); codes outside the registered regions return -1.  The
- * arithmetic MUST stay in lock-step with the array layout above.
+ * Map a status code to its canonical slot in ngx_http_status_defs[].  The
+ * branches are arranged so that each supported region resolves with a single
+ * comparison and a subtraction (O(1)); codes outside the registered regions
+ * return -1.  The arithmetic MUST stay in lock-step with the array layout
+ * above.
+ *
+ * This is the registry's single index primitive: it is the one place that
+ * knows how a status code maps to a class-offset slot.  It is exported (see
+ * ngx_http_status.h) so that other registry-aligned tables - notably the
+ * special-response error-page table - can be indexed by the SAME slot number
+ * instead of carrying their own divergent offset arithmetic.
  */
 
-static ngx_int_t
+ngx_int_t
 ngx_http_status_index(ngx_uint_t status)
 {
     if (status >= 100 && status <= 103) return (ngx_int_t) (status - 100);        /* 0..3   */

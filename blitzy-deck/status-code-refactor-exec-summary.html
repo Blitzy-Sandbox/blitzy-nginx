@@ -157,7 +157,7 @@
         <div class="grid cols-3" style="margin-top:14px;">
           <div class="card">
             <h3 class="ic-indigo"><i data-lucide="target"></i> Goal</h3>
-            <p>Consolidate three unlinked status definitions and 33 scattered field writes behind a single registry and a five-function API.</p>
+            <p>Consolidate three unlinked status definitions and 33 scattered status-handling sites &mdash; 17 direct writes plus 16 comparison reads &mdash; behind a single registry and a five-function API.</p>
           </div>
           <div class="card">
             <h3 class="ic-teal"><i data-lucide="layers"></i> Approach</h3>
@@ -197,12 +197,12 @@ graph LR
         <p class="kicker">Evidence &mdash; Reproducible from the repo root</p>
         <h2>The fragmentation is measurable</h2>
         <div class="grid cols-4" style="margin-top:14px;">
-          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="files"></i></span><span class="num">20</span><span class="lbl">files assign status</span></div>
-          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="hash"></i></span><span class="num">33</span><span class="lbl">assignment sites</span></div>
+          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="files"></i></span><span class="num">20</span><span class="lbl">files touch status</span></div>
+          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="hash"></i></span><span class="num">33</span><span class="lbl">status-field sites (17 W / 16 R)</span></div>
           <div class="card stat accent-amber"><span class="ic-amber ic-lg"><i data-lucide="table-2"></i></span><span class="num">3</span><span class="lbl">unlinked tables</span></div>
           <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="triangle-alert"></i></span><span class="num">207 / 202</span><span class="lbl">divergent macro</span></div>
         </div>
-        <pre style="margin-top:18px;"><code class="language-bash"><span class="c-cmt"># 20 files assign the status field directly; 33 total sites</span>
+        <pre style="margin-top:18px;"><code class="language-bash"><span class="c-cmt"># 20 files reference the status field; 33 total sites (17 writes + 16 comparison reads)</span>
 grep -rln 'headers_out\.status *=' src/http | wc -l   <span class="c-cmt"># -&gt; 20</span>
 grep -rho 'headers_out\.status *=' src/http | wc -l    <span class="c-cmt"># -&gt; 33</span>
 
@@ -360,7 +360,7 @@ graph TB
         </div>
         <pre class="mermaid" style="margin-top:6px;">
 graph LR
-    OLD["33 direct writes"]:::bad --> API["ngx_http_status_set(r, code)"]:::good --> OUT["identical status field"]:::good
+    OLD["17 direct writes"]:::bad --> API["ngx_http_status_set(r, code)"]:::good --> OUT["identical status field"]:::good
     classDef bad fill:#ffe0e0,stroke:#c0392b,color:#333333;
     classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
         </pre>

@@ -30,6 +30,7 @@ static ngx_int_t ngx_http_core_find_static_location(ngx_http_request_t *r,
 
 static ngx_int_t ngx_http_core_preconfiguration(ngx_conf_t *cf);
 static ngx_int_t ngx_http_core_postconfiguration(ngx_conf_t *cf);
+static ngx_int_t ngx_http_core_init_module(ngx_cycle_t *cycle);
 static void *ngx_http_core_create_main_conf(ngx_conf_t *cf);
 static char *ngx_http_core_init_main_conf(ngx_conf_t *cf, void *conf);
 static void *ngx_http_core_create_srv_conf(ngx_conf_t *cf);
@@ -817,7 +818,7 @@ ngx_module_t  ngx_http_core_module = {
     ngx_http_core_commands,                /* module directives */
     NGX_HTTP_MODULE,                       /* module type */
     NULL,                                  /* init master */
-    NULL,                                  /* init module */
+    ngx_http_core_init_module,             /* init module */
     NULL,                                  /* init process */
     NULL,                                  /* init thread */
     NULL,                                  /* exit thread */
@@ -3480,18 +3481,6 @@ ngx_http_core_postconfiguration(ngx_conf_t *cf)
 {
     ngx_http_top_request_body_filter = ngx_http_request_body_save_filter;
 
-    /*
-     * Initialize and finalize the HTTP status-code registry here, in the HTTP
-     * core postconfiguration handler.  This runs once in the master process
-     * while the configuration is being built - before the worker fork - so the
-     * registry is read-only by the time any worker serves a request.  Failing
-     * here aborts startup (and configuration reload), which is the intended
-     * behavior if the registry cannot be initialized.
-     */
-    if (ngx_http_status_init() != NGX_OK) {
-        return NGX_ERROR;
-    }
-
 #if (NGX_HTTP_STATUS_VALIDATION)
     {
         ngx_str_t  request_id = ngx_string("request_id");
@@ -3510,6 +3499,29 @@ ngx_http_core_postconfiguration(ngx_conf_t *cf)
         }
     }
 #endif
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_core_init_module(ngx_cycle_t *cycle)
+{
+    /*
+     * Finalize the HTTP status-code registry after every HTTP module has run
+     * its postconfiguration handler.  ngx_init_modules() invokes init_module
+     * hooks once, in the master process, only after the whole configuration -
+     * including the http{} block and all HTTP postconfiguration callbacks - has
+     * been built, and still before the worker fork.  Deferring finalization to
+     * this point is what makes ngx_http_status_register() a usable pre-fork
+     * extensibility seam: a third-party HTTP module can register codes from its
+     * own postconfiguration handler (which runs earlier) and have them accepted,
+     * because the registry is not sealed until here.  Once sealed it is
+     * read-only, so every worker inherits the same finalized registry.
+     */
+    if (ngx_http_status_init() != NGX_OK) {
+        return NGX_ERROR;
+    }
 
     return NGX_OK;
 }

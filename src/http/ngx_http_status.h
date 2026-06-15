@@ -60,6 +60,16 @@ ngx_int_t   ngx_http_status_register(const ngx_http_status_def_t *def);
 /* non-zero if the code carries the cacheable metadata flag */
 ngx_uint_t  ngx_http_status_is_cacheable(ngx_uint_t status);
 
+/*
+ * Canonical registry slot for a status code (O(1) class-offset), or -1 for a
+ * code outside the registered regions.  This is the single source of truth for
+ * "where does this code live": registry-aligned tables (e.g. the special-
+ * response error-page table) MUST be laid out parallel to the registry and
+ * indexed through this function rather than re-deriving their own offsets, so
+ * the duplicated lookup machinery collapses onto one index scheme.
+ */
+ngx_int_t   ngx_http_status_index(ngx_uint_t status);
+
 
 /*
  * ngx_http_status_set() is the single chokepoint for assigning a response

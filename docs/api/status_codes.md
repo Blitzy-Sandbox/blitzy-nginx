@@ -218,13 +218,15 @@ Extensibility seam for third-party status codes.
 ngx_int_t  ngx_http_status_register(const ngx_http_status_def_t *def);
 ```
 
-Registers an additional code descriptor. It is intended to be called **before
-the worker fork**, so that every worker inherits the registered code. The
+Registers an additional code descriptor. A third-party HTTP module calls it from
+its **postconfiguration handler**, which runs in the master process before the
+HTTP core module's `init_module` hook finalizes the registry (and therefore
+before the worker fork), so that every worker inherits the registered code. The
 descriptor is copied by value into a bounded table with a capacity of **32**
 registered codes. The function returns `NGX_ERROR` when the argument is `NULL`,
 when the table is full (capacity exceeded), or when the registry has already been
 finalized by `ngx_http_status_init()` (the registry is read-only after
-initialization); otherwise it returns `NGX_OK`.
+finalization); otherwise it returns `NGX_OK`.
 
 **Returns:** `NGX_OK` on success; `NGX_ERROR` for a `NULL` descriptor, on
 overflow (≥ 32 registered), or after the registry has been finalized.
@@ -271,10 +273,14 @@ Pre-fork initialization hook.
 ngx_int_t  ngx_http_status_init(void);
 ```
 
-Idempotent, allocation-free, one-time initialization called from
-`src/http/ngx_http_request.c` **before the worker fork**, so that every worker
-inherits the same read-only registry (no shared-memory migration is needed for a
-graceful binary upgrade). After it returns, the registry is finalized and
+Idempotent, allocation-free, one-time finalization called from the HTTP core
+module's `init_module` hook (`ngx_http_core_init_module` in
+`src/http/ngx_http_core_module.c`). `ngx_init_modules()` invokes that hook in the
+master process **after every HTTP module's postconfiguration handler has run and
+before the worker fork**, so each worker inherits the same read-only registry (no
+shared-memory migration is needed for a graceful binary upgrade) and a
+third-party module can still register codes from its own postconfiguration
+handler (which runs earlier). After it returns, the registry is finalized and
 `ngx_http_status_register()` rejects further mutation.
 
 **Returns:** `NGX_OK`.

@@ -76,7 +76,7 @@ included) and implemented in `src/http/ngx_http_status.c`. Each function is
 | `ngx_http_status_reason` | `ngx_str_t ngx_http_status_reason(ngx_uint_t status)` | Reason-phrase accessor (replaces the header filter's `ngx_http_status_lines[]` offset arithmetic). |
 | `ngx_http_status_register` | `ngx_int_t ngx_http_status_register(const ngx_http_status_def_t *def)` | Worker-init extensibility seam. |
 | `ngx_http_status_is_cacheable` | `ngx_uint_t ngx_http_status_is_cacheable(ngx_uint_t status)` | Cacheability-flag test. |
-| `ngx_http_status_init` | `ngx_int_t ngx_http_status_init(void)` | Idempotent pre-fork registry initialization hook (called from `ngx_http_request.c` before worker fork). |
+| `ngx_http_status_init` | `ngx_int_t ngx_http_status_init(void)` | Idempotent registry finalization hook (called from the HTTP core module's `init_module` hook, `ngx_http_core_init_module` in `ngx_http_core_module.c`, after all HTTP postconfiguration and before worker fork). |
 
 **Build modes.** Without `--with-http_status_validation` (the default),
 `ngx_http_status_set()` is a `static ngx_inline` that compiles to the original
@@ -180,8 +180,8 @@ original tree.)
 
 | # | Source file | Sites | Line(s) | Kind | Target / migration |
 |---|---|---|---|---|---|
-| 1 | `src/http/ngx_http_request.c` | 4 | L2837 (read), L2838 (write), L3914 (read), L3915 (write) | finalize/terminate paths | Writes → `ngx_http_status_set()` **permissive** (`(void)`-cast on the finalize path); this file also hosts the **`ngx_http_status_init()`** registry-init call before worker fork. |
-| 2 | `src/http/ngx_http_core_module.c` | 2 | L1781, L1859 | true writes | `ngx_http_status_set()` (standard pattern: on a `!= NGX_OK` return, log and return `NGX_HTTP_INTERNAL_SERVER_ERROR`). |
+| 1 | `src/http/ngx_http_request.c` | 4 | L2837 (read), L2838 (write), L3914 (read), L3915 (write) | finalize/terminate paths | Writes → `ngx_http_status_set()` **permissive** (`(void)`-cast on the finalize path). |
+| 2 | `src/http/ngx_http_core_module.c` | 2 | L1781, L1859 | true writes | `ngx_http_status_set()` (standard pattern: on a `!= NGX_OK` return, log and return `NGX_HTTP_INTERNAL_SERVER_ERROR`). This file also hosts the **`ngx_http_status_init()`** registry finalization, invoked from its `init_module` hook (`ngx_http_core_init_module`) after all HTTP postconfiguration and before worker fork — which is what makes `ngx_http_status_register()` usable from a third-party module's postconfiguration. |
 | 3 | `src/http/ngx_http_header_filter_module.c` | 2 | L386, L562 | comparison reads (`== NGX_HTTP_SWITCHING_PROTOCOLS`) | Reads observe the chokepoint-set field (unchanged); **this file also hosts legacy table #2** (see the legacy-table sub-table and the reverse matrix). |
 | 4 | `src/http/ngx_http_upstream.c` | 1 | L3165 | true write (proxied copy) | `ngx_http_status_set()` **pass-through** — `r->upstream` set ⇒ no strict validation; the proxied status is copied, not validated. |
 | 5 | `src/http/ngx_http_variables.c` | 1 | L2048 | comparison read (SWITCHING_PROTOCOLS / `$connection_upgrade`) | Reads the chokepoint-set field; routed via the API per the AAP §0.5.1 inventory. |
@@ -213,7 +213,7 @@ declarations at the heart of RC-1 — are mapped to their targets:
 |---|---|---|---|
 | 1 | `NGX_HTTP_*` `#define` constant block | `src/http/ngx_http_request.h:74-145` | **Registry** (`ngx_http_status_def_t[]`). The constants are retained for compatibility as plain numeric aliases; the registry becomes the single source of truth for reason text and metadata. |
 | 2 | `ngx_http_status_lines[]` reason-phrase table | `src/http/ngx_http_header_filter_module.c:58-136` | **`ngx_http_status_reason()`**. The offset-arithmetic lookup at L214-285 is removed, along with the divergent `NGX_HTTP_OFF_*` / `NGX_HTTP_LAST_*` macros (including `NGX_HTTP_LAST_2XX` = **207** at L70). |
-| 3 | `ngx_http_error_pages[]` error-page table | `src/http/ngx_http_special_response.c:340-410` | **Registry-aligned error-page lookup**. The divergent macros (including `NGX_HTTP_LAST_2XX` = **202** at L344) are removed. The static error-page byte arrays (L60-332), the 498 → `ngx_http_error_404_page` mapping (L398), and the 494/495/496/497 → 400 security wire-rewrite (~L511-515) are all preserved unchanged. |
+| 3 | `ngx_http_error_pages[]` error-page table | `src/http/ngx_http_special_response.c:340-410` | **Registry-aligned error-page lookup via `ngx_http_status_index()`**: the table is rebuilt as a slot-for-slot parallel of the registry (`ngx_http_status_defs[]`), so a code's body slot is exactly `ngx_http_status_index(code)`, resolved through the new `ngx_http_error_page_index()` helper. Both the divergent `NGX_HTTP_OFF_*` / `NGX_HTTP_LAST_*` macros (including `NGX_HTTP_LAST_2XX` = **202** at L344) **and** the file's previously independent hardcoded region bounds (`309`/`430`/`508`) and base offsets (`1`/`9`/`39`) are removed; the MSIE-padding boundary is re-expressed as `r->err_status >= NGX_HTTP_BAD_REQUEST`. The static error-page byte arrays (L60-332), the 498 → `ngx_http_error_404_page` mapping (L398), and the 494/495/496/497 → 400 security wire-rewrite (~L511-515) are all preserved unchanged (verified byte-identical). |
 
 ### 2c. Reverse matrix — registry/API targets → sources
 

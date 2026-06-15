@@ -337,11 +337,40 @@ static char ngx_http_error_507_page[] =
 ;
 
 
+/*
+ * Error-page bodies, registry-aligned: this table is laid out PARALLEL to the
+ * status registry (ngx_http_status_defs[] in ngx_http_status.c) so that the
+ * slot for a code is exactly ngx_http_status_index(code).  That collapses the
+ * error-page lookup onto the registry's single index scheme and removes this
+ * module's previously independent offset arithmetic (the divergent
+ * NGX_HTTP_OFF_xxx and NGX_HTTP_LAST_xxx macros).  Each entry is the body
+ * emitted for
+ * that code (or ngx_null_string for codes that carry no built-in body, which
+ * the renderer treats as a zero-length body).  The static error-page byte
+ * arrays above are unchanged; only the indexing is realigned.
+ *
+ * Ordering MUST stay in lock-step with ngx_http_status_defs[]:
+ *   100-103, 200-206, 300-308, 400-429, 500-507, 444, 494-499.
+ */
 static ngx_str_t ngx_http_error_pages[] = {
 
-    ngx_null_string,                     /* 201, 204 */
+    /* 1xx informational (100-103) - no built-in body */
+    ngx_null_string,                     /* 100 */
+    ngx_null_string,                     /* 101 */
+    ngx_null_string,                     /* 102 */
+    ngx_null_string,                     /* 103 */
 
-    /* ngx_null_string, */               /* 300 */
+    /* 2xx (200-206) - no built-in body */
+    ngx_null_string,                     /* 200 */
+    ngx_null_string,                     /* 201 */
+    ngx_null_string,                     /* 202 */
+    ngx_null_string,                     /* 203 */
+    ngx_null_string,                     /* 204 */
+    ngx_null_string,                     /* 205 */
+    ngx_null_string,                     /* 206 */
+
+    /* 3xx (300-308) */
+    ngx_null_string,                     /* 300 */
     ngx_string(ngx_http_error_301_page),
     ngx_string(ngx_http_error_302_page),
     ngx_string(ngx_http_error_303_page),
@@ -351,6 +380,7 @@ static ngx_str_t ngx_http_error_pages[] = {
     ngx_string(ngx_http_error_307_page),
     ngx_string(ngx_http_error_308_page),
 
+    /* 4xx (400-429) */
     ngx_string(ngx_http_error_400_page),
     ngx_string(ngx_http_error_401_page),
     ngx_string(ngx_http_error_402_page),
@@ -382,13 +412,7 @@ static ngx_str_t ngx_http_error_pages[] = {
     ngx_null_string,                     /* 428 */
     ngx_string(ngx_http_error_429_page),
 
-    ngx_string(ngx_http_error_494_page), /* 494, request header too large */
-    ngx_string(ngx_http_error_495_page), /* 495, https certificate error */
-    ngx_string(ngx_http_error_496_page), /* 496, https no certificate */
-    ngx_string(ngx_http_error_497_page), /* 497, http to https */
-    ngx_string(ngx_http_error_404_page), /* 498, canceled */
-    ngx_null_string,                     /* 499, client has closed connection */
-
+    /* 5xx (500-507) */
     ngx_string(ngx_http_error_500_page),
     ngx_string(ngx_http_error_501_page),
     ngx_string(ngx_http_error_502_page),
@@ -396,9 +420,54 @@ static ngx_str_t ngx_http_error_pages[] = {
     ngx_string(ngx_http_error_504_page),
     ngx_string(ngx_http_error_505_page),
     ngx_null_string,                     /* 506 */
-    ngx_string(ngx_http_error_507_page)
+    ngx_string(ngx_http_error_507_page),
+
+    /* nginx extension code 444 - no built-in body */
+    ngx_null_string,                     /* 444, connection closed */
+
+    /* nginx extension codes 494-499 */
+    ngx_string(ngx_http_error_494_page), /* 494, request header too large */
+    ngx_string(ngx_http_error_495_page), /* 495, https certificate error */
+    ngx_string(ngx_http_error_496_page), /* 496, https no certificate */
+    ngx_string(ngx_http_error_497_page), /* 497, http to https */
+    ngx_string(ngx_http_error_404_page), /* 498, canceled (reuses 404 body) */
+    ngx_null_string                      /* 499, client has closed connection */
 
 };
+
+
+/*
+ * Number of slots in ngx_http_error_pages[], derived from the array itself so
+ * the bound stays correct if the registry-aligned table grows; this replaces
+ * the former hardcoded region boundaries (the NGX_HTTP_LAST_xxx and
+ * NGX_HTTP_OFF_xxx macros).
+ */
+#define NGX_HTTP_ERROR_PAGES_N                                                \
+    (sizeof(ngx_http_error_pages) / sizeof(ngx_http_error_pages[0]))
+
+
+/*
+ * Map an HTTP status code to its slot in the registry-aligned error-page
+ * table.  The table is laid out parallel to the status registry, so the slot
+ * is simply ngx_http_status_index(); this is the single source of truth for
+ * the mapping and removes this module's previously independent offset
+ * arithmetic.  Codes outside the registry (or beyond the table) fall back to
+ * slot 0, which carries no body - matching the historical "unknown code,
+ * zero body" behaviour.
+ */
+static ngx_uint_t
+ngx_http_error_page_index(ngx_uint_t status)
+{
+    ngx_int_t  idx;
+
+    idx = ngx_http_status_index(status);
+
+    if (idx < 0 || (ngx_uint_t) idx >= NGX_HTTP_ERROR_PAGES_N) {
+        return 0;
+    }
+
+    return (ngx_uint_t) idx;
+}
 
 
 ngx_int_t
@@ -471,42 +540,25 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
         return ngx_http_send_refresh(r);
     }
 
-    if (error == NGX_HTTP_CREATED) {
-        /* 201 */
-        err = 0;
+    /*
+     * Resolve the error-page slot through the registry-aligned index.  Codes
+     * with no built-in body (1xx, 2xx including 201/204, 300/304/..., and any
+     * unregistered code) resolve to a ngx_null_string slot and emit no body,
+     * preserving the historical behaviour without per-range offset arithmetic.
+     */
+    err = ngx_http_error_page_index(error);
 
-    } else if (error == NGX_HTTP_NO_CONTENT) {
-        /* 204 */
-        err = 0;
-
-    } else if (error >= NGX_HTTP_MOVED_PERMANENTLY
-               && error < 309 /* LAST_3XX */)
-    {
-        /* 3XX */
-        err = error - NGX_HTTP_MOVED_PERMANENTLY + 1 /* OFF_3XX */;
-
-    } else if (error >= NGX_HTTP_BAD_REQUEST
-               && error < 430 /* LAST_4XX */)
-    {
-        /* 4XX */
-        err = error - NGX_HTTP_BAD_REQUEST + 9 /* OFF_4XX */;
-
-    } else if (error >= NGX_HTTP_NGINX_CODES
-               && error < 508 /* LAST_5XX */)
-    {
-        /* 49X, 5XX */
-        err = error - NGX_HTTP_NGINX_CODES + 39 /* OFF_5XX */;
-        switch (error) {
-            case NGX_HTTP_TO_HTTPS:
-            case NGX_HTTPS_CERT_ERROR:
-            case NGX_HTTPS_NO_CERT:
-            case NGX_HTTP_REQUEST_HEADER_TOO_LARGE:
-                r->err_status = NGX_HTTP_BAD_REQUEST;
-        }
-
-    } else {
-        /* unknown code, zero body */
-        err = 0;
+    /*
+     * Security invariant: nginx's internal-only codes 494-497 are rewritten to
+     * 400 on the wire so they are never exposed.  The body slot resolved above
+     * still points at the code-specific page; only the status line changes.
+     */
+    switch (error) {
+    case NGX_HTTP_TO_HTTPS:
+    case NGX_HTTPS_CERT_ERROR:
+    case NGX_HTTPS_NO_CERT:
+    case NGX_HTTP_REQUEST_HEADER_TOO_LARGE:
+        r->err_status = NGX_HTTP_BAD_REQUEST;
     }
 
     return ngx_http_send_special_response(r, clcf, err);
@@ -652,9 +704,8 @@ ngx_http_send_error_page(ngx_http_request_t *r, ngx_http_err_page_t *err_page)
         return ngx_http_send_refresh(r);
     }
 
-    return ngx_http_send_special_response(r, clcf, r->err_status
-                                                   - NGX_HTTP_MOVED_PERMANENTLY
-                                                   + 1 /* OFF_3XX */);
+    return ngx_http_send_special_response(r, clcf,
+                                          ngx_http_error_page_index(r->err_status));
 }
 
 
@@ -689,7 +740,7 @@ ngx_http_send_special_response(ngx_http_request_t *r,
         if (clcf->msie_padding
             && (r->headers_in.msie || r->headers_in.chrome)
             && r->http_version >= NGX_HTTP_VERSION_10
-            && err >= 9 /* OFF_4XX */)
+            && r->err_status >= NGX_HTTP_BAD_REQUEST)
         {
             r->headers_out.content_length_n +=
                                          sizeof(ngx_http_msie_padding) - 1;
