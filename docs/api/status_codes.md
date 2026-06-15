@@ -42,9 +42,18 @@ one model and eliminates that divergence.
   core table on the common path.
 - **Read-only after initialization.** The registry is finalized before the
   worker fork and is never written afterwards.
-- **Under 1 KB per worker.** Because the array is `static const`, it lives in the
-  binary's `.rodata` segment and is therefore **shared across all worker
-  processes**. Copy-on-write never triggers, because the memory is never written.
+- **Effectively zero per-worker cost.** The descriptor table is `static const`
+  (65 entries, ~2.6 KB of static data). Because each entry holds pointers (the
+  reason string and `rfc_section`), the toolchain places it in `.data.rel.ro` —
+  relocated once at load, then made read-only (RELRO), so it is immutable at
+  runtime just like `.rodata`. Since it is never written after load, its pages
+  are **shared copy-on-write across all worker processes** and never fault, so
+  the **incremental resident memory each worker adds for the registry is
+  effectively zero** (well under the 1 KB-per-worker budget). The mutable
+  registration table used by `ngx_http_status_register()` adds 8 slots
+  (320 bytes) in `.bss`, written at most once before fork and likewise shared.
+  The "< 1 KB per worker" figure is a per-worker *incremental* memory bound, not
+  a bound on the total static size of the descriptor table.
 
 ### Visibility
 

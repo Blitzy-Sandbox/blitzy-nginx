@@ -505,6 +505,7 @@ ngx_int_t ngx_http_set_etag(ngx_http_request_t *r);
 void ngx_http_weak_etag(ngx_http_request_t *r);
 ngx_int_t ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
     ngx_str_t *ct, ngx_http_complex_value_t *cv);
+void ngx_http_log_invalid_status(ngx_http_request_t *r, ngx_uint_t status);
 u_char *ngx_http_map_uri_to_path(ngx_http_request_t *r, ngx_str_t *name,
     size_t *root_length, size_t reserved);
 ngx_int_t ngx_http_auth_basic_user(ngx_http_request_t *r);

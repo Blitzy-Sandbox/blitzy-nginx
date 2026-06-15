@@ -126,7 +126,12 @@ self-contained, environment-agnostic Grafana-style template. It uses template
 variables (`${DS_METRICS}` data source, `$instance`, and a `$request_id` textbox
 for correlation drill-down) and references **generic** metric names that an
 exporter or log-derived pipeline supplies (nginx-core ships no native per-status
-exporter). Its panels cover the three required views:
+exporter). Every data-source reference in the template — each panel target and
+the annotation query alike — binds to the `${DS_METRICS}` input variable rather
+than a hardcoded data-source UID, so the dashboard stays portable and imports
+cleanly into any Grafana instance; Grafana supplies its own built-in
+annotation/alert overlay automatically on import, so the template does not pin
+one. Its panels cover the three required views:
 
 - **Counts by status class (1xx–5xx)** — a stacked timeseries plus a distribution
   pie, from `nginx_http_status_class_total{class=...}`.

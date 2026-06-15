@@ -481,6 +481,26 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
                    "http special response: %i, \"%V?%V\"",
                    error, &r->uri, &r->args);
 
+#if (NGX_HTTP_STATUS_VALIDATION)
+    /*
+     * Strict-validation build: a locally generated (non-upstream) response
+     * whose status falls outside the RFC 9110 valid range (100..599) cannot be
+     * rendered as a status line by ngx_http_send_header(), which aborts the
+     * send and leaves the client with an empty reply.  Log the violation
+     * exactly once (with the $request_id correlation id, via the shared
+     * helper) and fall back to 500, mirroring the ngx_http_send_response()
+     * path so every invalid local status converges on the standard Internal
+     * Server Error response.  Proxied/upstream statuses are never
+     * strict-validated, preserving the upstream pass-through invariant.
+     */
+    if (r->upstream == NULL
+        && ngx_http_status_validate((ngx_uint_t) error) != NGX_OK)
+    {
+        ngx_http_log_invalid_status(r, (ngx_uint_t) error);
+        error = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+#endif
+
     r->err_status = error;
 
     if (r->keepalive) {

@@ -1784,7 +1784,7 @@ static ngx_int_t  ngx_http_status_request_id_index = NGX_ERROR;
  * it carries the status alone.  Centralizing the record here keeps the log
  * shape consistent across every caller for log-derived metrics.
  */
-static void
+void
 ngx_http_log_invalid_status(ngx_http_request_t *r, ngx_uint_t status)
 {
 #if (NGX_HTTP_STATUS_VALIDATION)

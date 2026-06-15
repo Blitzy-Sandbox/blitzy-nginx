@@ -22,12 +22,17 @@
 
 
 /*
- * Maximum number of additional status definitions that may be registered at
- * runtime through ngx_http_status_register().  Registration is expected to
- * happen before the worker fork; the registry is treated as read-only after
- * initialization completes.
+ * Maximum number of additional status definitions that may be registered
+ * through ngx_http_status_register().  Registration is expected to happen
+ * before the worker fork; the registry is treated as read-only afterwards.
+ *
+ * This capacity sizes the only mutable (.bss) part of the registry, so it is
+ * kept small: at sizeof(ngx_http_status_def_t) == 40 bytes per slot, 8 slots
+ * is 320 bytes.  No in-tree module registers codes today (the seam exists for
+ * third-party modules), and the .bss is zero-filled at load and written at
+ * most once before fork, so it adds no measurable per-worker resident memory.
  */
-#define NGX_HTTP_STATUS_MAX_REGISTERED  32
+#define NGX_HTTP_STATUS_MAX_REGISTERED  8
 
 
 /*
@@ -35,10 +40,18 @@
  *
  * Entries are kept in ascending code order, grouped by class region, in the
  * exact order assumed by ngx_http_status_index() so that the common lookup is
- * O(1) array indexing.  Because the array is "static const" it lives in the
- * binary's read-only data segment, is shared across all workers without any
- * copy-on-write fault, and contributes effectively zero incremental per-worker
- * RSS (well under the 1 KB budget).
+ * O(1) array indexing.
+ *
+ * Storage: the array is "static const" (65 descriptors, ~2.6 KB of static
+ * data).  Because each descriptor holds pointers (the "reason" ngx_str_t data
+ * and "rfc_section"), the toolchain places the table in ".data.rel.ro" rather
+ * than ".rodata": it is relocated once at load and then made read-only (RELRO),
+ * so it is immutable at runtime just like ".rodata".  As it is never written
+ * after load, its pages are shared copy-on-write across every worker and never
+ * fault, so the incremental resident memory each worker adds for the registry
+ * is effectively zero.  (The "< 1 KB per worker" budget is a per-worker
+ * incremental-RSS bound, which this satisfies; it is not a bound on the total
+ * static size of the descriptor table.)
  *
  * The "reason" field is the complete status-line text as it appears on the
  * wire, including the numeric prefix (e.g. "404 Not Found").  Codes that the
