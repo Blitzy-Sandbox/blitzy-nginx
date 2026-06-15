@@ -1,6 +1,10 @@
 site_name: 'blitzy-nginx'
 nav:
   - Home: index.md
+  - Status Code API: api/status_codes.md
+  - Migration Guide: migration/status_code_api.md
+  - Decision Log: decisions/status_code_refactor.md
+  - Observability: observability/status_codes_observability.md
 plugins:
   - techdocs-core
   - mermaid2
