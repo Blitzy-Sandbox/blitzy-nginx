@@ -139,6 +139,18 @@ static ngx_uint_t             ngx_http_status_nregistered = 0;
 
 
 /*
+ * Finalization flag for the registry lifecycle.  It is set by
+ * ngx_http_status_init() once, before the worker fork, after which the registry
+ * is treated as read-only: ngx_http_status_register() rejects any further
+ * mutation.  Keeping this state at file scope (rather than local to
+ * ngx_http_status_init()) is what lets registration actually enforce - not just
+ * document - the pre-fork, read-only-after-init contract, eliminating the
+ * worker-time mutation/race risk.
+ */
+static ngx_uint_t             ngx_http_status_initialized = 0;
+
+
+/*
  * Map a status code to its index in ngx_http_status_defs[].  The branches are
  * arranged so that each supported region resolves with a single comparison and
  * a subtraction (O(1)); codes outside the registered regions return -1.  The
@@ -267,6 +279,15 @@ ngx_http_status_is_cacheable(ngx_uint_t status)
 ngx_int_t
 ngx_http_status_register(const ngx_http_status_def_t *def)
 {
+    if (ngx_http_status_initialized) {
+        /*
+         * The registry was finalized by ngx_http_status_init() before the
+         * worker fork and is now read-only; reject the late registration so a
+         * worker can never mutate the shared registry (no post-fork races).
+         */
+        return NGX_ERROR;
+    }
+
     if (def == NULL) {
         return NGX_ERROR;
     }
@@ -306,6 +327,16 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
         return NGX_ERROR;
     }
 
+    /*
+     * Successful non-upstream assignment: emit the same status-set debug trace
+     * as the default-build inline setter and the upstream pass-through branch,
+     * giving a consistent, connection-correlated log shape across every path.
+     * The invalid path above intentionally stays silent so the caller owns the
+     * single NGX_LOG_ERR "invalid HTTP status" record.
+     */
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http status set: %ui", status);
+
     r->headers_out.status = status;
 
     return NGX_OK;
@@ -325,13 +356,17 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 ngx_int_t
 ngx_http_status_init(void)
 {
-    static ngx_uint_t  initialized = 0;
-
-    if (initialized) {
+    if (ngx_http_status_initialized) {
         return NGX_OK;
     }
 
-    initialized = 1;
+    /*
+     * Finalize the registry: from this point on it is read-only and
+     * ngx_http_status_register() rejects further mutation.  Because this runs
+     * once before the worker fork, every worker inherits the same finalized,
+     * read-only registry.
+     */
+    ngx_http_status_initialized = 1;
 
     return NGX_OK;
 }

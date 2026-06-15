@@ -85,6 +85,16 @@ ngx_int_t   ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status);
 static ngx_inline ngx_int_t
 ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 {
+    /*
+     * Status-set observability for the default build.  ngx_log_debug1 expands
+     * to nothing unless the tree is built --with-debug, so production builds
+     * keep the zero-overhead, byte-identical field write; debug builds gain a
+     * status-set trace correlated by the connection id carried on
+     * r->connection->log.
+     */
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http status set: %ui", status);
+
     r->headers_out.status = status;
     return NGX_OK;
 }

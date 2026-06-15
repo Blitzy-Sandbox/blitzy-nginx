@@ -1763,6 +1763,54 @@ ngx_http_weak_etag(ngx_http_request_t *r)
 }
 
 
+#if (NGX_HTTP_STATUS_VALIDATION)
+/*
+ * Index of the $request_id variable, resolved once at postconfiguration.  It
+ * lets the strict-mode "invalid HTTP status" error-log records carry the same
+ * $request_id correlation id that the access log exposes, so an operator (or
+ * the status-codes observability dashboard) can pivot from a validation-failure
+ * spike straight to the offending request's log lines.
+ */
+static ngx_int_t  ngx_http_status_request_id_index = NGX_ERROR;
+#endif
+
+
+/*
+ * Emit the single structured error-log record for a status code rejected by
+ * ngx_http_status_set().  Under --with-http_status_validation the record is
+ * keyed with the $request_id correlation id (falling back to "-" when it is
+ * unavailable); in the default build - where ngx_http_status_set() never fails -
+ * it carries the status alone.  Centralizing the record here keeps the log
+ * shape consistent across every caller for log-derived metrics.
+ */
+static void
+ngx_http_log_invalid_status(ngx_http_request_t *r, ngx_uint_t status)
+{
+#if (NGX_HTTP_STATUS_VALIDATION)
+    ngx_str_t                   request_id;
+    ngx_http_variable_value_t  *vv;
+
+    ngx_str_set(&request_id, "-");
+
+    if (ngx_http_status_request_id_index != NGX_ERROR) {
+        vv = ngx_http_get_indexed_variable(r, ngx_http_status_request_id_index);
+
+        if (vv != NULL && !vv->not_found && vv->len != 0) {
+            request_id.len = vv->len;
+            request_id.data = vv->data;
+        }
+    }
+
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                  "invalid HTTP status %ui, request_id: \"%V\"",
+                  status, &request_id);
+#else
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                  "invalid HTTP status %ui", status);
+#endif
+}
+
+
 ngx_int_t
 ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
     ngx_str_t *ct, ngx_http_complex_value_t *cv)
@@ -1779,8 +1827,7 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
     }
 
     if (ngx_http_status_set(r, status) != NGX_OK) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "invalid HTTP status %ui", status);
+        ngx_http_log_invalid_status(r, status);
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
@@ -1861,8 +1908,7 @@ ngx_http_send_header(ngx_http_request_t *r)
 
     if (r->err_status) {
         if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                          "invalid HTTP status %ui", (ngx_uint_t) r->err_status);
+            ngx_http_log_invalid_status(r, r->err_status);
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
         r->headers_out.status_line.len = 0;
@@ -3433,6 +3479,37 @@ static ngx_int_t
 ngx_http_core_postconfiguration(ngx_conf_t *cf)
 {
     ngx_http_top_request_body_filter = ngx_http_request_body_save_filter;
+
+    /*
+     * Initialize and finalize the HTTP status-code registry here, in the HTTP
+     * core postconfiguration handler.  This runs once in the master process
+     * while the configuration is being built - before the worker fork - so the
+     * registry is read-only by the time any worker serves a request.  Failing
+     * here aborts startup (and configuration reload), which is the intended
+     * behavior if the registry cannot be initialized.
+     */
+    if (ngx_http_status_init() != NGX_OK) {
+        return NGX_ERROR;
+    }
+
+#if (NGX_HTTP_STATUS_VALIDATION)
+    {
+        ngx_str_t  request_id = ngx_string("request_id");
+
+        /*
+         * Resolve the $request_id variable index now so the strict-mode
+         * invalid-status error-log records can be correlated with the access
+         * log via ngx_http_get_indexed_variable().  Using the indexed core
+         * variable yields the same per-request value the access log records.
+         */
+        ngx_http_status_request_id_index =
+                                  ngx_http_get_variable_index(cf, &request_id);
+
+        if (ngx_http_status_request_id_index == NGX_ERROR) {
+            return NGX_ERROR;
+        }
+    }
+#endif
 
     return NGX_OK;
 }
