@@ -13,9 +13,13 @@ Changes with nginx 1.29.5                                        15 Jun 2026
        validation is disabled by default and adds no overhead when it is
        not enabled.
 
-    *) Change: the duplicated status reason-phrase and error-page lookup
-       tables have been consolidated onto the new status registry, and
-       the divergent NGX_HTTP_LAST_2XX and NGX_HTTP_OFF_* offset macros
-       have been removed; status lines and error-page bodies remain
-       byte-identical to previous releases, and the nginx-specific status
-       codes 444 and 494-499 are preserved.
+    *) Change: the status reason-phrase lookup now routes through the new
+       status registry via ngx_http_status_reason(), and the error-page
+       lookup is now registry-fed -- gated by ngx_http_status_validate(),
+       keyed by status code, and reading the registry class flags for the
+       MSIE/Chrome body padding decision -- so the divergent
+       NGX_HTTP_LAST_2XX and NGX_HTTP_OFF_* offset macros have been removed
+       from both files.  The static error-page bodies are retained
+       unchanged; status lines and error-page bodies remain byte-identical
+       to previous releases, and the nginx-specific status codes 444 and
+       494-499 are preserved.

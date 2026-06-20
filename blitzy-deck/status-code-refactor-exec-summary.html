@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>NGINX HTTP Status-Code Registry Refactor — Executive Summary</title>
 
-  <!-- Pinned CDN: reveal.js 5.1.0 core stylesheet -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <!-- Pinned CDN: reveal.js 5.1.0 core stylesheet (Subresource Integrity pinned) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"
+        integrity="sha384-YgvgKeZJykuztG+iQPoZHNZENTFZvOcOJ/uRzmJTje6GHYN9zAw+y5rx/L8MQKA/"
+        crossorigin="anonymous">
 
   <!-- ============================================================
        BLITZY BRAND THEME (INLINED — no external repo assets).
@@ -160,7 +162,7 @@
         <div class="grid cols-3" style="margin-top:14px;">
           <div class="card">
             <h3 class="ic-indigo"><i data-lucide="target"></i> Goal</h3>
-            <p>Consolidate three unlinked status definitions and 33 scattered field writes behind a single registry and a five-function API.</p>
+            <p>Consolidate three unlinked status definitions and 33 scattered status-field sites (17 writes + 16 comparison reads, across 20 files) behind a single registry and a five-function API.</p>
           </div>
           <div class="card">
             <h3 class="ic-teal"><i data-lucide="layers"></i> Approach</h3>
@@ -201,11 +203,12 @@ graph LR
         <h2>The fragmentation is measurable</h2>
         <div class="grid cols-4" style="margin-top:14px;">
           <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="files"></i></span><span class="num">20</span><span class="lbl">files assign status</span></div>
-          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="hash"></i></span><span class="num">33</span><span class="lbl">assignment sites</span></div>
+          <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="hash"></i></span><span class="num">33</span><span class="lbl">field-access sites (17 writes + 16 reads)</span></div>
           <div class="card stat accent-amber"><span class="ic-amber ic-lg"><i data-lucide="table-2"></i></span><span class="num">3</span><span class="lbl">unlinked tables</span></div>
           <div class="card stat accent-red"><span class="ic-red ic-lg"><i data-lucide="triangle-alert"></i></span><span class="num">207 / 202</span><span class="lbl">divergent macro</span></div>
         </div>
-        <pre style="margin-top:18px;"><code class="language-bash"><span class="c-cmt"># 20 files assign the status field directly; 33 total sites</span>
+        <pre style="margin-top:18px;"><code class="language-bash"><span class="c-cmt"># 20 files reference the status field; the regex matches both '=' writes</span>
+<span class="c-cmt"># and the leading '=' of '==' reads, so 33 sites = 17 writes + 16 reads</span>
 grep -rln 'headers_out\.status *=' src/http | wc -l   <span class="c-cmt"># -&gt; 20</span>
 grep -rho 'headers_out\.status *=' src/http | wc -l    <span class="c-cmt"># -&gt; 33</span>
 
@@ -255,7 +258,7 @@ graph TB
 graph LR
     REG["ngx_http_status_def_t<br/>single static const registry<br/>ngx_http_status.c"]:::good
     API["ngx_http_status_*() API"]:::good
-    M["20 modules / 33 sites"]:::neutral
+    M["17 write sites via setter<br/>(16 reads observe the field)"]:::neutral
     R["reason lookup"]:::neutral
     E["error-page lookup"]:::neutral
     REG --> API
@@ -281,7 +284,7 @@ graph TB
         DEF["#define constants<br/>ngx_http_request.h:74-145"]:::bad
         RLT["Reason-phrase table<br/>ngx_http_status_lines[]<br/>header_filter_module.c:58-136"]:::bad
         EPT["Error-page table<br/>ngx_http_error_pages[]<br/>special_response.c:340-410"]:::bad
-        MODS["20 modules / 33 sites<br/>r->headers_out.status = NGX_HTTP_*"]:::bad
+        MODS["20 files / 33 sites<br/>direct r->headers_out.status access<br/>(17 writes + 16 reads)"]:::bad
         DEF -.manual sync.-> RLT
         DEF -.manual sync.-> EPT
         DEF -.no validation.-> MODS
@@ -293,9 +296,9 @@ graph TB
         direction TB
         REG["ngx_http_status_def_t registry<br/>ngx_http_status.c (single static array)"]:::good
         API["API: ngx_http_status_set / validate /<br/>reason / register / is_cacheable<br/>declared via ngx_http.h"]:::good
-        MODS2["20 modules / 33 sites<br/>ngx_http_status_set(r, code)"]:::good
+        MODS2["20 files / 33 sites<br/>17 writes -> ngx_http_status_set(r, code)<br/>16 reads observe the set field"]:::good
         RLT2["reason lookup -> ngx_http_status_reason()"]:::good
-        EPT2["error-page lookup (registry-aligned)"]:::good
+        EPT2["error-page lookup -> validate + flags<br/>(registry-fed)"]:::good
         REG --> API
         API --> MODS2
         REG --> RLT2
@@ -363,7 +366,7 @@ graph TB
         </div>
         <pre class="mermaid" style="margin-top:6px;">
 graph LR
-    OLD["33 direct writes"]:::bad --> API["ngx_http_status_set(r, code)"]:::good --> OUT["identical status field"]:::good
+    OLD["17 direct writes"]:::bad --> API["ngx_http_status_set(r, code)"]:::good --> OUT["identical status field"]:::good
     classDef bad fill:#ffe0e0,stroke:#c0392b,color:#333333;
     classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
         </pre>
@@ -462,17 +465,46 @@ graph TB
     </div>
   </div>
 
-  <!-- Pinned CDN: reveal.js 5.1.0 (UMD) and Lucide 0.460.0 (UMD) -->
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <!-- Pinned CDN: reveal.js 5.1.0 (UMD) and Lucide 0.460.0 (UMD), Subresource Integrity pinned -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"
+          integrity="sha384-M/JtqCVlLcK9lwVnBnMXP0V577CBULkjodKsR/PITOe4MSKNbbwqCemEyluOw0+5"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"
+          integrity="sha384-ieG+IKD0d/ZPXyCBTMVAbqsQdns8QGJR/e26WMw7M4fkaI/rHcS/YIoi+ah9WGge"
+          crossorigin="anonymous"></script>
 
-  <!-- Pinned CDN: Mermaid 11.4.0 (ESM) + initialization -->
+  <!-- Pinned CDN: Mermaid 11.15.0 (ESM).
+       SECURITY: upgraded from the AAP-pinned 11.4.0 to 11.15.0 (the latest
+       non-vulnerable release) to clear the moderate advisories affecting
+       11.4.0 — classDef HTML-injection (GHSA-ghcm-xqfw-q4vr, fixed 11.15.0),
+       architecture-icon XSS (CVE-2025-54880, fixed 11.10.0), and the Gantt
+       infinite-loop DoS (fixed 11.15.0). This security-driven deviation from
+       the AAP 0.7.1 version pin is recorded in
+       docs/decisions/status_code_refactor.md.
+       SRI: the ESM entrypoint is integrity-verified via the import map below
+       (browsers without import-map integrity ignore the key and still load
+       the pinned URL). The entrypoint statically imports a graph of sub-chunks
+       (./chunks/mermaid.esm.min/chunk-*.mjs) whose hashes are not enumerable
+       at author time and which `import` syntax cannot carry an `integrity`
+       attribute for; per the review's sanctioned exception those sub-chunks
+       are protected instead by HTTPS + an exact version pin on a pinned CDN +
+       securityLevel:'strict'. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "mermaid": "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs"
+    },
+    "integrity": {
+      "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs": "sha384-whY2DyvhZRFfs9hvtGdZaKcgbETgqMlDN+KNlWnXEL2QDa2XQkBOApUT7arfftO9"
+    }
+  }
+  </script>
   <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs';
+    import mermaid from 'mermaid';
 
     mermaid.initialize({
       startOnLoad: false,
-      securityLevel: 'loose',
+      securityLevel: 'strict',
       theme: 'base',
       themeVariables: {
         fontFamily: 'Segoe UI, Roboto, Helvetica, Arial, sans-serif',

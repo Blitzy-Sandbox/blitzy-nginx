@@ -288,6 +288,28 @@ ngx_http_status_validate(ngx_uint_t status)
 
 
 /*
+ * Return the registry flag bitmask (class + cacheability) for a status code,
+ * or 0 when the code is unknown to the registry.  This is the single accessor
+ * for the registry's authoritative class metadata; ngx_http_status_is_cacheable()
+ * and the error-page renderer both read their class decisions from it so that
+ * no consumer re-derives the code-space structure on its own.
+ */
+ngx_uint_t
+ngx_http_status_flags(ngx_uint_t status)
+{
+    const ngx_http_status_def_t  *def;
+
+    def = ngx_http_status_lookup(status);
+
+    if (def != NULL) {
+        return def->flags;
+    }
+
+    return 0;
+}
+
+
+/*
  * Return 1 when the code is known to the registry and is flagged cacheable by
  * default, 0 otherwise.  This exposes metadata only and introduces no caching
  * behavior of its own; nginx's cache layer is unaffected.
@@ -295,11 +317,7 @@ ngx_http_status_validate(ngx_uint_t status)
 ngx_uint_t
 ngx_http_status_is_cacheable(ngx_uint_t status)
 {
-    const ngx_http_status_def_t  *def;
-
-    def = ngx_http_status_lookup(status);
-
-    if (def != NULL && (def->flags & NGX_HTTP_STATUS_CACHEABLE)) {
+    if (ngx_http_status_flags(status) & NGX_HTTP_STATUS_CACHEABLE) {
         return 1;
     }
 

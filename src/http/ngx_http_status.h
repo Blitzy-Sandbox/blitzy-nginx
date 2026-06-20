@@ -60,6 +60,15 @@ ngx_str_t   ngx_http_status_reason(ngx_uint_t status);
 ngx_int_t   ngx_http_status_register(const ngx_http_status_def_t *def);
 ngx_uint_t  ngx_http_status_is_cacheable(ngx_uint_t status);
 
+/*
+ * Return the registry flag bitmask (class + cacheability) for a status code,
+ * or 0 when the code is unknown to the registry.  This exposes the registry's
+ * authoritative class metadata so that consumers (for example the error-page
+ * renderer in ngx_http_special_response.c) can make class-based decisions from
+ * the single source of truth instead of re-deriving the code-space structure.
+ */
+ngx_uint_t  ngx_http_status_flags(ngx_uint_t status);
+
 
 /*
  * ngx_http_status_set() is the single status-assignment chokepoint.  When the
@@ -85,9 +94,12 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 
 
 /*
- * One-time, idempotent registry initialization.  Called from
- * ngx_http_request.c before worker fork; the core registry is static const,
- * so it is valid at startup and remains read-only thereafter.
+ * One-time, idempotent registry initialization.  Invoked from the pre-fork
+ * HTTP header-filter postconfiguration hook (ngx_http_header_filter_init in
+ * ngx_http_header_filter_module.c), which runs in the master process while the
+ * configuration is parsed and therefore before any worker is forked; the core
+ * registry is static const, so it is valid at startup and remains read-only
+ * thereafter.
  */
 ngx_int_t   ngx_http_status_init(void);
 

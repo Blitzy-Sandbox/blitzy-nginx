@@ -46,9 +46,13 @@ variable, implemented entirely in `src/http/ngx_http_variables.c`:
   (`ngx_hex_dump`), i.e. randomized; without OpenSSL it falls back to a
   deterministic `ngx_sprintf(id, "%08xD%08xD%08xD%08xD", ...)` (still 32 chars).
 
-This refactor **reuses `$request_id` as the correlation id** across all
-status-set log lines, so a dashboard spike can be pivoted to the exact request in
-`error.log`/`access.log`. The numeric response code is likewise already exposed
+This refactor **reuses `$request_id` as the correlation id** for status
+observability rather than inventing a new one: the chokepoint's debug lines are
+written to the per-request connection log (`r->connection->log`) and carry the
+connection number (`c:%uA`) as their in-message key, and including `$request_id`
+in the `error_log` / `access_log` format (see the recommended format below) ties
+every emitted line to the exact request, so a dashboard spike can be pivoted to it
+in `error.log`/`access.log`. The numeric response code is likewise already exposed
 via the `$status` variable (`src/http/ngx_http_variables.c:319-320`), which is the
 value the dashboard's class-count and top-codes panels conceptually aggregate.
 
@@ -99,11 +103,16 @@ defined in exactly one place:
 | Build / path | Behavior |
 |---|---|
 | **Default build** (no `--with-http_status_validation`) | `ngx_http_status_set()` reduces to the original field write. **No extra log lines; zero overhead.** |
-| **Strict build, invalid code** | Emits a single `NGX_LOG_ERR` line `"invalid HTTP status %ui"`, then falls back to `NGX_HTTP_INTERNAL_SERVER_ERROR` (500). This is the one event the dashboard's validation-failure panels count. |
-| **Strict build, upstream/permissive path** | Proxied/upstream status is passed through (never strict-validated); unknown codes are traced at `NGX_LOG_DEBUG_HTTP`, not errored. |
+| **Strict build, invalid (locally generated) code** | The chokepoint logs the rejection at `NGX_LOG_DEBUG_HTTP` (`"http status set rejected invalid status %ui c:%uA"`) and returns `NGX_ERROR` **without assigning** the status. The standard-pattern guarded caller then logs `NGX_LOG_ERR "invalid HTTP status %ui"` and falls back to `NGX_HTTP_INTERNAL_SERVER_ERROR` (500). A rejected local status therefore produces a chokepoint **debug** line *plus* a caller **error** line; the `NGX_LOG_ERR` event is the operator-visible one the dashboard's validation-failure panels count. |
+| **Strict build, upstream/proxied path** | Proxied status (`r->upstream` set) is passed through and **never strict-validated**; it is traced at `NGX_LOG_DEBUG_HTTP`. A valid locally generated code is likewise traced at `NGX_LOG_DEBUG_HTTP` on success. |
 
-Every such line carries the `$request_id` correlation id (REUSED above), so a
-validation failure is traceable to a specific request.
+All of these lines are written to the connection log (`r->connection->log`), which
+carries nginx's per-request context; the chokepoint debug lines include the
+connection number (`c:%uA`, `r->connection->number`) as their correlation key.
+`$request_id` (REUSED above) is available for correlation when the operator's
+`error_log` / `log_format` is configured to include it — it is a log-format field,
+**not** a literal token embedded in these messages. A validation failure thus
+remains traceable to the specific request/connection that produced it.
 
 ### 2. Status-code metrics dashboard
 

@@ -14,7 +14,8 @@
 static ngx_int_t ngx_http_send_error_page(ngx_http_request_t *r,
     ngx_http_err_page_t *err_page);
 static ngx_int_t ngx_http_send_special_response(ngx_http_request_t *r,
-    ngx_http_core_loc_conf_t *clcf, ngx_uint_t err);
+    ngx_http_core_loc_conf_t *clcf, ngx_uint_t status);
+static ngx_str_t ngx_http_error_page_body(ngx_uint_t status);
 static ngx_int_t ngx_http_send_refresh(ngx_http_request_t *r);
 
 
@@ -337,74 +338,106 @@ static char ngx_http_error_507_page[] =
 ;
 
 
-static ngx_str_t ngx_http_error_pages[] = {
+/*
+ * Error-page body table, aligned to the status registry.  Each entry is keyed
+ * by its registry status code rather than by the former per-class offset
+ * arithmetic, so the table is self-describing and no longer maintains a second,
+ * independently-synchronized encoding of the code-space structure.  Codes that
+ * have no built-in body are simply absent: ngx_http_error_page_body() returns an
+ * empty string for them, rendered as a zero-length body exactly as the previous
+ * ngx_null_string placeholders were.  The bodies are the unchanged static byte
+ * arrays above, so the wire output is byte-identical to previous releases.
+ */
 
-    ngx_null_string,                     /* 201, 204 */
+typedef struct {
+    ngx_uint_t  status;
+    ngx_str_t   page;
+} ngx_http_error_page_entry_t;
 
-    /* ngx_null_string, */               /* 300 */
-    ngx_string(ngx_http_error_301_page),
-    ngx_string(ngx_http_error_302_page),
-    ngx_string(ngx_http_error_303_page),
-    ngx_null_string,                     /* 304 */
-    ngx_null_string,                     /* 305 */
-    ngx_null_string,                     /* 306 */
-    ngx_string(ngx_http_error_307_page),
-    ngx_string(ngx_http_error_308_page),
 
-    ngx_string(ngx_http_error_400_page),
-    ngx_string(ngx_http_error_401_page),
-    ngx_string(ngx_http_error_402_page),
-    ngx_string(ngx_http_error_403_page),
-    ngx_string(ngx_http_error_404_page),
-    ngx_string(ngx_http_error_405_page),
-    ngx_string(ngx_http_error_406_page),
-    ngx_null_string,                     /* 407 */
-    ngx_string(ngx_http_error_408_page),
-    ngx_string(ngx_http_error_409_page),
-    ngx_string(ngx_http_error_410_page),
-    ngx_string(ngx_http_error_411_page),
-    ngx_string(ngx_http_error_412_page),
-    ngx_string(ngx_http_error_413_page),
-    ngx_string(ngx_http_error_414_page),
-    ngx_string(ngx_http_error_415_page),
-    ngx_string(ngx_http_error_416_page),
-    ngx_null_string,                     /* 417 */
-    ngx_null_string,                     /* 418 */
-    ngx_null_string,                     /* 419 */
-    ngx_null_string,                     /* 420 */
-    ngx_string(ngx_http_error_421_page),
-    ngx_null_string,                     /* 422 */
-    ngx_null_string,                     /* 423 */
-    ngx_null_string,                     /* 424 */
-    ngx_null_string,                     /* 425 */
-    ngx_null_string,                     /* 426 */
-    ngx_null_string,                     /* 427 */
-    ngx_null_string,                     /* 428 */
-    ngx_string(ngx_http_error_429_page),
+static ngx_http_error_page_entry_t  ngx_http_error_pages[] = {
 
-    ngx_string(ngx_http_error_494_page), /* 494, request header too large */
-    ngx_string(ngx_http_error_495_page), /* 495, https certificate error */
-    ngx_string(ngx_http_error_496_page), /* 496, https no certificate */
-    ngx_string(ngx_http_error_497_page), /* 497, http to https */
-    ngx_string(ngx_http_error_404_page), /* 498, canceled */
-    ngx_null_string,                     /* 499, client has closed connection */
+    /* 3xx redirects (300/304/305/306 have no built-in body) */
+    { 301, ngx_string(ngx_http_error_301_page) },
+    { 302, ngx_string(ngx_http_error_302_page) },
+    { 303, ngx_string(ngx_http_error_303_page) },
+    { 307, ngx_string(ngx_http_error_307_page) },
+    { 308, ngx_string(ngx_http_error_308_page) },
 
-    ngx_string(ngx_http_error_500_page),
-    ngx_string(ngx_http_error_501_page),
-    ngx_string(ngx_http_error_502_page),
-    ngx_string(ngx_http_error_503_page),
-    ngx_string(ngx_http_error_504_page),
-    ngx_string(ngx_http_error_505_page),
-    ngx_null_string,                     /* 506 */
-    ngx_string(ngx_http_error_507_page)
+    /* 4xx client errors (407, 417-420, 422-428 have no built-in body) */
+    { 400, ngx_string(ngx_http_error_400_page) },
+    { 401, ngx_string(ngx_http_error_401_page) },
+    { 402, ngx_string(ngx_http_error_402_page) },
+    { 403, ngx_string(ngx_http_error_403_page) },
+    { 404, ngx_string(ngx_http_error_404_page) },
+    { 405, ngx_string(ngx_http_error_405_page) },
+    { 406, ngx_string(ngx_http_error_406_page) },
+    { 408, ngx_string(ngx_http_error_408_page) },
+    { 409, ngx_string(ngx_http_error_409_page) },
+    { 410, ngx_string(ngx_http_error_410_page) },
+    { 411, ngx_string(ngx_http_error_411_page) },
+    { 412, ngx_string(ngx_http_error_412_page) },
+    { 413, ngx_string(ngx_http_error_413_page) },
+    { 414, ngx_string(ngx_http_error_414_page) },
+    { 415, ngx_string(ngx_http_error_415_page) },
+    { 416, ngx_string(ngx_http_error_416_page) },
+    { 421, ngx_string(ngx_http_error_421_page) },
+    { 429, ngx_string(ngx_http_error_429_page) },
+
+    /* nginx extension codes (499 has no built-in body) */
+    { 494, ngx_string(ngx_http_error_494_page) }, /* request header too large */
+    { 495, ngx_string(ngx_http_error_495_page) }, /* https certificate error */
+    { 496, ngx_string(ngx_http_error_496_page) }, /* https no certificate */
+    { 497, ngx_string(ngx_http_error_497_page) }, /* http to https */
+    { 498, ngx_string(ngx_http_error_404_page) }, /* canceled, reuses 404 body */
+
+    /* 5xx server errors (506 has no built-in body) */
+    { 500, ngx_string(ngx_http_error_500_page) },
+    { 501, ngx_string(ngx_http_error_501_page) },
+    { 502, ngx_string(ngx_http_error_502_page) },
+    { 503, ngx_string(ngx_http_error_503_page) },
+    { 504, ngx_string(ngx_http_error_504_page) },
+    { 505, ngx_string(ngx_http_error_505_page) },
+    { 507, ngx_string(ngx_http_error_507_page) }
 
 };
+
+
+/*
+ * Registry-fed error-page lookup.  The status registry is the single source of
+ * truth for which codes exist: a built-in body is rendered only for a
+ * registry-valid code (ngx_http_status_validate), and the body is then selected
+ * by status code from the table above.  Returns an empty ngx_str_t for any code
+ * without a built-in body, which the caller renders as a zero-length body.
+ */
+static ngx_str_t
+ngx_http_error_page_body(ngx_uint_t status)
+{
+    ngx_uint_t  i, n;
+    ngx_str_t   body;
+
+    ngx_str_null(&body);
+
+    if (ngx_http_status_validate(status) != NGX_OK) {
+        return body;
+    }
+
+    n = sizeof(ngx_http_error_pages) / sizeof(ngx_http_error_pages[0]);
+
+    for (i = 0; i < n; i++) {
+        if (ngx_http_error_pages[i].status == status) {
+            return ngx_http_error_pages[i].page;
+        }
+    }
+
+    return body;
+}
 
 
 ngx_int_t
 ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
 {
-    ngx_uint_t                 i, err;
+    ngx_uint_t                 i;
     ngx_http_err_page_t       *err_page;
     ngx_http_core_loc_conf_t  *clcf;
 
@@ -471,45 +504,27 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
         return ngx_http_send_refresh(r);
     }
 
-    if (error == NGX_HTTP_CREATED) {
-        /* 201 */
-        err = 0;
+    /*
+     * Preserve the nginx security wire-rewrite: the internal HTTPS / oversized
+     * request-header codes are reported to the client as 400 (Bad Request).
+     * Only the status line changes here -- the error-page body is still selected
+     * by the original code, because ngx_http_send_special_response() is given
+     * the original "error" (not the rewritten r->err_status).  So 494/495/496/497
+     * continue to render their own bodies exactly as before.
+     */
+    switch (error) {
+    case NGX_HTTP_TO_HTTPS:
+    case NGX_HTTPS_CERT_ERROR:
+    case NGX_HTTPS_NO_CERT:
+    case NGX_HTTP_REQUEST_HEADER_TOO_LARGE:
+        r->err_status = NGX_HTTP_BAD_REQUEST;
+        break;
 
-    } else if (error == NGX_HTTP_NO_CONTENT) {
-        /* 204 */
-        err = 0;
-
-    } else if (error >= NGX_HTTP_MOVED_PERMANENTLY
-               && error < 309 /* LAST_3XX */)
-    {
-        /* 3XX */
-        err = error - NGX_HTTP_MOVED_PERMANENTLY + 1 /* OFF_3XX */;
-
-    } else if (error >= NGX_HTTP_BAD_REQUEST
-               && error < 430 /* LAST_4XX */)
-    {
-        /* 4XX */
-        err = error - NGX_HTTP_BAD_REQUEST + 9 /* OFF_4XX */;
-
-    } else if (error >= NGX_HTTP_NGINX_CODES
-               && error < 508 /* LAST_5XX */)
-    {
-        /* 49X, 5XX */
-        err = error - NGX_HTTP_NGINX_CODES + 39 /* OFF_5XX */;
-        switch (error) {
-            case NGX_HTTP_TO_HTTPS:
-            case NGX_HTTPS_CERT_ERROR:
-            case NGX_HTTPS_NO_CERT:
-            case NGX_HTTP_REQUEST_HEADER_TOO_LARGE:
-                r->err_status = NGX_HTTP_BAD_REQUEST;
-        }
-
-    } else {
-        /* unknown code, zero body */
-        err = 0;
+    default:
+        break;
     }
 
-    return ngx_http_send_special_response(r, clcf, err);
+    return ngx_http_send_special_response(r, clcf, error);
 }
 
 
@@ -652,22 +667,29 @@ ngx_http_send_error_page(ngx_http_request_t *r, ngx_http_err_page_t *err_page)
         return ngx_http_send_refresh(r);
     }
 
-    return ngx_http_send_special_response(r, clcf, r->err_status
-                                                   - NGX_HTTP_MOVED_PERMANENTLY
-                                                   + 1 /* OFF_3XX */);
+    /*
+     * The error_page redirect path always ends on a 3xx status (r->err_status
+     * has been normalized to a redirect code above); pass that code straight to
+     * the registry-fed renderer, which selects the matching redirect body.
+     */
+    return ngx_http_send_special_response(r, clcf, r->err_status);
 }
 
 
 static ngx_int_t
 ngx_http_send_special_response(ngx_http_request_t *r,
-    ngx_http_core_loc_conf_t *clcf, ngx_uint_t err)
+    ngx_http_core_loc_conf_t *clcf, ngx_uint_t status)
 {
     u_char       *tail;
     size_t        len;
     ngx_int_t     rc;
+    ngx_str_t     body;
     ngx_buf_t    *b;
     ngx_uint_t    msie_padding;
     ngx_chain_t   out[3];
+
+    /* registry-fed body selection: keyed by status code, no offset arithmetic */
+    body = ngx_http_error_page_body(status);
 
     if (clcf->server_tokens == NGX_HTTP_SERVER_TOKENS_ON) {
         len = sizeof(ngx_http_error_full_tail) - 1;
@@ -684,12 +706,20 @@ ngx_http_send_special_response(ngx_http_request_t *r,
 
     msie_padding = 0;
 
-    if (ngx_http_error_pages[err].len) {
-        r->headers_out.content_length_n = ngx_http_error_pages[err].len + len;
+    if (body.len) {
+        r->headers_out.content_length_n = body.len + len;
+        /*
+         * MSIE/Chrome padding applies to client- and server-error bodies (4xx,
+         * 49x, 5xx).  The error class is read from the registry's authoritative
+         * flags rather than re-deriving it from a numeric offset, so this single
+         * source of truth decides the behavior; the set of codes that satisfy
+         * it is identical to the previous "4xx and above" offset test.
+         */
         if (clcf->msie_padding
             && (r->headers_in.msie || r->headers_in.chrome)
             && r->http_version >= NGX_HTTP_VERSION_10
-            && err >= 9 /* OFF_4XX */)
+            && (ngx_http_status_flags(status)
+                & (NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_SERVER_ERROR)))
         {
             r->headers_out.content_length_n +=
                                          sizeof(ngx_http_msie_padding) - 1;
@@ -719,7 +749,7 @@ ngx_http_send_special_response(ngx_http_request_t *r,
         return rc;
     }
 
-    if (ngx_http_error_pages[err].len == 0) {
+    if (body.len == 0) {
         return ngx_http_send_special(r, NGX_HTTP_LAST);
     }
 
@@ -729,8 +759,8 @@ ngx_http_send_special_response(ngx_http_request_t *r,
     }
 
     b->memory = 1;
-    b->pos = ngx_http_error_pages[err].data;
-    b->last = ngx_http_error_pages[err].data + ngx_http_error_pages[err].len;
+    b->pos = body.data;
+    b->last = body.data + body.len;
 
     out[0].buf = b;
     out[0].next = &out[1];

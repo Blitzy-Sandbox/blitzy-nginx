@@ -26,13 +26,25 @@ code space:
 These three tables were kept in sync only by developer discipline, and that
 discipline had already failed: the same offset macro `NGX_HTTP_LAST_2XX` was
 defined as `207` in the header filter and as `202` in the special-response
-module. Routing every reason-phrase and error-page lookup through one registry
-eliminates that divergence at its source.
+module. Routing both the reason-phrase lookup and the error-page lookup through
+one registry eliminates that divergence at its source.
 
 In the *before* state, the three tables were independent C objects that no
 compiler cross-checked, so they could — and did — drift apart. In the *after*
-state, a single registry feeds the reason-phrase lookup and the error-page
-lookup, giving one authoritative source.
+state, the registry is the single source of truth for which codes exist and for
+each code's class and cacheability metadata, and both consumers now derive their
+behavior from it:
+
+- The header filter's reason-phrase lookup is routed entirely through
+  `ngx_http_status_reason()`.
+- The special-response error-page lookup is **registry-fed**: a built-in body is
+  rendered only for a registry-valid code (`ngx_http_status_validate()`), the
+  body is selected by that status code (no per-class offset arithmetic), and the
+  client/server-error class that drives MSIE/Chrome padding is read from the
+  registry's authoritative flags (`ngx_http_status_flags()`). The error-page
+  **bodies** themselves remain as the unchanged `static` byte arrays in
+  `ngx_http_special_response.c`; the registry intentionally stores metadata, not
+  body content, so the wire output is byte-identical to previous releases.
 
 Implementation properties:
 
@@ -209,9 +221,18 @@ argument, once the registry has been frozen by `ngx_http_status_init()`, or on
 overflow (capacity exceeded); otherwise it copies the descriptor into the table
 and returns `NGX_OK`. The registry is read-only after initialization.
 
+The descriptor below is a **template**, not a concrete new code: substitute the
+status code your module emits, its reason phrase, the appropriate
+`NGX_HTTP_STATUS_*` class/cacheability flags, and an optional RFC-section string.
+This API only stores descriptors a caller supplies; it does not define any status
+codes beyond the core registry on its own.
+
 ```c
 static const ngx_http_status_def_t  my_code = {
-    218, ngx_string("218 This Is Fine"), 0, NULL
+    /* code        */ MY_STATUS_CODE,                /* the code your module emits */
+    /* reason      */ ngx_string("<reason phrase>"), /* its reason phrase          */
+    /* flags       */ NGX_HTTP_STATUS_CLIENT_ERROR,  /* class / cacheability bits  */
+    /* rfc_section */ NULL                           /* optional, e.g. "15.5.1"    */
 };
 
 if (ngx_http_status_register(&my_code) != NGX_OK) {
@@ -245,9 +266,11 @@ Pre-fork initialization hook.
 ngx_int_t  ngx_http_status_init(void);
 ```
 
-Idempotent, allocation-free, one-time initialization. It is called from
-`src/http/ngx_http_request.c` **before worker fork**, so every worker inherits
-the read-only registry and no shared-memory migration is required for a
+Idempotent, allocation-free, one-time initialization. It is called from the
+HTTP header-filter postconfiguration hook (`ngx_http_header_filter_init` in
+`src/http/ngx_http_header_filter_module.c`), which runs in the master process
+during HTTP configuration — that is, **before worker fork** — so every worker
+inherits the read-only registry and no shared-memory migration is required for a
 graceful binary upgrade. Calling it freezes the registration table (see
 `ngx_http_status_register`). Returns `NGX_OK`.
 
@@ -427,4 +450,3 @@ auto/configure --with-http_status_validation && make
   `ngx_http_status_set()` (validation build), and `ngx_http_status_init()`.
 - `src/http/ngx_http.h` — includes `ngx_http_status.h`, making the API visible
   across the HTTP subsystem.
-

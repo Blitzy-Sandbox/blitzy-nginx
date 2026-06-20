@@ -49,10 +49,14 @@ The `flags` field is a bitmask of the metadata bits:
 ## 1. Why migrate
 
 Before the refactor, a response status was written directly to the
-`r->headers_out.status` struct field from roughly 20 modules across 33 distinct
-assignment sites. Because the write was a bare struct-field assignment, there was
-**no place to validate a code, attach metadata, or instrument the assignment** —
-the missing chokepoint identified as root cause **RC-2**.
+`r->headers_out.status` struct field. A grep of the field across the HTTP tree
+matches **33 sites in 20 files**; of those, **17 are true write (assignment)
+sites** and the remaining **16 are comparison reads** (`headers_out.status == …`)
+that inspect the status rather than set it. Because each write was a bare
+struct-field assignment, there was **no place to validate a code, attach
+metadata, or instrument the assignment** — the missing chokepoint identified as
+root cause **RC-2**. Only the 17 write sites are migrated to the setter; the 16
+comparison reads are intentionally left unchanged.
 
 `ngx_http_status_set()` introduces that single chokepoint. Every status assignment
 now flows through one function, which makes it possible to add optional RFC 9110
@@ -186,9 +190,14 @@ meaningful — use the `(void)` form, which discards the return value:
 
 `src/http/ngx_http_request.c` uses exactly this form on its request
 terminate and free paths. In the default build the `(void)` call is identical to the
-old field write. In the strict build it still validates and logs at debug level, but
-the path **continues regardless** — the value is set either way, and no error is
-returned up the stack.
+old field write, so the value is always set. In the strict build the setter
+**validates before assigning**: a valid code is stored and logged at debug level,
+while an **out-of-range code is rejected — the setter returns `NGX_ERROR` and the
+value is *not* assigned** (the rejection is recorded with a debug-level line). With
+the `(void)` form the caller continues regardless, because it discards the return
+value; but a rejected out-of-range value is left unset rather than written. Use the
+`(void)` form only on paths — finalize, terminate, free — where continuing after a
+possibly-rejected assignment is acceptable.
 
 ## 4. Upstream / proxied pass-through exception
 

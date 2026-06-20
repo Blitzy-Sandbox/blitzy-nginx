@@ -34,20 +34,27 @@ optional RFC 9110 status code validation can be enabled with the
 
 <change type="change">
 <para lang="ru">
-продублированные таблицы пояснительных фраз и страниц ошибок
-объединены в новый реестр статусов, а расходившиеся макросы
-смещения NGX_HTTP_LAST_2XX и NGX_HTTP_OFF_* удалены;
-строки статуса и тела страниц ошибок остаются побайтово
-идентичными предыдущим выпускам, специфичные для nginx коды
-444 и 494-499 сохранены.
+поиск пояснительной фразы статуса теперь выполняется через новый
+реестр статусов с помощью ngx_http_status_reason(), а выбор страницы
+ошибки теперь опирается на реестр: он защищён проверкой
+ngx_http_status_validate(), производится по коду статуса и использует
+флаги класса из реестра для решения о дополнении тела ответа для
+MSIE/Chrome, поэтому расходившиеся макросы смещения NGX_HTTP_LAST_2XX
+и NGX_HTTP_OFF_* удалены из обоих файлов; статические тела страниц
+ошибок сохранены без изменений, строки статуса и тела страниц ошибок
+остаются побайтово идентичными предыдущим выпускам, специфичные для
+nginx коды 444 и 494-499 сохранены.
 </para>
 <para lang="en">
-the duplicated status reason-phrase and error-page lookup tables
-have been consolidated onto the new status registry, and the
-divergent NGX_HTTP_LAST_2XX and NGX_HTTP_OFF_* offset macros have
-been removed; status lines and error-page bodies remain
-byte-identical to previous releases, and the nginx-specific status
-codes 444 and 494-499 are preserved.
+the status reason-phrase lookup now routes through the new status
+registry via ngx_http_status_reason(), and the error-page lookup is
+now registry-fed, gated by ngx_http_status_validate(), keyed by status
+code, and reading the registry class flags for the MSIE/Chrome body
+padding decision, so the divergent NGX_HTTP_LAST_2XX and NGX_HTTP_OFF_*
+offset macros have been removed from both files; the static error-page
+bodies are retained unchanged, status lines and error-page bodies
+remain byte-identical to previous releases, and the nginx-specific
+status codes 444 and 494-499 are preserved.
 </para>
 </change>
 

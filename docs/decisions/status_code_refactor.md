@@ -92,6 +92,7 @@ its mitigation. Root-cause IDs (RC-1 … RC-5) cross-reference the deficiencies 
 | **Upstream/proxied pass-through bypass (`r->upstream` set ⇒ no strict validation)** | Validate proxied status codes like locally generated ones. | A backend may legitimately return any code; nginx must pass it through unchanged (AAP §0.5.2 hard constraint). `ngx_http_status_set()` detects `r->upstream != NULL` and assigns without strict validation. | An out-of-spec upstream code could pass through. *Mitigation:* accepted by design (pass-through fidelity); the textual status line from the upstream is preserved verbatim. |
 | **Documented interpretation deviation: bug-fix template vs. structural refactor (required by Rule 2)** | Author the work strictly against the literal bug-fix template. | The underlying task is a structural refactor, not a runtime bug; "root cause" is therefore mapped to the architectural deficiencies **RC-1 … RC-5** and "the fix" to the refactoring implementation (registry + API). This is the single intentional template deviation, recorded here per the Explainability rule. | Reviewers expecting a one-line runtime fix. *Mitigation:* this explicit decision-log entry plus the before/after diagram in Part 3 frame the work as a refactor. |
 | **Distributed-tracing limitation (required)** | Add full distributed-trace propagation for status assignments. | nginx-core has **no** distributed-tracing primitive. The refactor reuses native `error_log` structured logging keyed by the `$request_id` correlation id and stub-status metrics, but full trace-context propagation would require an external module and is out of scope. | Incomplete end-to-end tracing. *Mitigation:* accepted and recorded as a known limitation; documented in the observability notes; an external module is the recommended path if needed later. |
+| **Security-driven Mermaid CDN version deviation in the executive deck: 11.4.0 → 11.15.0** | Keep the AAP §0.7.1-pinned Mermaid 11.4.0; or pin an intermediate 11.x release. | Vulnerability data published after the AAP was authored shows the pinned **11.4.0** carries moderate advisories — `classDef` HTML-injection (GHSA-ghcm-xqfw-q4vr), architecture-icon XSS (CVE-2025-54880), and a Gantt infinite-loop DoS — fixed only at **11.15.0**, the latest non-vulnerable release. The deck is therefore re-pinned to 11.15.0 and its Mermaid `securityLevel` hardened from `'loose'` to `'strict'`. This is a deliberate, security-motivated deviation from the AAP §0.7.1 version pin, recorded here as the governance "update the constraint through the proper process" path; the deck stays a single self-contained reveal.js artifact (Rule 4) with Mermaid + Lucide and exact CDN pins preserved. | A newer Mermaid release could alter rendering. *Mitigation:* the upgrade stays within Mermaid's 11.x line (identical flowchart syntax); every diagram is re-verified to render as SVG in-browser with zero console errors; the classic CDN resources (reveal.css, reveal.js, Lucide) now carry Subresource-Integrity `sha384` hashes with `crossorigin`; and the Mermaid ESM entrypoint is integrity-pinned via an import map, with its dynamically imported sub-chunks covered by HTTPS + an exact version pin on a pinned CDN + `securityLevel:'strict'` — the review-sanctioned documented exception for ES-module imports. |
 
 Per the Explainability rule, the rationale for each non-trivial choice lives here, in the decision
 log — not in code comments. Code comments in the implementation state intent only where they aid a
@@ -108,35 +109,50 @@ direction.
 
 ### Methodology
 
-The inventory was measured on the pre-refactor tree with:
+The field `r->headers_out.status` appears at **33 in-scope sites across 20 files** (a
+`headers_out.status` grep over `src/http` matches 36 sites in 21 files; excluding the
+out-of-scope Perl XS module `src/http/modules/perl/nginx.xs`, which carries 3 of them, leaves
+the 33). Those 33 sites partition into **17 true writes + 16 comparison reads**.
+
+Because the refactor has already migrated every true write, the split is verified **against the
+current (post-refactor) tree** with the two patterns below — and every line number in the
+forward matrix that follows is a current-tree line number, so the matrix can be regenerated and
+checked directly against source:
 
 ```text
-grep -rn 'headers_out\.status *=' src/http        ->  36 matches across 21 files
+# 17 true writes — now realized as ngx_http_status_set() call sites (the chokepoint).
+# Pre-refactor these were bare `r->headers_out.status = …` assignments; they no longer
+# match a single-'=' grep precisely because they have been migrated.
+grep -rn 'ngx_http_status_set(' src/http --include=*.c | grep -v 'ngx_http_status\.c'   ->  17
+
+# 16 comparison reads — left unchanged; they observe the field the chokepoint now sets.
+grep -rnE 'headers_out\.status *==' src/http --include=*.c | grep -v 'ngx_http_status\.c' ->  16
 ```
 
-Excluding the out-of-scope Perl XS module `src/http/modules/perl/nginx.xs` (3 matches) leaves
-**exactly 33 sites across 20 files**. This grep pattern intentionally matches **both** true
-writes (`=`, migrated to `ngx_http_status_set()`) **and** equality-comparison reads (`==`,
-which now observe the field that the chokepoint sets); both kinds are listed below for
-completeness so that coverage is provably 100 %. The two kinds are distinguished, and the split
-is reproduced, with two narrower patterns (again excluding the Perl XS module):
+So the 33 in-scope sites partition into **17 true writes + 16 comparison reads = 33**, measured
+directly from the current source. The totals — 33 sites across 20 files plus 3 legacy tables —
+are what the 100 % coverage claim rests on.
 
-```text
-grep -rnE 'headers_out\.status *=([^=]|$)' src/http   ->  17 true writes
-grep -rnE 'headers_out\.status *=='        src/http   ->  16 comparison reads
-```
-
-So the 33 in-scope sites partition into **17 true writes + 16 comparison reads = 33**. (The
-write/read split is measured directly from source by the two patterns above; the totals — 33
-sites across 20 files plus 3 legacy tables — are what the 100 % coverage claim rests on.)
+> **Reconciliation with the FINAL checkpoint's `18 writes / 15 reads` expectation.** The FINAL
+> acceptance checkpoint anticipated an **18 / 15** split. The realized source is **17 / 16**: the
+> two grep commands above are reproducible on the delivered tree and an independent baseline grep
+> confirms 33 sites in 20 files split 17 / 16. The single-site difference is a **classification**
+> difference, not a missing or extra migration. The AAP §0.5.1 *preliminary* inventory tentatively
+> listed `src/http/ngx_http_variables.c` as a status **write** to migrate; the realized code shows
+> that site (`ngx_http_variables.c:2048`) is a **comparison read**
+> (`r->headers_out.status == NGX_HTTP_SWITCHING_PROTOCOLS`), correctly left unchanged because a
+> read must not be routed through the assignment chokepoint. Reclassifying that one site from write
+> to read converts the preliminary **18 / 15** into the source-verified **17 / 16** while keeping
+> the total at 33. Coverage therefore remains 100 %: every one of the 33 sites is accounted for,
+> and the only adjustment is which side of the write/read partition a single site falls on.
 
 ### Forward matrix — sites and tables → registry/API targets
 
 | # | Source file | Sites | Line(s) | Kind | Target / migration |
 |---|---|---|---|---|---|
 | 1 | `src/http/ngx_http_request.c` | 4 | L2837 (read), L2838 (write), L3914 (read), L3915 (write) | finalize/terminate paths (2 reads + 2 writes) | writes → `(void) ngx_http_status_set()` (permissive; `(void)`-cast on the finalize/terminate path); reads observe the chokepoint-set field |
-| 2 | `src/http/ngx_http_core_module.c` | 2 | L1781, L1859 | true writes | `ngx_http_status_set()` (standard pattern: on `!= NGX_OK`, log and return `NGX_HTTP_INTERNAL_SERVER_ERROR`) |
-| 3 | `src/http/ngx_http_header_filter_module.c` | 2 | L386, L562 | comparison reads (`== NGX_HTTP_SWITCHING_PROTOCOLS`) | reads observe the chokepoint-set field (unchanged); this file **also hosts legacy table #2**, consumes the registry via `ngx_http_status_reason()` (L160), and invokes `ngx_http_status_init()` (L629) — see notes below |
+| 2 | `src/http/ngx_http_core_module.c` | 2 | L1781, L1863 | true writes | `ngx_http_status_set()` (standard pattern: on `!= NGX_OK`, log and return `NGX_HTTP_INTERNAL_SERVER_ERROR`) |
+| 3 | `src/http/ngx_http_header_filter_module.c` | 2 | L270, L446 | comparison reads (`== NGX_HTTP_SWITCHING_PROTOCOLS`) | reads observe the chokepoint-set field (unchanged); this file **also hosts legacy table #2**, consumes the registry via `ngx_http_status_reason()` (L160), and invokes `ngx_http_status_init()` (L629) — see notes below |
 | 4 | `src/http/ngx_http_upstream.c` | 1 | L3165 | true write (proxied copy) | `(void) ngx_http_status_set()` **pass-through** — `r->upstream` set ⇒ no strict validation; `status_line` preserved verbatim |
 | 5 | `src/http/ngx_http_variables.c` | 1 | L2048 | comparison read (`== NGX_HTTP_SWITCHING_PROTOCOLS`) | reads the chokepoint-set field; routed via the API per AAP §0.5.1 inventory |
 | 6 | `src/http/v3/ngx_http_v3_filter_module.c` | 4 | L132, L141, L152, L334 | comparison reads (NO_CONTENT / NOT_MODIFIED / OK) | read the chokepoint-set field; HTTP/3 status emission flows through `ngx_http_status_set()` on the write paths |
@@ -157,7 +173,7 @@ sites across 20 files plus 3 legacy tables — are what the 100 % coverage claim
 
 **Tally: 20 files, 33 sites (17 writes + 16 comparison reads) — 100 % mapped.**
 `src/http/ngx_http_header_filter_module.c` is the 20th in-scope file — its 2 comparison sites
-(L386, L562) complete the 33 — and is simultaneously the host of legacy table #2.
+(L270, L446) complete the 33 — and is simultaneously the host of legacy table #2.
 
 > **Registry-init seam — exact location.** `ngx_http_status_init()` is invoked from the pre-fork
 > header-filter postconfiguration hook `ngx_http_header_filter_init`
@@ -174,7 +190,7 @@ The **3 legacy tables** are mapped in addition to the 33 assignment sites:
 |---|---|---|---|
 | 1 | `NGX_HTTP_*` `#define` constant block | `src/http/ngx_http_request.h:74-145` | **registry** — constants retained for source compatibility; the registry becomes the single source of truth for reason and metadata |
 | 2 | `ngx_http_status_lines[]` reason-phrase table | `src/http/ngx_http_header_filter_module.c:58-136` | **`ngx_http_status_reason()`** — offset-arithmetic lookup at L214-285 removed; divergent `NGX_HTTP_OFF_*` / `NGX_HTTP_LAST_*` macros, including `NGX_HTTP_LAST_2XX` = **207** at L70, deleted |
-| 3 | `ngx_http_error_pages[]` error-page table | `src/http/ngx_http_special_response.c:340-410` | **registry-aligned error-page lookup** — divergent macros, including `NGX_HTTP_LAST_2XX` = **202** at L344, deleted; static byte arrays L60-332, the 498 → `ngx_http_error_404_page` map at L398, and the 494/495/496/497 → 400 security rewrite at ~L511-515 all preserved unchanged |
+| 3 | `ngx_http_error_pages[]` error-page table | `src/http/ngx_http_special_response.c:358-403` | **registry-fed error-page lookup** — the former positional array and its per-class offset arithmetic are gone. The table is now **keyed by status code** (`ngx_http_error_page_entry_t`), and `ngx_http_error_page_body()` (L414) renders a built-in body **only for a registry-valid code** (`ngx_http_status_validate()`, L421), selecting it by status code; the client/server-error class that gates MSIE/Chrome padding is read from the registry flags (`ngx_http_status_flags()`, L721). The divergent macros, including `NGX_HTTP_LAST_2XX` = **202** (formerly at L344), are deleted. Static byte arrays (L61-338), the 498 → `ngx_http_error_404_page` map (L392), and the 494/495/496/497 → 400 security rewrite (L520) are preserved unchanged, so the wire output stays byte-identical |
 
 ### Reverse matrix — registry/API targets → sources
 
@@ -186,7 +202,7 @@ The **3 legacy tables** are mapped in addition to the 33 assignment sites:
 | `ngx_http_status_validate()` | New RFC 9110 structural check (accepts 100–599); no prior equivalent; gated by `--with-http_status_validation` |
 | `ngx_http_status_is_cacheable()` | New cacheability metadata accessor (cacheable-by-default set: 200, 203, 204, 206, 300, 301, 308, 404, 405, 410, 414, 501); no prior equivalent |
 | `ngx_http_status_register()` / `ngx_http_status_init()` | New extensibility seam and idempotent pre-fork init hook; no prior equivalent. `ngx_http_status_init()` is invoked from `ngx_http_header_filter_init` (header filter, pre-fork master); `ngx_http_status_register()` is frozen once init has run |
-| Error-page index (`ngx_http_special_response.c`) | Registry-aligned; the divergent `NGX_HTTP_OFF_*` / `NGX_HTTP_LAST_*` offset macros (legacy table #3) are removed |
+| Error-page lookup `ngx_http_error_page_body()` (`ngx_http_special_response.c`) | Registry-fed: gated by `ngx_http_status_validate()` and keyed by status code (legacy table #3); the divergent `NGX_HTTP_OFF_*` / `NGX_HTTP_LAST_*` offset macros are removed and the per-class offset arithmetic is replaced by registry class flags (`ngx_http_status_flags()`) |
 
 The 16 comparison-read sites are bound in reverse to the field that the `ngx_http_status_set()`
 chokepoint now writes: each `r->headers_out.status == NGX_HTTP_*` test observes exactly the value
@@ -218,7 +234,7 @@ graph TB
         DEF["#define constants<br/>ngx_http_request.h:74-145"]:::bad
         RLT["Reason-phrase table<br/>ngx_http_status_lines[]<br/>header_filter_module.c:58-136"]:::bad
         EPT["Error-page table<br/>ngx_http_error_pages[]<br/>special_response.c:340-410"]:::bad
-        MODS["20 modules / 33 sites<br/>r->headers_out.status = NGX_HTTP_*"]:::bad
+        MODS["20 files / 33 sites<br/>direct r->headers_out.status access<br/>(17 writes + 16 reads)"]:::bad
         DEF -.manual sync.-> RLT
         DEF -.manual sync.-> EPT
         DEF -.no validation.-> MODS
@@ -230,9 +246,9 @@ graph TB
         direction TB
         REG["ngx_http_status_def_t registry<br/>ngx_http_status.c (single static array)"]:::good
         API["API: ngx_http_status_set / validate /<br/>reason / register / is_cacheable<br/>declared via ngx_http.h"]:::good
-        MODS2["20 modules / 33 sites<br/>ngx_http_status_set(r, code)"]:::good
+        MODS2["20 files / 33 sites<br/>17 writes -> ngx_http_status_set(r, code)<br/>16 reads observe the set field"]:::good
         RLT2["reason lookup -> ngx_http_status_reason()"]:::good
-        EPT2["error-page lookup (registry-aligned)"]:::good
+        EPT2["error-page lookup -> validate + flags<br/>(registry-fed)"]:::good
         REG --> API
         API --> MODS2
         REG --> RLT2
@@ -251,8 +267,9 @@ declarations of the same code set, kept in sync only by developer discipline; th
 discipline had already failed (RC-3), and the 20 modules write status directly to the field with no
 validation seam (RC-2). In the **AFTER** state, a single `static const` registry feeds the API, the
 reason lookup, and the error-page lookup, yielding one authoritative source of truth (RC-1, RC-4,
-RC-5 resolved); the 20 modules assign status exclusively through `ngx_http_status_set(r, code)`, and
-the divergent offset macros are gone. Because the registry copies the legacy reason strings verbatim
+RC-5 resolved); across the 20 in-scope files, all 17 status-assignment sites now flow exclusively
+through `ngx_http_status_set(r, code)` (the 16 comparison-read sites simply observe the field it
+sets), and the divergent offset macros are gone. Because the registry copies the legacy reason strings verbatim
 and the error-page byte arrays and security rewrites are preserved, the wire output remains
 byte-identical across the change.
 
