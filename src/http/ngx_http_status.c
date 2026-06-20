@@ -23,9 +23,15 @@
 /*
  * Maximum number of third-party status codes that may be added through
  * ngx_http_status_register() before worker fork.  The registration table is
- * treated as read-only once the workers have started.
+ * treated as read-only once the workers have started.  The bound is kept small
+ * deliberately: the core registry already covers every standard RFC 9110
+ * Section 15 code and every nginx extension code, so this table exists only for
+ * the rare third-party code, and a small capacity keeps the writable (BSS)
+ * footprint negligible.  At sizeof(ngx_http_status_def_t) == 40 bytes this is
+ * 320 bytes of zero-initialized BSS that is shared (zero pages) across workers
+ * until a code is actually registered.
  */
-#define NGX_HTTP_STATUS_MAX_REGISTERED  32
+#define NGX_HTTP_STATUS_MAX_REGISTERED  8
 
 
 /*
@@ -34,7 +40,11 @@
  * arithmetic; the offsets in that helper MUST stay in lock-step with the order
  * of this array.  The array is "static const": it lives in the read-only data
  * segment, is shared across all workers, and is never modified at runtime, so
- * the per-worker incremental footprint is effectively zero.
+ * the per-worker incremental footprint is effectively zero.  Its absolute size
+ * (about 2.6 KB for the full standard + extension code set, at
+ * sizeof(ngx_http_status_def_t) == 40 bytes per entry) is therefore a one-time
+ * cost in the shared .rodata segment, NOT a per-worker cost: copy-on-write
+ * never triggers because the pages are never written.
  *
  * Codes that historically emitted a numeric-only status line (all 1xx, every
  * nginx extension code, and the gaps within the 2xx-5xx ranges) carry an empty
@@ -270,16 +280,30 @@ ngx_http_status_reason(ngx_uint_t status)
 
 
 /*
- * RFC 9110 structural conformance check: a status code is well-formed when it
- * lies in the three-digit class range 100..599.  This accepts every standard
- * code and the nginx extension codes (444, 494..499).  Codes that are merely
- * unknown but in range are still structurally valid and are handled
- * permissively by ngx_http_status_set().
+ * RFC 9110 conformance check against the status registry.  A status code is
+ * valid only when it is a member of the registry: a core RFC 9110 Section 15
+ * code or an nginx extension code (444, 494..499) in the static table above, or
+ * a third-party code added before worker fork via ngx_http_status_register().
+ * The registry is therefore the single authoritative definition of "a known,
+ * conformant status code".
+ *
+ * A bare three-digit range (100..599) is intentionally NOT sufficient: an
+ * in-range code that the registry does not define -- for example 299, 451, or
+ * 599 -- is not a code this server knows how to emit, so it is rejected.  Under
+ * --with-http_status_validation, ngx_http_status_set() uses this to refuse a
+ * locally generated out-of-registry code (the standard-pattern caller then logs
+ * NGX_LOG_ERR and falls back to NGX_HTTP_INTERNAL_SERVER_ERROR); proxied
+ * responses bypass this entirely because ngx_http_status_set() checks
+ * r->upstream first.  The error-page renderer (ngx_http_special_response.c)
+ * likewise gates built-in body selection on a registry-valid code.  Because
+ * every code with a built-in error-page body and every code any core module
+ * assigns is already registered, this check leaves the wire output of the
+ * default build byte-identical to previous releases.
  */
 ngx_int_t
 ngx_http_status_validate(ngx_uint_t status)
 {
-    if (status >= 100 && status <= 599) {
+    if (ngx_http_status_lookup(status) != NULL) {
         return NGX_OK;
     }
 

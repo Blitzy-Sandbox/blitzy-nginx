@@ -19,7 +19,7 @@ flowchart LR
     req["HTTP request<br/>($request_id assigned)"] --> set["ngx_http_status_set(r, code)<br/>(chokepoint)"]
     set -->|"valid / permissive"| out["response status line"]
     set -->|"strict mode: invalid code"| err["NGX_LOG_ERR<br/>&quot;invalid HTTP status %ui&quot;<br/>fallback 500"]
-    out --> log["error_log / access_log<br/>keyed by $request_id"]
+    out --> log["error_log (connection ctx)<br/>+ access_log $request_id field"]
     err --> log
     log --> exp["exporter / log pipeline"]
     stub["stub_status<br/>(connections + accepts/handled/requests)"] --> exp
@@ -31,7 +31,7 @@ logs are **reused**; the chokepoint logging and the dashboard are **added**.
 
 ## REUSED — nginx-native primitives (do not reinvent)
 
-### 1. Structured `error_log` keyed by the `$request_id` correlation id
+### 1. Structured logging with the `$request_id` correlation id
 
 nginx already provides a per-request correlation id via the `$request_id`
 variable, implemented entirely in `src/http/ngx_http_variables.c`:

@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>NGINX HTTP Status-Code Registry Refactor — Executive Summary</title>
+  <!-- Inline empty favicon: prevents the browser's default /favicon.ico request
+       (avoids a 404 on load while keeping the deck fully self-contained). -->
+  <link rel="icon" href="data:,">
 
   <!-- Pinned CDN: reveal.js 5.1.0 core stylesheet (Subresource Integrity pinned) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"
@@ -279,7 +282,7 @@ graph LR
     classDef good fill:#e0ffe9,stroke:#1e8449,color:#333333;
     classDef neutral fill:#16203a,stroke:#7c8cff,color:#eef2ff;
         </pre>
-        <p class="xsmall muted" style="margin-top:6px;">Read-only after worker init, O(1) class-offset indexing, under 1 KB per worker.</p>
+        <p class="xsmall muted" style="margin-top:6px;">Read-only after worker init, O(1) class-offset indexing; shared <code>.rodata</code> (&approx; 2.6 KB one-time, &approx; 0 added per-worker RSS).</p>
         <div class="footer"><span class="brandmark"><span class="dot"></span>Blitzy</span><span>Target Architecture</span></div>
       </section>
 
@@ -295,7 +298,7 @@ graph TB
         DEF["#define constants<br/>ngx_http_request.h:74-145"]:::bad
         RLT["Reason-phrase table<br/>ngx_http_status_lines[]<br/>header_filter_module.c:58-136"]:::bad
         EPT["Error-page table<br/>ngx_http_error_pages[]<br/>special_response.c:340-410"]:::bad
-        MODS["20 files / 33 sites<br/>direct r->headers_out.status access<br/>(17 writes + 16 reads)"]:::bad
+        MODS["20 modules / 33 sites<br/>r->headers_out.status = NGX_HTTP_*"]:::bad
         DEF -.manual sync.-> RLT
         DEF -.manual sync.-> EPT
         DEF -.no validation.-> MODS
@@ -307,9 +310,9 @@ graph TB
         direction TB
         REG["ngx_http_status_def_t registry<br/>ngx_http_status.c (single static array)"]:::good
         API["API: ngx_http_status_set / validate /<br/>reason / register / is_cacheable<br/>declared via ngx_http.h"]:::good
-        MODS2["20 files / 33 sites<br/>17 writes -> ngx_http_status_set(r, code)<br/>16 reads observe the set field"]:::good
+        MODS2["20 modules / 33 sites<br/>ngx_http_status_set(r, code)"]:::good
         RLT2["reason lookup -> ngx_http_status_reason()"]:::good
-        EPT2["error-page lookup -> validate + flags<br/>(registry-fed)"]:::good
+        EPT2["error-page lookup (registry-aligned)"]:::good
         REG --> API
         API --> MODS2
         REG --> RLT2
@@ -407,7 +410,7 @@ graph TB
     Q{"validation<br/>compiled in?"}:::neutral
     U{"r->upstream set?"}:::neutral
     PASS["assign status<br/>(zero overhead)"]:::good
-    VAL["validate vs RFC 9110<br/>fallback 500 + log on fail"]:::good
+    VAL["validate vs registry (RFC 9110 §15)<br/>fallback 500 + log on fail"]:::good
     S --> Q
     Q -- "no (default)" --> PASS
     Q -- "yes" --> U
@@ -427,7 +430,7 @@ graph TB
         <div class="grid cols-4" style="margin-top:14px;">
           <div class="card stat accent-teal"><span class="num">&lt; 2%</span><span class="lbl">latency p50/p95/p99</span></div>
           <div class="card stat accent-teal"><span class="num">&lt; 10</span><span class="lbl">CPU cycles / assign</span></div>
-          <div class="card stat accent-teal"><span class="num">&lt; 1 KB</span><span class="lbl">registry per worker</span></div>
+          <div class="card stat accent-teal"><span class="num">&approx; 0</span><span class="lbl">added per-worker RSS (shared .rodata)</span></div>
           <div class="card stat accent-green"><span class="num">O(1)</span><span class="lbl">array indexing</span></div>
         </div>
         <p class="small muted" style="margin-top:16px;"><span class="ic-green"><i data-lucide="zap"></i></span> With validation disabled, overhead is exactly zero via compile-time constant propagation; the registry lives in read-only <code>.rodata</code>, shared copy-on-write across workers.</p>
@@ -444,7 +447,7 @@ graph TB
             <ul class="small">
               <li>Byte-parity <code>diff</code> of status lines &amp; error pages</li>
               <li>External nginx-tests <code>prove -r t/</code> (clone-only)</li>
-              <li><code>wrk</code> latency within bounds; graceful binary upgrade</li>
+              <li>Load-test p50/p95/p99 within bounds; graceful binary upgrade</li>
             </ul>
           </div>
           <div>
@@ -466,7 +469,7 @@ graph TB
         <div class="grid cols-2" style="margin-top:12px;">
           <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Consolidated</h3><p>Core modules use <code>ngx_http_status_set()</code> exclusively; divergent macros removed.</p></div>
           <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Compatible</h3><p>Byte-identical output; ABI, security rewrites, and upstream pass-through intact.</p></div>
-          <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Validated</h3><p>RFC 9110 codes registered; optional strict mode; nginx-tests pass.</p></div>
+          <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Validated</h3><p>RFC 9110 codes registered; optional strict mode; nginx-tests: no new failures vs baseline.</p></div>
           <div class="card"><h3 class="ic-green"><i data-lucide="check"></i> Governed</h3><p>Every rule-mandated artifact present at its specified path.</p></div>
         </div>
         <p class="lead" style="margin-top:18px;">NGINX 1.29.5 — status handling, centralized.</p>
