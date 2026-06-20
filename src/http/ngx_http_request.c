@@ -213,10 +213,6 @@ ngx_http_init_connection(ngx_connection_t *c)
     ngx_http_in6_addr_t       *addr6;
 #endif
 
-    /* initialize the HTTP status registry (idempotent; the static const
-     * registry is valid before worker fork) */
-    (void) ngx_http_status_init();
-
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL) {
         ngx_http_close_connection(c);

@@ -618,6 +618,18 @@ ngx_http_early_hints_filter(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_header_filter_init(ngx_conf_t *cf)
 {
+    /*
+     * Initialize the HTTP status registry once, before worker fork.  This
+     * postconfiguration hook runs in the master process while the http{} block
+     * is parsed, so the registry is finalized and frozen (read-only) before any
+     * worker is forked and inherits it.  The header filter renders every status
+     * line through ngx_http_status_reason(), which makes it the natural owner
+     * of this registry-readiness guarantee.
+     */
+    if (ngx_http_status_init() != NGX_OK) {
+        return NGX_ERROR;
+    }
+
     ngx_http_top_header_filter = ngx_http_header_filter;
     ngx_http_top_early_hints_filter = ngx_http_early_hints_filter;
 
