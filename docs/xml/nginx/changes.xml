@@ -5,6 +5,55 @@
 <change_log title="nginx">
 
 
+<changes ver="1.29.5" date="2026-06-15">
+
+<change type="feature">
+<para lang="ru">
+коды состояния HTTP-ответа теперь управляются через
+централизованный программный интерфейс на основе реестра:
+функция ngx_http_status_set() является единой точкой назначения
+статуса ответа, а функции ngx_http_status_reason(),
+ngx_http_status_validate(), ngx_http_status_register() и
+ngx_http_status_is_cacheable() предоставляют пояснительные фразы,
+метаданные RFC 9110, точку регистрации и информацию о кэшируемости;
+дополнительная проверка кодов состояния по RFC 9110 включается
+параметром сборки "--with-http_status_validation" и по умолчанию
+выключена.
+</para>
+<para lang="en">
+HTTP response status codes are now managed through a centralized,
+registry-backed API: the ngx_http_status_set() function is the single
+point that assigns a response status, and the ngx_http_status_reason(),
+ngx_http_status_validate(), ngx_http_status_register(), and
+ngx_http_status_is_cacheable() functions provide reason phrases,
+RFC 9110 metadata, a registration seam, and cacheability information;
+optional RFC 9110 status code validation can be enabled with the
+"--with-http_status_validation" configure option, disabled by default.
+</para>
+</change>
+
+<change type="change">
+<para lang="ru">
+продублированные таблицы пояснительных фраз и страниц ошибок
+объединены в новый реестр статусов, а расходившиеся макросы
+смещения NGX_HTTP_LAST_2XX и NGX_HTTP_OFF_* удалены;
+строки статуса и тела страниц ошибок остаются побайтово
+идентичными предыдущим выпускам, специфичные для nginx коды
+444 и 494-499 сохранены.
+</para>
+<para lang="en">
+the duplicated status reason-phrase and error-page lookup tables
+have been consolidated onto the new status registry, and the
+divergent NGX_HTTP_LAST_2XX and NGX_HTTP_OFF_* offset macros have
+been removed; status lines and error-page bodies remain
+byte-identical to previous releases, and the nginx-specific status
+codes 444 and 494-499 are preserved.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.29.4" date="2025-12-09">
 
 <change type="feature">
