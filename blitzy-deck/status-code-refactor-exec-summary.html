@@ -95,6 +95,7 @@
 
     .reveal pre{ box-shadow:none; width:100%; font-size:0.46em; }
     .reveal pre code{
+      display:block; white-space:pre; overflow:auto;
       background:var(--blz-code); color:#dbe4ff; border:1px solid var(--blz-border);
       border-radius:10px; padding:16px 18px; max-height:none; line-height:1.45;
     }
@@ -105,14 +106,24 @@
     /* Lucide icon sizing */
     .reveal i[data-lucide]{ width:1em; height:1em; vertical-align:-0.12em; stroke-width:2; }
     .ic-lg i[data-lucide]{ width:1.6em; height:1.6em; }
-    .ic-indigo i[data-lucide]{ color:var(--blz-indigo-2); }
-    .ic-teal i[data-lucide]{ color:var(--blz-teal); }
-    .ic-green i[data-lucide]{ color:var(--blz-green); }
-    .ic-red i[data-lucide]{ color:var(--blz-red); }
-    .ic-amber i[data-lucide]{ color:var(--blz-amber); }
+    /* Lucide replaces each <i data-lucide> with <svg ... data-lucide stroke="currentColor">.
+       Target the attribute (matches the rendered <svg>, not the pre-render <i>) so the
+       semantic color cascades into the icon's stroke via currentColor. Scoped to the icon
+       element only, so sibling/heading text in the same .ic-* wrapper is not recolored. */
+    .ic-indigo [data-lucide]{ color:var(--blz-indigo-2); }
+    .ic-teal [data-lucide]{ color:var(--blz-teal); }
+    .ic-green [data-lucide]{ color:var(--blz-green); }
+    .ic-red [data-lucide]{ color:var(--blz-red); }
+    .ic-amber [data-lucide]{ color:var(--blz-amber); }
 
     /* Mermaid containers */
     .mermaid{ background:transparent; text-align:center; }
+    /* Mermaid wraps htmlLabels text in <p>. The deck's global `.reveal p` near-white
+       color would otherwise override each node's classDef color (dark #333 on the
+       light-fill nodes, near-white on the dark-fill nodes). Inheriting the color
+       Mermaid sets on the label container restores legibility on every node and
+       edge label without touching the deck's other paragraphs. */
+    .reveal .mermaid p{ color:inherit !important; }
     /* Constrain rendered diagram height so tall flowcharts scale to fit a 720px slide
        (width is already handled by Mermaid's useMaxWidth viewBox). Wide/short diagrams
        are unaffected because their natural height is below this cap. */
@@ -473,29 +484,30 @@ graph TB
           integrity="sha384-ieG+IKD0d/ZPXyCBTMVAbqsQdns8QGJR/e26WMw7M4fkaI/rHcS/YIoi+ah9WGge"
           crossorigin="anonymous"></script>
 
-  <!-- Pinned CDN: Mermaid 11.15.0 (ESM).
-       SECURITY: upgraded from the AAP-pinned 11.4.0 to 11.15.0 (the latest
-       non-vulnerable release) to clear the moderate advisories affecting
-       11.4.0 — classDef HTML-injection (GHSA-ghcm-xqfw-q4vr, fixed 11.15.0),
-       architecture-icon XSS (CVE-2025-54880, fixed 11.10.0), and the Gantt
-       infinite-loop DoS (fixed 11.15.0). This security-driven deviation from
-       the AAP 0.7.1 version pin is recorded in
-       docs/decisions/status_code_refactor.md.
+  <!-- Pinned CDN: Mermaid 11.4.0 (ESM) — exact version pin per AAP 0.7.1 / Rule 4.
+       SECURITY: this is an author-controlled, static presentation with no
+       user-supplied diagram input; every Mermaid source is hardcoded below.
+       Mermaid runs with securityLevel:'strict' (DOMPurify sanitization) and the
+       deck uses only flowcharts (no Gantt, no architecture/icon diagrams), so the
+       advisories that affect 11.4.0 only in untrusted-input contexts — classDef
+       HTML-injection (GHSA-ghcm-xqfw-q4vr), architecture-icon XSS
+       (CVE-2025-54880) and the Gantt infinite-loop DoS — are not reachable here.
+       The residual-risk assessment and the decision to hold the AAP-pinned 11.4.0
+       are recorded in docs/decisions/status_code_refactor.md.
        SRI: the ESM entrypoint is integrity-verified via the import map below
        (browsers without import-map integrity ignore the key and still load
        the pinned URL). The entrypoint statically imports a graph of sub-chunks
        (./chunks/mermaid.esm.min/chunk-*.mjs) whose hashes are not enumerable
        at author time and which `import` syntax cannot carry an `integrity`
-       attribute for; per the review's sanctioned exception those sub-chunks
-       are protected instead by HTTPS + an exact version pin on a pinned CDN +
-       securityLevel:'strict'. -->
+       attribute for; those sub-chunks are protected instead by HTTPS + an exact
+       version pin on a pinned CDN + securityLevel:'strict'. -->
   <script type="importmap">
   {
     "imports": {
-      "mermaid": "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs"
+      "mermaid": "https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs"
     },
     "integrity": {
-      "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs": "sha384-whY2DyvhZRFfs9hvtGdZaKcgbETgqMlDN+KNlWnXEL2QDa2XQkBOApUT7arfftO9"
+      "https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs": "sha384-HbZodwcydhFoeJkM8JD85LgJ4EGrGW8p7/jgYlNNjwawbrvYc5jzWjzs8Z8Lgsvo"
     }
   }
   </script>
