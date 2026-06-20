@@ -213,6 +213,10 @@ ngx_http_init_connection(ngx_connection_t *c)
     ngx_http_in6_addr_t       *addr6;
 #endif
 
+    /* initialize the HTTP status registry (idempotent; the static const
+     * registry is valid before worker fork) */
+    (void) ngx_http_status_init();
+
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL) {
         ngx_http_close_connection(c);
@@ -2835,7 +2839,7 @@ ngx_http_terminate_request(ngx_http_request_t *r, ngx_int_t rc)
     mr->terminated = 1;
 
     if (rc > 0 && (mr->headers_out.status == 0 || mr->connection->sent == 0)) {
-        mr->headers_out.status = rc;
+        (void) ngx_http_status_set(mr, rc);
     }
 
     cln = mr->cleanup;
@@ -3912,7 +3916,7 @@ ngx_http_free_request(ngx_http_request_t *r, ngx_int_t rc)
 #endif
 
     if (rc > 0 && (r->headers_out.status == 0 || r->connection->sent == 0)) {
-        r->headers_out.status = rc;
+        (void) ngx_http_status_set(r, rc);
     }
 
     if (!r->logged) {

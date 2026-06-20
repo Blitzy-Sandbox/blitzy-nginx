@@ -70,6 +70,7 @@ if [ $HTTP = YES ]; then
                          ngx_http_upstream_module"
         ngx_module_incs="src/http src/http/modules"
         ngx_module_deps="src/http/ngx_http.h \
+                         src/http/ngx_http_status.h \
                          src/http/ngx_http_request.h \
                          src/http/ngx_http_config.h \
                          src/http/ngx_http_core_module.h \
@@ -79,6 +80,7 @@ if [ $HTTP = YES ]; then
                          src/http/ngx_http_upstream.h \
                          src/http/ngx_http_upstream_round_robin.h"
         ngx_module_srcs="src/http/ngx_http.c \
+                         src/http/ngx_http_status.c \
                          src/http/ngx_http_core_module.c \
                          src/http/ngx_http_special_response.c \
                          src/http/ngx_http_request.c \
@@ -99,6 +101,11 @@ if [ $HTTP = YES ]; then
     if [ $HTTP_CACHE = YES ]; then
         have=NGX_HTTP_CACHE . auto/have
         HTTP_SRCS="$HTTP_SRCS $HTTP_FILE_CACHE_SRCS"
+    fi
+
+
+    if [ $HTTP_STATUS_VALIDATION = YES ]; then
+        have=NGX_HTTP_STATUS_VALIDATION . auto/have
     fi
 
 
