@@ -1,0 +1,21 @@
+Changes with nginx 1.29.5                                        15 Jun 2026
+
+    *) Feature: HTTP response status codes are now managed through a
+       centralized, registry-backed API.  The ngx_http_status_set()
+       function is the single point that assigns a response status, and
+       the ngx_http_status_reason(), ngx_http_status_validate(),
+       ngx_http_status_register(), and ngx_http_status_is_cacheable()
+       functions provide reason phrases, RFC 9110 metadata, a
+       registration seam, and cacheability information.
+
+    *) Feature: optional RFC 9110 status code validation can be enabled
+       with the "--with-http_status_validation" configure option;
+       validation is disabled by default and adds no overhead when it is
+       not enabled.
+
+    *) Change: the duplicated status reason-phrase and error-page lookup
+       tables have been consolidated onto the new status registry, and
+       the divergent NGX_HTTP_LAST_2XX and NGX_HTTP_OFF_* offset macros
+       have been removed; status lines and error-page bodies remain
+       byte-identical to previous releases, and the nginx-specific status
+       codes 444 and 494-499 are preserved.
