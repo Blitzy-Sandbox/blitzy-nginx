@@ -745,9 +745,29 @@ ngx_http_send_special_response(ngx_http_request_t *r,
 
     rc = ngx_http_send_header(r);
 
+#if (NGX_HTTP_STATUS_VALIDATION)
+    /*
+     * In the strict-validation build (--with-http_status_validation),
+     * ngx_http_send_header() rejects a locally generated, structurally invalid
+     * status code -- one outside RFC 9110's 100..599 range, e.g. "return 600;"
+     * or an "error_page =600 ..." override -- by logging it once and returning
+     * NGX_HTTP_INTERNAL_SERVER_ERROR.  That is a positive (> NGX_OK) return, so
+     * it must be propagated here exactly as ngx_http_send_response() already
+     * does for the < 400 path; otherwise the body would be written over a header
+     * that was never sent, corrupting the response and resetting the connection.
+     * Propagating it lets ngx_http_finalize_request() render a clean 500 -- the
+     * documented "strict-mode invalid code -> 500 fallback".  The default build
+     * never reaches this (the inline setter cannot fail), so wire output there
+     * is byte-for-byte unchanged.
+     */
+    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) {
+        return rc;
+    }
+#else
     if (rc == NGX_ERROR || r->header_only) {
         return rc;
     }
+#endif
 
     if (body.len == 0) {
         return ngx_http_send_special(r, NGX_HTTP_LAST);
