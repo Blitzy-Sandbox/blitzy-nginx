@@ -120,6 +120,14 @@ ngx_int_t ngx_http_parse_chunked(ngx_http_request_t *r, ngx_buf_t *b,
     ngx_http_chunked_t *ctx, ngx_uint_t keep_trailers);
 
 
+/* HTTP status-code registry facade (RFC 9110 §15) */
+ngx_int_t ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code);
+ngx_int_t ngx_http_status_validate(ngx_uint_t code);
+ngx_str_t *ngx_http_status_reason(ngx_uint_t code);
+ngx_int_t ngx_http_status_register(const ngx_http_status_def_t *def);
+ngx_uint_t ngx_http_status_is_cacheable(ngx_uint_t code);
+
+
 ngx_http_request_t *ngx_http_create_request(ngx_connection_t *c);
 ngx_int_t ngx_http_process_request_uri(ngx_http_request_t *r);
 void ngx_http_process_request(ngx_http_request_t *r);
