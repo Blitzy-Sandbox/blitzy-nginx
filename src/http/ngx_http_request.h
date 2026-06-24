@@ -145,6 +145,36 @@
 #define NGX_HTTP_INSUFFICIENT_STORAGE      507
 
 
+/*
+ * HTTP status-code classification flags.
+ *
+ * These bits are OR-combined in the "flags" field of ngx_http_status_def_t
+ * and consumed by ngx_http_status_is_cacheable() and the registry lookup
+ * helpers implemented in ngx_http_request.c.  NGX_HTTP_STATUS_CACHEABLE marks
+ * the RFC 9110 section 15.1 / RFC 9111 heuristically-cacheable subset.
+ */
+#define NGX_HTTP_STATUS_CACHEABLE          0x0001
+#define NGX_HTTP_STATUS_CLIENT_ERROR       0x0002
+#define NGX_HTTP_STATUS_SERVER_ERROR       0x0004
+#define NGX_HTTP_STATUS_INFORMATIONAL      0x0008
+
+
+/*
+ * Registry record describing a single HTTP status code: its numeric value,
+ * default reason phrase, classification flags (NGX_HTTP_STATUS_* above), and
+ * the RFC 9110 section that defines it.  The authoritative, immutable
+ * "static const ngx_http_status_def_t status_registry[]" table is built in
+ * ngx_http_request.c.  This type is intentionally distinct from the
+ * pre-existing ngx_http_status_t (upstream status-line parser) in ngx_http.h.
+ */
+typedef struct {
+    ngx_uint_t    code;
+    ngx_str_t     reason;
+    ngx_uint_t    flags;
+    const char   *rfc_section;
+} ngx_http_status_def_t;
+
+
 #define NGX_HTTP_LOWLEVEL_BUFFERED         0xf0
 #define NGX_HTTP_WRITE_BUFFERED            0x10
 #define NGX_HTTP_GZIP_BUFFERED             0x20

@@ -1,0 +1,522 @@
+/*!
+ * blitzy-reveal-theme.css
+ * ---------------------------------------------------------------------------
+ * Canonical Blitzy reveal.js theme — dark, modern, executive-grade.
+ *
+ * Project   : blitzy-nginx — "NGINX HTTP status code registry refactoring
+ *             with RFC 9110 compliance"
+ * Consumed  : ../status_code_refactor_executive_summary.html
+ *             (linked via <link rel="stylesheet" href="references/blitzy-reveal-theme.css">)
+ *
+ * Layering  : This stylesheet LAYERS ON TOP of reveal.js 5.1.0 core CSS
+ *             (reveal.js@5.1.0/dist/reveal.css, linked FIRST by the deck) and
+ *             fully REPLACES any stock reveal.js theme (no stock theme under
+ *             dist/theme/ is linked). It therefore defines every reveal.js
+ *             `--r-*` custom property and the base appearance rules itself,
+ *             mirroring the structure of a stock reveal 5.x theme, Blitzy-branded.
+ *
+ * Self-contained: pure CSS, no @import of remote fonts (system/web-safe font
+ *             stacks with graceful degradation). No build step / preprocessor.
+ *
+ * Compatible with: the deck's Mermaid 11.4.0 (theme:'dark', diagrams in
+ *             <pre class="mermaid">), Lucide 0.460.0 (<i data-lucide> -> inline
+ *             <svg class="lucide ...">), and the optional reveal highlight
+ *             plugin monokai.css (<pre><code class="language-c">).
+ * ---------------------------------------------------------------------------
+ */
+
+/* =========================================================================
+ * 1. Brand tokens + reveal.js theme variables
+ * ========================================================================= */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Blitzy brand palette (dark, executive) ---- */
+  --blitzy-bg:            #0b1020;  /* deep navy/ink backdrop            */
+  --blitzy-bg-glow-1:     #16224a;  /* subtle top-right glow             */
+  --blitzy-bg-glow-2:     #102046;  /* subtle bottom-left glow           */
+  --blitzy-surface:       #131b34;  /* panels / KPI cards                */
+  --blitzy-surface-2:     #0f1730;  /* card gradient end                 */
+  --blitzy-border:        #2a3556;  /* hairline borders                  */
+  --blitzy-border-soft:   #1e2845;  /* softer separators                 */
+
+  --blitzy-text:          #e8edf7;  /* primary body text (near white)    */
+  --blitzy-heading:       #f4f7fc;  /* headings (bright)                 */
+  --blitzy-text-muted:    #9fb0c9;  /* muted / secondary text            */
+
+  --blitzy-primary:       #4f7cff;  /* Blitzy primary (electric indigo)  */
+  --blitzy-primary-bright:#6ea8fe;  /* hover / highlight                 */
+  --blitzy-primary-dark:  #2f5fe0;  /* pressed / dark links              */
+  --blitzy-accent:        #22d3ee;  /* cyan secondary accent             */
+  --blitzy-spark:         #ffb020;  /* amber "spark" — KPI numerals      */
+  --blitzy-success:       #34d399;  /* positive / approved               */
+  --blitzy-danger:        #f87171;  /* risk / blocked                    */
+
+  --blitzy-code-bg:       #272822;  /* matches monokai highlight bg      */
+  --blitzy-card-radius:   14px;
+  --blitzy-shadow:        0 10px 30px rgba(2, 6, 20, 0.45);
+  --blitzy-shadow-soft:   0 6px 18px rgba(2, 6, 20, 0.35);
+
+  /* ---- reveal.js 5.x theme variables (consumed by core + rules below) -- */
+  --r-background-color: var(--blitzy-bg);
+
+  --r-main-font: "Inter", "Segoe UI", system-ui, -apple-system,
+                 BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --r-main-font-size: 36px;
+  --r-main-color: var(--blitzy-text);
+  --r-block-margin: 16px;
+
+  --r-heading-margin: 0 0 16px 0;
+  --r-heading-font: "Inter", "Segoe UI", system-ui, -apple-system,
+                    BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --r-heading-color: var(--blitzy-heading);
+  --r-heading-line-height: 1.18;
+  --r-heading-letter-spacing: -0.01em;
+  --r-heading-text-transform: none;
+  --r-heading-text-shadow: none;
+  --r-heading-font-weight: 800;
+  --r-heading1-text-shadow: none;
+
+  --r-heading1-size: 2.1em;
+  --r-heading2-size: 1.5em;
+  --r-heading3-size: 1.2em;
+  --r-heading4-size: 1em;
+
+  --r-code-font: "JetBrains Mono", "SFMono-Regular", "SF Mono", Menlo,
+                 Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --r-link-color: var(--blitzy-primary);
+  --r-link-color-dark: var(--blitzy-primary-dark);
+  --r-link-color-hover: var(--blitzy-primary-bright);
+
+  --r-selection-background-color: rgba(79, 124, 255, 0.40);
+  --r-selection-color: #ffffff;
+}
+
+/* Light-background safety override (if a slide opts into a light bg). */
+.reveal section.has-light-background,
+.reveal section.has-light-background h1,
+.reveal section.has-light-background h2,
+.reveal section.has-light-background h3,
+.reveal section.has-light-background h4,
+.reveal section.has-light-background h5,
+.reveal section.has-light-background h6 {
+  color: #0b1020;
+}
+
+/* =========================================================================
+ * 2. Deck backdrop + base typography
+ * ========================================================================= */
+
+.reveal-viewport {
+  background:
+    radial-gradient(1200px 820px at 82% -12%,
+      var(--blitzy-bg-glow-1) 0%, rgba(22, 34, 74, 0) 60%),
+    radial-gradient(1040px 720px at -12% 112%,
+      var(--blitzy-bg-glow-2) 0%, rgba(16, 32, 70, 0) 55%),
+    var(--r-background-color);
+  background-color: var(--r-background-color);
+}
+
+.reveal {
+  font-family: var(--r-main-font);
+  font-size: var(--r-main-font-size);
+  font-weight: normal;
+  color: var(--r-main-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.reveal ::selection {
+  color: var(--r-selection-color);
+  background: var(--r-selection-background-color);
+  text-shadow: none;
+}
+
+.reveal ::-moz-selection {
+  color: var(--r-selection-color);
+  background: var(--r-selection-background-color);
+  text-shadow: none;
+}
+
+.reveal .slides {
+  text-align: left;
+}
+
+.reveal .slides section,
+.reveal .slides section > section {
+  line-height: 1.35;
+  font-weight: inherit;
+  padding: 8px 12px;
+}
+
+/* =========================================================================
+ * 3. Headings
+ * ========================================================================= */
+
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4,
+.reveal h5,
+.reveal h6 {
+  margin: var(--r-heading-margin);
+  color: var(--r-heading-color);
+  font-family: var(--r-heading-font);
+  font-weight: var(--r-heading-font-weight);
+  line-height: var(--r-heading-line-height);
+  letter-spacing: var(--r-heading-letter-spacing);
+  text-transform: var(--r-heading-text-transform);
+  text-shadow: var(--r-heading-text-shadow);
+  word-wrap: break-word;
+}
+
+.reveal h1 { font-size: var(--r-heading1-size); text-shadow: var(--r-heading1-text-shadow); }
+.reveal h2 { font-size: var(--r-heading2-size); }
+.reveal h3 { font-size: var(--r-heading3-size); color: var(--blitzy-text); font-weight: 700; }
+.reveal h4 { font-size: var(--r-heading4-size); color: var(--blitzy-text); font-weight: 700; }
+
+/* Accent rule under section headings (h2) for an executive cue. */
+.reveal h2 {
+  padding-bottom: 0.12em;
+  border-bottom: 2px solid var(--blitzy-border);
+}
+
+/* Optional gradient-text helper (used only where the deck opts in). */
+.reveal .gradient {
+  background: linear-gradient(90deg, var(--blitzy-primary-bright), var(--blitzy-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--blitzy-primary-bright); /* fallback for non-clip browsers */
+}
+
+/* =========================================================================
+ * 4. Body elements: paragraphs, lists, quotes, tables, media
+ * ========================================================================= */
+
+.reveal p { margin: var(--r-block-margin) 0; line-height: 1.35; }
+
+.reveal ul,
+.reveal ol { display: inline-block; text-align: left; margin: 0 0 0 1em; }
+.reveal li { margin-bottom: 0.32em; }
+.reveal li::marker { color: var(--blitzy-primary); }
+
+.reveal strong,
+.reveal b { color: var(--blitzy-heading); font-weight: 700; }
+.reveal em,
+.reveal i { font-style: italic; }
+
+.reveal blockquote {
+  display: block;
+  position: relative;
+  width: 90%;
+  margin: var(--r-block-margin) auto;
+  padding: 0.6em 1em;
+  background: var(--blitzy-surface);
+  border-left: 4px solid var(--blitzy-primary);
+  border-radius: 0 10px 10px 0;
+  color: var(--blitzy-text);
+  box-shadow: var(--blitzy-shadow-soft);
+}
+
+.reveal table {
+  margin: var(--r-block-margin) auto;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 0.8em;
+  width: 100%;
+}
+.reveal table th {
+  text-align: left;
+  padding: 0.35em 0.7em;
+  color: var(--blitzy-heading);
+  border-bottom: 2px solid var(--blitzy-primary);
+}
+.reveal table td {
+  padding: 0.32em 0.7em;
+  border-bottom: 1px solid var(--blitzy-border-soft);
+}
+.reveal table tbody tr:last-child td { border-bottom: none; }
+
+.reveal img,
+.reveal svg.diagram {
+  max-width: 100%;
+  height: auto;
+}
+
+/* =========================================================================
+ * 5. Links + reveal chrome (progress, controls, slide number)
+ * ========================================================================= */
+
+.reveal a {
+  color: var(--r-link-color);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.reveal a:hover { color: var(--r-link-color-hover); text-shadow: none; border: none; }
+
+.reveal .progress { color: var(--blitzy-primary); height: 4px; }
+.reveal .controls { color: var(--blitzy-primary); }
+
+.reveal .slide-number {
+  background: rgba(11, 16, 32, 0.65);
+  color: var(--blitzy-text-muted);
+  font-family: var(--r-main-font);
+  border-radius: 6px 0 0 0;
+}
+
+/* =========================================================================
+ * 6. Code blocks (monokai-consistent) — EXCLUDES <pre class="mermaid">
+ * ========================================================================= */
+
+.reveal pre:not(.mermaid) {
+  display: block;
+  position: relative;
+  width: 92%;
+  margin: var(--r-block-margin) auto;
+  font-family: var(--r-code-font);
+  font-size: 0.56em;
+  line-height: 1.5;
+  background: var(--blitzy-code-bg);
+  border: 1px solid var(--blitzy-border);
+  border-radius: 12px;
+  box-shadow: var(--blitzy-shadow);
+  overflow: hidden;
+}
+
+/* Block code: let the monokai plugin own token colors / inner background. */
+.reveal pre:not(.mermaid) code {
+  display: block;
+  padding: 0.95em 1.15em;
+  overflow: auto;
+  max-height: 560px;
+  border-radius: 12px;
+  white-space: pre;
+  word-wrap: normal;
+  font-family: var(--r-code-font);
+  tab-size: 4;
+}
+
+/* Inline code (not inside <pre>) — Blitzy-tinted chip. */
+.reveal :not(pre) > code {
+  font-family: var(--r-code-font);
+  font-size: 0.9em;
+  background: rgba(79, 124, 255, 0.14);
+  color: var(--blitzy-accent);
+  border: 1px solid var(--blitzy-border-soft);
+  border-radius: 6px;
+  padding: 0.06em 0.36em;
+}
+
+/* =========================================================================
+ * 7. Mermaid diagrams — <pre class="mermaid"> reset + SVG fit
+ *    (deck initializes Mermaid with theme:'dark'; do NOT recolor the SVG)
+ * ========================================================================= */
+
+.reveal pre.mermaid,
+.reveal .mermaid {
+  display: block;
+  width: auto;
+  margin: var(--r-block-margin) auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  font-family: var(--r-main-font);
+  font-size: 0.6em;
+  line-height: normal;
+  text-align: center;
+  overflow: visible;
+}
+
+/* Make the rendered diagram fit the slide and center. */
+.reveal .mermaid svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Avoid a flash of raw, unprocessed diagram source before mermaid.run(). */
+.reveal .mermaid:not([data-processed="true"]) {
+  color: transparent;
+}
+
+/* =========================================================================
+ * 8. Lucide icons — <i data-lucide> becomes <svg class="lucide ...">
+ * ========================================================================= */
+
+.reveal [data-lucide],
+.reveal svg.lucide {
+  width: 1em;
+  height: 1em;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  vertical-align: -0.14em;
+  display: inline-block;
+  flex: none;
+}
+
+/* Icons sitting in headings inherit the accent for a branded cue. */
+.reveal h1 svg.lucide,
+.reveal h2 svg.lucide,
+.reveal h3 svg.lucide,
+.reveal .section-title svg.lucide {
+  color: var(--blitzy-primary);
+  margin-right: 0.35em;
+}
+
+/* Slightly larger, cyan-accented icons inside KPI cards. */
+.reveal .kpi-card svg.lucide {
+  width: 1.15em;
+  height: 1.15em;
+  color: var(--blitzy-accent);
+}
+
+/* =========================================================================
+ * 9. KPI cards — .kpi-grid / .kpi-card / .kpi-value / .kpi-label
+ * ========================================================================= */
+
+.reveal .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7em;
+  align-items: stretch;
+  margin: var(--r-block-margin) 0;
+  width: 100%;
+}
+
+.reveal .kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28em;
+  text-align: left;
+  padding: 0.7em 0.8em;
+  background: linear-gradient(180deg, var(--blitzy-surface), var(--blitzy-surface-2));
+  border: 1px solid var(--blitzy-border);
+  border-radius: var(--blitzy-card-radius);
+  box-shadow: var(--blitzy-shadow);
+}
+
+.reveal .kpi-card:hover { border-color: var(--blitzy-primary); }
+
+.reveal .kpi-value {
+  font-family: var(--r-heading-font);
+  font-size: 1.7em;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--blitzy-spark);
+}
+
+.reveal .kpi-label {
+  font-size: 0.42em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--blitzy-text-muted);
+}
+
+/* =========================================================================
+ * 10. Title slide / section header / legend helpers
+ * ========================================================================= */
+
+.reveal .title-slide { text-align: center; }
+.reveal .title-slide h1 { font-size: 2.4em; margin-bottom: 0.18em; }
+.reveal .title-slide .subtitle,
+.reveal .subtitle {
+  display: block;
+  color: var(--blitzy-text-muted);
+  font-weight: 500;
+  font-size: 0.62em;
+}
+.reveal .title-slide .brand,
+.reveal .brand {
+  color: var(--blitzy-primary);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* Eyebrow / kicker label above a heading. */
+.reveal .eyebrow,
+.reveal .kicker {
+  display: inline-block;
+  font-size: 0.4em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--blitzy-accent);
+  margin-bottom: 0.4em;
+}
+
+/* Section header with icon alignment. */
+.reveal .section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+/* Small muted caption used for the Mermaid before/after legend line. */
+.reveal .legend {
+  font-size: 0.42em;
+  color: var(--blitzy-text-muted);
+  line-height: 1.5;
+  margin-top: 0.6em;
+  text-align: center;
+}
+.reveal .legend strong { color: var(--blitzy-text); }
+
+/* =========================================================================
+ * 11. Misc utility helpers (lightweight, optional)
+ * ========================================================================= */
+
+.reveal .muted   { color: var(--blitzy-text-muted); }
+.reveal .accent  { color: var(--blitzy-primary); }
+.reveal .spark   { color: var(--blitzy-spark); }
+.reveal .center  { text-align: center; }
+
+.reveal .columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1em;
+  align-items: start;
+}
+
+.reveal .pill,
+.reveal .badge {
+  display: inline-block;
+  padding: 0.12em 0.6em;
+  border-radius: 999px;
+  font-size: 0.42em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(79, 124, 255, 0.16);
+  color: var(--blitzy-primary-bright);
+  border: 1px solid var(--blitzy-border);
+}
+.reveal .badge.is-ok   { background: rgba(52, 211, 153, 0.16); color: var(--blitzy-success); }
+.reveal .badge.is-risk { background: rgba(248, 113, 113, 0.16); color: var(--blitzy-danger); }
+
+/* =========================================================================
+ * 12. Print / PDF (?print-pdf) — keep dark slides legible, drop heavy shadows
+ * ========================================================================= */
+
+@media print {
+  .reveal-viewport,
+  .reveal {
+    background: var(--r-background-color) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .reveal .kpi-card,
+  .reveal blockquote,
+  .reveal pre:not(.mermaid) {
+    box-shadow: none;
+  }
+}

@@ -5,6 +5,35 @@
 <change_log title="nginx">
 
 
+<changes ver="1.29.5" date="2026-01-27">
+
+<change type="feature">
+<para lang="ru">
+реестр кодов состояния HTTP и новый программный интерфейс
+ngx_http_status_set() для централизованной установки кода
+состояния ответа в соответствии с RFC&nbsp;9110.
+</para>
+<para lang="en">
+the HTTP status code registry and the new ngx_http_status_set() API
+for centralized response status code handling
+following RFC&nbsp;9110.
+</para>
+</change>
+
+<change type="feature">
+<para lang="ru">
+параметр сборки <nobr>--with-http_status_validation</nobr>
+включает строгую проверку кодов состояния HTTP по RFC&nbsp;9110.
+</para>
+<para lang="en">
+the <nobr>"--with-http_status_validation"</nobr> build option
+enables strict validation of HTTP status codes per RFC&nbsp;9110.
+</para>
+</change>
+
+</changes>
+
+
 <changes ver="1.29.4" date="2025-12-09">
 
 <change type="feature">
