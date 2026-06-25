@@ -497,15 +497,21 @@ ngx_http_status_validate(ngx_uint_t code)
  * Set the response status code through the registry facade (the canonical
  * replacement for a direct "r->headers_out.status = code" assignment).
  *
+ * This out-of-line definition is compiled ONLY in the validation build
+ * (NGX_HTTP_STATUS_VALIDATION).  In the default build ngx_http_status_set() is
+ * instead a static-inline fast path declared in ngx_http.h that compiles every
+ * call site to the same single store as the legacy direct assignment, so the
+ * hot path carries no function-call overhead and stays within the <2% latency
+ * budget.
+ *
  * Upstream pass-through: when the status originates from a proxied upstream
  * (r->upstream is set) it must be emitted verbatim and is therefore never
  * validated, transformed, or rejected -- store and return immediately.  For a
- * locally-generated response, opt-in validation (when built with
- * NGX_HTTP_STATUS_VALIDATION) rejects a non-conforming code so the caller can
- * log it and return NGX_HTTP_INTERNAL_SERVER_ERROR.  In the default build this
- * compiles to the same single store as the legacy direct assignment, keeping
- * the hot path within the performance budget.
+ * locally-generated response, strict validation rejects a non-conforming code
+ * so the caller can log it and return NGX_HTTP_INTERNAL_SERVER_ERROR.
  */
+#if (NGX_HTTP_STATUS_VALIDATION)
+
 ngx_int_t
 ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code)
 {
@@ -514,16 +520,16 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code)
         return NGX_OK;
     }
 
-#if (NGX_HTTP_STATUS_VALIDATION)
     if (ngx_http_status_validate(code) != NGX_OK) {
         return NGX_ERROR;
     }
-#endif
 
     r->headers_out.status = code;
 
     return NGX_OK;
 }
+
+#endif
 
 
 /*
