@@ -34,7 +34,7 @@ the `ngx_http_status_def_t` record type, live in
 > it enumerates *coverage* and does not duplicate the guide's prose.
 
 > **Verification anchor.** Every line number in this matrix was verified against
-> the status-code refactor as committed on this branch (HEAD `bbc1429a1`). Line
+> the status-code refactor as committed on this branch (HEAD `f5d6ee19e`). Line
 > numbers point at the `ngx_http_status_set()` call (write-sites) or the
 > field read (read-side comparisons) in the committed source, so each reference
 > resolves to a real location in the shippable code.
