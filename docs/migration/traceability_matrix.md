@@ -2,12 +2,20 @@
 
 This matrix provides **bidirectional traceability** between the legacy
 status-handling constructs of nginx and the new centralized registry/facade
-implementation, at **100% coverage with no gaps**. For every legacy
-construct — each `NGX_HTTP_*` numeric constant, each scattered "Pattern A"
-direct field write (`r->headers_out.status = ...`), and each read-side
-comparison — this document records its corresponding target: a registry entry,
-an `ngx_http_status_set()` call, or an explicit, justified "preserved /
-out-of-scope" decision.
+implementation. Its **100%-coverage, no-gaps guarantee applies to the two
+AAP-mandated dimensions**: every `NGX_HTTP_*` numeric constant (Table A) and
+every scattered "Pattern A" direct field write `r->headers_out.status = ...`
+(Table B). Each such construct is mapped to its corresponding target — a
+registry entry or an `ngx_http_status_set()` call. For completeness the matrix
+*additionally* accounts for the remaining status-handling surfaces — central
+finalization choke points, registry consumers, read-side `==`/`!=` comparisons,
+the HTTP/2 and HTTP/3 protocol encoders, the embedded-Perl boundary,
+Pattern B/C modules, and upstream pass-through (Table C) — recording for each an
+explicit, justified "materializes centrally / consumes the registry / preserved
+read-only / out-of-scope" decision. The read-side comparison list (Table C) is
+**representative rather than exhaustive**: every such site merely *reads* the
+status field and is uniformly preserved verbatim, so it is documented
+illustratively and is **not** part of the AAP-mandated census above.
 
 The two halves of the mapping are:
 
@@ -208,19 +216,29 @@ through `ngx_http_status_set()`.
 | `ngx_http_header_filter_module.c` | `ngx_http_status_reason()` (L165) | Delegates default reason-phrase resolution to the registry, replacing direct `ngx_http_status_lines[]` indexing |
 | `ngx_http_special_response.c` | `ngx_http_status_reason()` (L442), `ngx_http_status_is_cacheable()` (L446) | Consulted at the `r->err_status` dispatch; **`error_page` parsing is preserved exactly** |
 
-### Read-side `==` comparisons — PRESERVED, NOT converted
+### Read-side `==`/`!=` comparisons — PRESERVED, NOT converted (representative)
 
 These sites **read** `r->headers_out.status` (they do not write it), so there is
 no write to convert; converting them would be meaningless. They are preserved
-verbatim.
+verbatim. This category is **not** subject to the AAP's 100% mandate (which
+governs the `NGX_HTTP_*` constants and the Pattern A write-sites); the table
+below is therefore **representative** of the read-side comparisons across the
+filter chain and the HTTP/1.x header filter — every such read, listed or not, is
+uniformly preserved read-only. Further read-side comparisons exist in other
+filters (e.g. `ngx_http_gzip_filter_module.c` L230–232,
+`ngx_http_addition_filter_module.c` L101) and in the HTTP/2 / HTTP/3 encoders
+(see "Protocol read-side …" below); all are preserved unchanged.
 
 | File | Line(s) | Codes compared | Notes |
 |---|---|---|---|
+| `ngx_http_header_filter_module.c` | 114–116, 151, 159, 274, 450 | 200 / 206 / 304 / 204 / 101 | HTTP/1.x filter: `last_modified` clearing guard (L114–116, `!=` OK/206/304); per-class normalization for 204/304 (L151/159, via the local `status = r->headers_out.status` at L142); `SWITCHING_PROTOCOLS` upgrade header (L274/450). Default reason-phrase resolution is delegated to `ngx_http_status_reason()` — see "Reason / consumer integration" above |
 | `ngx_http_charset_filter_module.c` | 497–498 | 301 / 302 | `MOVED_PERMANENTLY` / `MOVED_TEMPORARILY` |
 | `ngx_http_chunked_filter_module.c` | 65–71 | 304 / 204 / `< 200` / CONNECT `< 300` | Body-less / informational guard |
 | `ngx_http_xslt_filter_module.c` | 210 | 304 | `NOT_MODIFIED` |
 | `ngx_http_image_filter_module.c` | 227 | 304 | `NOT_MODIFIED` (same module also has the 200 write-site at L594) |
-| `ngx_http_slice_filter_module.c` | 204 | 206 | `PARTIAL_CONTENT` (same module also has the 200 write-site at L176) |
+| `ngx_http_slice_filter_module.c` | 116, 204 | 206 | `!= PARTIAL_CONTENT` (L116) / `== PARTIAL_CONTENT` (L204) (same module also has the 200 write-site at L176) |
+| `ngx_http_range_filter_module.c` | 156 | 200 | `!= NGX_HTTP_OK` guard (same module also has the 206/416 write-sites at L234/L623) |
+| `ngx_http_not_modified_filter_module.c` | 57 | 200 | `!= NGX_HTTP_OK` guard (same module also has the 304 write-site at L94) |
 
 ### Protocol read-side validation hooks (log-only, only under `NGX_HTTP_STATUS_VALIDATION`)
 
@@ -235,12 +253,27 @@ compiled out unless the binary is built with
 | `src/http/v2/ngx_http_v2_filter_module.c` | 167 | HPACK `:status` | `ngx_http_status_validate(...)` call at L167, guarded by `#if (NGX_HTTP_STATUS_VALIDATION)` at L166 |
 | `src/http/v3/ngx_http_v3_filter_module.c` | 123 | QPACK `:status` | `ngx_http_status_validate(...)` call at L123, guarded by `#if (NGX_HTTP_STATUS_VALIDATION)` at L122 |
 
+Beyond the optional validation hook, both encoders also **read**
+`r->headers_out.status` to emit the indexed/literal `:status` representation and
+to apply per-protocol status-class normalization — HTTP/2 at
+`src/http/v2/ngx_http_v2_filter_module.c` L174/L207 (HPACK `switch`), and
+HTTP/3 at `src/http/v3/ngx_http_v3_filter_module.c`
+L131–133/L140/L149/L160/L342 (QPACK indexed 200, 204/304 handling,
+`last_modified` clearing). This per-protocol normalization is **preserved
+exactly** and is a documented, deliberately out-of-scope consolidation
+opportunity (AAP §0.6.2 / §0.7.3); these reads are not converted.
+
 ### Out-of-scope and pass-through surfaces
 
 - **`src/http/modules/perl/nginx.xs` status writes (L117, L153): OUT OF SCOPE.**
   These are the embedded-Perl boundary (`r->headers_out.status = SvIV(ST(1));`
   at L117 and the `= NGX_HTTP_OK` default at L153) and are intentionally not
   converted.
+- **`src/http/ngx_http_variables.c` read (L2048): OUT OF SCOPE.** This file is
+  not among the in-scope (modified) files; its
+  `r->headers_out.status == NGX_HTTP_SWITCHING_PROTOCOLS` read is a read-only
+  comparison, preserved verbatim and intentionally excluded from the read-side
+  table above.
 - **Pattern B / Pattern C modules** — `ngx_http_access_module.c` (403),
   `ngx_http_auth_basic_module.c` (401/403), `ngx_http_index_module.c` (403/404),
   `ngx_http_referer_module.c`, `ngx_http_rewrite_module.c` (the `return`
@@ -256,19 +289,23 @@ compiled out unless the binary is built with
 
 ## 100% Coverage Statement & Rationale
 
-**Coverage is 100% with no gaps.** Every legacy status-handling construct is
-accounted for: every `NGX_HTTP_*` constant maps to a registry entry (Table A);
-every Pattern A write-site maps to an `ngx_http_status_set()` call (Table B);
-and every remaining surface — central choke points, registry consumers,
-read-side comparisons, protocol hooks, the embedded-Perl boundary, Pattern B/C
-modules, and upstream pass-through — is explicitly enumerated (Table C). No
-status-handling construct in the in-scope HTTP tree is left unmapped.
+**The AAP-mandated coverage is 100% with no gaps:** every `NGX_HTTP_*` constant
+maps to a registry entry (Table A) and every Pattern A write-site maps to an
+`ngx_http_status_set()` call (Table B) — **no constant and no Pattern A
+write-site is left unmapped**. In addition, every remaining status-handling
+surface — central choke points, registry consumers, read-side comparisons,
+protocol hooks, the embedded-Perl boundary, Pattern B/C modules, and upstream
+pass-through — is accounted for in Table C with an explicit disposition. The
+read-side `==`/`!=` comparisons are documented **representatively** (they are
+uniformly preserved read-only and are not part of the mandated constant /
+Pattern A census); read-side comparisons in out-of-scope files such as
+`ngx_http_variables.c` (L2048) are noted and intentionally excluded.
 
 Each category that is **not** subject to Pattern A conversion is excluded for a
 concrete, intentional reason:
 
-- **Read-side `==` comparisons** (Table C) — these *read* the status field, they
-  do not *write* it. There is no assignment to convert, so applying
+- **Read-side `==`/`!=` comparisons** (Table C) — these *read* the status field,
+  they do not *write* it. There is no assignment to convert, so applying
   `ngx_http_status_set()` would be meaningless; they are preserved verbatim.
 - **Pattern B (`return NGX_HTTP_*`) and Pattern C (the `return` directive)** —
   the returned/parsed status materializes at the central finalization choke
@@ -287,7 +324,7 @@ concrete, intentional reason:
 | Category | Count | Disposition |
 |---|---|---|
 | Pattern A write-sites | 12 | Converted to `ngx_http_status_set()` (Table B) |
-| Read-side `==` comparisons | 5 | Preserved (read-only; Table C) |
+| Read-side `==`/`!=` comparisons | representative (8 shown in Table C) | Preserved read-only; not part of the mandated census (Table C) |
 | Central finalization choke points | 2 | Route through `ngx_http_status_set()` (Table C) |
 | Registry consumer integrations | 2 | `reason()` / `is_cacheable()` (Table C) |
 | Protocol read-side validation hooks | 2 | Log-only under `NGX_HTTP_STATUS_VALIDATION` (Table C) |
