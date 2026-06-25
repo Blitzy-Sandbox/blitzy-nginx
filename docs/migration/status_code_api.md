@@ -203,6 +203,26 @@ per-`return` edits** anywhere in those modules. For the exact choke points and t
 constants they cover, see Table C of the
 [Traceability Matrix](traceability_matrix.md).
 
+#### Late choke point — `ngx_http_send_header()` coerces rather than returns
+
+The failure-branch table above lists `return NGX_HTTP_INTERNAL_SERVER_ERROR;` as the
+form for an `ngx_int_t` function, and that is exactly what the **early** choke point
+`ngx_http_send_response()` uses: it runs *before* the response is committed, so a
+returned 500 is finalized into a clean error response. `ngx_http_send_header()` is
+the **late** choke point and is the one documented exception to that rule. By the
+time it runs, the special-response flow has already committed to `r->err_status` and
+laid out the (empty) error body, so a bare `return` there would abort header
+emission and close the connection with **zero bytes** — an empty close the client
+observes as no response at all (HTTP&nbsp;000), not a status line. It therefore
+**coerces** a validation-rejected `err_status` to `NGX_HTTP_INTERNAL_SERVER_ERROR`
+and falls through to the header filter, deterministically materializing the same
+clean `500` this guide documents as the failure response. This coercion is reached
+**only** in the opt-in validation build for a locally-generated, unmodelled code
+(for example a bare `return 451;`); in the default build `ngx_http_status_set()`
+never fails, so the branch is unreachable and the wire output is byte-identical to
+stock nginx. The detection-by-logging behavior is unchanged either way —
+`invalid status code: N` is still logged for every rejected code.
+
 The `error_page` parsing and dispatch logic — `overwrite` handling, complex-value
 URI evaluation, internal redirect, and named-location dispatch — is **preserved
 exactly**. The registry integrates only at the default reason-phrase lookup; it does

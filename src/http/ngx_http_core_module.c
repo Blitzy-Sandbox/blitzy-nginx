@@ -1863,7 +1863,24 @@ ngx_http_send_header(ngx_http_request_t *r)
         if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                           "invalid status code: %ui", r->err_status);
-            return NGX_HTTP_INTERNAL_SERVER_ERROR;
+
+            /*
+             * Late header choke point: by the time the special-response flow
+             * reaches ngx_http_send_header() it has already committed to
+             * r->err_status and laid out the (empty) error body, so returning
+             * an error code here would abort header emission and close the
+             * connection with zero bytes -- an empty close the client observes
+             * as no response at all -- instead of materializing a status line.
+             * Coerce the rejected code to a clean 500 and fall through to the
+             * header filter, mirroring the deterministic 500 that the earlier
+             * ngx_http_send_response() choke point yields on a rejected code
+             * (that one may still return NGX_HTTP_INTERNAL_SERVER_ERROR because
+             * it runs before the response is committed).  Validation is opt-in
+             * (NGX_HTTP_STATUS_VALIDATION); in the default build
+             * ngx_http_status_set() never fails, so this branch is unreachable
+             * there and the wire behavior stays byte-identical to stock nginx.
+             */
+            r->headers_out.status = NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
         r->headers_out.status_line.len = 0;
     }
