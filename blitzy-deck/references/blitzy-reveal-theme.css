@@ -391,6 +391,20 @@
   }
 }
 
+/* Comma-separated numeric-list chips (e.g. the slide-13 RFC 9111 cacheable codes)
+   are NOT C tokens with a "->" hyphen-break hazard, so they may wrap freely at all
+   widths. The generic inline-code rule above forces `white-space: nowrap`, which
+   keeps all 12 codes on one line; that ~60-char chip's min-content expands its 1fr
+   `.columns` grid track ~285px past the 960px reveal stage, and reveal's
+   `overflow: hidden` then clips the trailing "414, 501". Opting this chip into
+   wrapping (with overflow-wrap shrinking its min-content so the grid track can
+   narrow) keeps every code on-stage at presentation widths, while the C-token chips
+   on slides 8/12 keep their nowrap protection (the rule above) untouched. */
+.reveal :not(pre) > code.codelist {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* =========================================================================
  * 7. Mermaid diagrams — <pre class="mermaid"> reset + SVG fit
  *    (deck initializes Mermaid with theme:'dark'; do NOT recolor the SVG)
