@@ -206,25 +206,38 @@ reviews them cross-cutting.
   beyond a normal rebuild.
 - **(f) Third-party (CDN) dependency posture.** The only third-party runtime
   dependencies in the change set are the CDN assets loaded by the executive
-  deck (a Frontend-owned, non-product artifact). The deck pins **Mermaid
-  11.15.0**, a release with no known direct vulnerabilities, rather than the
-  11.4.0 version Snyk flags for arbitrary code injection; the AAP's
-  "no known-vulnerable dependencies" requirement (§0.7.1) takes precedence
-  over the AAP's specific 11.4.0 version pin (§0.5.1). Mermaid runs at the
-  hardened `securityLevel: 'antiscript'` (it strips `<script>` from labels)
-  over trusted, static, in-repo diagram source. reveal.js (5.1.0) and Lucide
-  (0.460.0) remain pinned and carry no known advisory at those versions.
+  deck (a Frontend-owned, non-product artifact). The deck pins the
+  AAP-mandated versions — **reveal.js 5.1.0, Mermaid 11.4.0, and Lucide
+  0.460.0** (§0.5.1, §0.6.6) — and the QA Frontend fidelity checkpoint
+  requires exactly that Mermaid 11.4.0 pin. The known Mermaid advisories that
+  affect releases below 11.15.0 (CVE-2026-41148/41149/41159 CSS/HTML injection
+  via `classDef`/`fontFamily`/`themeCSS`, and CVE-2026-41150 Gantt DoS) are
+  all conditioned on rendering **untrusted, user-supplied diagram input**
+  through those specific features. This deck renders only two **trusted,
+  static, self-authored** `graph TD` flowcharts and uses none of the
+  vulnerable constructs (no `classDef`, no state diagrams, no
+  `fontFamily`/`themeCSS`/`altFontFamily`, no Gantt), so those advisories are
+  **not exploitable** in this artifact at any version. Mermaid therefore runs
+  under `securityLevel: 'loose'` (scope R7) — the level required to render the
+  trusted, static `<br/>` line breaks in the node labels. Any cross-cutting
+  policy to upgrade even non-exploitable CDN dependencies is owned by the
+  Security final and, if mandated, must be reconciled by amending the AAP
+  §0.5.1 pin there rather than deviating from the frozen pin here. reveal.js
+  (5.1.0) and Lucide (0.460.0) carry no known advisory at the pinned versions.
 
 No new attack surface, no new privileged operation, and no new parsing of
 untrusted input are introduced in the server. The facade only centralizes an
 existing field write and an existing reason lookup, and the only third-party
-dependencies (deck CDN assets) are pinned to non-vulnerable versions.
+dependencies (deck CDN assets) are pinned to the AAP-mandated versions and
+render only trusted, static, self-authored diagram source.
 
 **Verdict: APPROVED** — validation is safely opt-in, upstream status is a
 strict pass-through, sentinel codes are protected, the registry is immutable
 with no runtime mutation path, the module ABI is preserved, and the only
-third-party (deck CDN) dependencies are pinned to non-vulnerable versions and
-run under a hardened Mermaid security level.
+third-party (deck CDN) dependencies are pinned to the AAP-mandated versions
+and render only trusted, static diagram source (the Mermaid sub-11.15.0
+advisories require untrusted input through features this deck does not use, so
+they are not exploitable here).
 
 ### Phase 2.3 — Backend Architecture
 
@@ -468,21 +481,26 @@ Reviewed for:
 - **Embedded before/after architecture diagrams** rendered with Mermaid,
   matching the "Status Handling: Before vs After" views from the design
   specification (scattered field mutation → centralized registry + facade);
-  the "After" diagram and prose name the delivered `status_registry[]` table.
+  the "After" diagram reproduces the §0.3.5 registry node verbatim
+  (`ngx_http_status_def_t registry[]`), and slide 6's prose names the
+  delivered `status_registry[]` table.
   Alongside them, **KPI cards** (e.g., `<2%` latency budget, ~0 incremental
   RSS, the ≈ 2.3 KB read-only registry, `NGX_MODULE_V1` ABI preserved). The 11
   KPI cards lay out as two rows (6 + 5) that fit within reveal's 960×700 canvas
   without clipping.
-- **Pinned CDN dependencies**: reveal.js **5.1.0**, Mermaid **11.15.0**, and
-  Lucide **0.460.0**. Mermaid is pinned to 11.15.0 rather than the AAP's
-  nominal 11.4.0 pin because Snyk flags 11.4.0 for arbitrary code injection,
-  and the AAP's "no known-vulnerable dependencies" requirement (§0.7.1) takes
-  precedence over the specific version pin (§0.5.1). Pinning otherwise avoids
-  drift and keeps the deck self-contained and reproducible.
-- **Hardened diagram rendering** — Mermaid runs at
-  `securityLevel: 'antiscript'` (which strips `<script>` from labels) over
-  trusted, static, in-repo diagram source, replacing the weaker `'loose'`
-  mode while preserving the `<br/>` line breaks the labels rely on.
+- **Pinned CDN dependencies**: reveal.js **5.1.0**, Mermaid **11.4.0**, and
+  Lucide **0.460.0** — the exact versions the AAP pins (§0.5.1, §0.6.6) and
+  that the QA Frontend fidelity checkpoint requires. Exact three-part pins
+  (no `@latest`/`@next`/major-only ranges) keep the deck self-contained and
+  reproducible.
+- **Diagram rendering** — Mermaid runs at `securityLevel: 'loose'` (scope R7),
+  the level that renders the trusted, static `<br/>` line breaks the node
+  labels rely on. The deck's two diagrams are self-authored `graph TD`
+  flowcharts with no `classDef`/`fontFamily`/`themeCSS`/Gantt constructs, so
+  the Mermaid advisories below 11.15.0 — all of which require rendering
+  untrusted input through those features — are not exploitable here; any
+  cross-cutting policy to bump non-exploitable CDN dependencies is owned by
+  the Security final.
 - **Accessibility** — the viewport meta allows user zoom (no
   `maximum-scale`/`user-scalable=no`), and the canonical theme defines explicit
   `:focus-visible` affordances (a 3px cyan outline using Blitzy tokens, > 3:1
@@ -502,10 +520,11 @@ KPI grid fits, and the focus ring is visible).
 
 **Verdict: APPROVED** — a single self-contained reveal.js deck within the
 slide-count range, on-brand, embedding the before/after Mermaid views and KPI
-cards; all three CDN dependencies are pinned to non-vulnerable versions
-(Mermaid 11.15.0), Mermaid renders under the hardened `'antiscript'` level, the
-deck allows user zoom and provides visible keyboard focus, and every KPI and
-architecture claim matches the delivered implementation.
+cards; all three CDN dependencies are pinned to the AAP-mandated versions
+(reveal.js 5.1.0, Mermaid 11.4.0, Lucide 0.460.0), Mermaid renders under
+`securityLevel: 'loose'` over trusted, static diagram source, the deck allows
+user zoom and provides visible keyboard focus, and every KPI and architecture
+claim matches the delivered implementation.
 
 ### Phase 2.7 — Other SME
 

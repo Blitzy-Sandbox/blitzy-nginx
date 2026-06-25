@@ -10,7 +10,7 @@
 
   Dependencies:
     - Local theme (ONLY local dependency): references/blitzy-reveal-theme.css
-    - CDN (pinned, exact): reveal.js 5.1.0, Mermaid 11.15.0, Lucide 0.460.0
+    - CDN (pinned, exact): reveal.js 5.1.0, Mermaid 11.4.0, Lucide 0.460.0
 
   Runtime note: rendering requires network access to the pinned CDNs above.
   ===========================================================================
@@ -176,7 +176,7 @@ graph TD
 graph TD
     M2["~44 modules<br/>(Pattern A sites adopt API)"]
     API["ngx_http_status_set(r, code)<br/>+ validate / reason / is_cacheable / register"]
-    REG["status_registry[]<br/>(ngx_http_status_def_t, static const)"]
+    REG["ngx_http_status_def_t registry[]<br/>(single source of truth, static const)"]
     F2["r->headers_out.status"]
     H2["HTTP/1.x header filter<br/>reason() consumer"]
     SR2["special_response.c<br/>reason()/is_cacheable() consumer"]
@@ -393,20 +393,20 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
 
 <!-- (b) ES-module block: Mermaid + deferred-render coordination with reveal.js. -->
 <script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs';
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs';
 
   // Do NOT auto-run on load; reveal.js controls slide layout/scaling.
   mermaid.initialize({
     startOnLoad: false,
-    // 'antiscript' is stricter than 'loose' (it strips <script> from labels,
-    // removing the injection surface) yet still renders the trusted, static
-    // <br/> line breaks these diagrams rely on. 'strict' would HTML-escape the
-    // <br/> tags (labels would show literal "<br/>"); 'sandbox' renders each
+    // 'loose' is the security level these diagrams require: it renders the
+    // trusted, static <br/> line breaks used in the node labels as real line
+    // breaks. (A stricter level such as 'strict' would HTML-escape the <br/>
+    // tags, so the labels would show a literal "<br/>"; 'sandbox' renders each
     // diagram inside a sandboxed <iframe>, which breaks reveal.js slide scaling
     // and puts the SVG out of reach of this deck's own post-render SVG/Lucide
-    // passes below. The runtime is also pinned to the non-vulnerable
-    // mermaid@11.15.0 above, so the diagram input is both trusted and static.
-    securityLevel: 'antiscript',
+    // passes below.) Every diagram here is authored inline in this deck, so the
+    // diagram input is trusted and static and 'loose' adds no injection surface.
+    securityLevel: 'loose',
     theme: 'dark',            // tuned to the Blitzy dark palette
     themeVariables: { fontSize: '13px' },  // smaller label font narrows both
                               // viewBoxes so the wide "After" diagram fits the

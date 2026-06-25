@@ -18,7 +18,7 @@
  * Self-contained: pure CSS, no @import of remote fonts (system/web-safe font
  *             stacks with graceful degradation). No build step / preprocessor.
  *
- * Compatible with: the deck's Mermaid 11.15.0 (theme:'dark', diagrams in
+ * Compatible with: the deck's Mermaid 11.4.0 (theme:'dark', diagrams in
  *             <pre class="mermaid">), Lucide 0.460.0 (<i data-lucide> -> inline
  *             <svg class="lucide ...">), and the optional reveal highlight
  *             plugin monokai.css (<pre><code class="language-c">).
