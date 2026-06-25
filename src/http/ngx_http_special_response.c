@@ -425,6 +425,33 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
 
     r->err_status = error;
 
+    /*
+     * consult the centralized HTTP status-code registry (RFC 9110 §15) as a
+     * behavior-neutral consumer: resolve the default reason phrase and the
+     * cacheability classification for err_status without altering any bytes,
+     * headers, status, or control flow.  The consult is a debug-only trace
+     * compiled out unless built with --with-debug, so it never affects the
+     * emitted response; the HTTP/1.x header filter remains the sole emitter
+     * of the status line (now itself a registry consumer).
+     */
+
+#if (NGX_DEBUG)
+    {
+    ngx_str_t  *reason;
+
+    reason = ngx_http_status_reason(r->err_status);
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http special response status: %ui cacheable:%ui",
+                   r->err_status, ngx_http_status_is_cacheable(r->err_status));
+
+    if (reason && reason->len) {
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "http special response reason: \"%V\"", reason);
+    }
+    }
+#endif
+
     if (r->keepalive) {
         switch (error) {
             case NGX_HTTP_BAD_REQUEST:
