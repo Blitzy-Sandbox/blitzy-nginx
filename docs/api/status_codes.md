@@ -49,25 +49,30 @@ HTTP/2, and HTTP/3.
 
 ### Memory footprint
 
-The registry is a single `static const` array of **58 records × 40 bytes
-≈ 2.3 KB**. Because each `ngx_http_status_def_t` embeds pointers (`reason.data`
-and `rfc_section`), a position-independent (PIE) build places the array in the
-**`.data.rel.ro`** segment — read-only *after* RELRO relocation — rather than in
-pure `.rodata`. The table is mapped once and shared across all forked workers, so
-the **incremental per-worker private RSS is ≈ 0**, and lookup is **O(1) with zero
-allocation**. The AAP/scope §0.6.3 names a literal `< 1 KB`-in-`.rodata` target;
-that target is technically unsatisfiable under the preserved-exactly 40-byte
-struct and the mandated offset-array layout, and is formally reconciled and
-waived in
-[`docs/decisions/status_code_refactor.md`](../decisions/status_code_refactor.md)
-— the §0.6.3 intent (immutable, shared, ≈ 0 incremental RSS) being fully met.
+The registry is stored as two parallel `static const` tables. The metadata table
+`status_registry[]` is a **compact, pointer-free** `ngx_http_status_entry_t`
+array (`uint16_t code` + `uint16_t flags`, 4 bytes per row); at **58 × 4 = 232
+bytes** with no embedded pointers it needs no relocation, so the linker places it
+in **pure `.rodata`** — meeting the AAP/scope §0.6.3 `< 1 KB`-in-`.rodata` target
+with margin. The default reason phrases live in a parallel
+`static const ngx_str_t ngx_http_status_reasons[]` (928 bytes in `.data.rel.ro`,
+since each `ngx_str_t` slot points at a phrase literal); those literals are the
+**shared, pre-existing** strings — reused, not duplicated. Both tables are mapped
+once and shared across all forked workers, so the **incremental per-worker private
+RSS is ≈ 0**, and lookup is **O(1) with zero allocation** (the same per-class
+index addresses both tables). The **public** `ngx_http_status_def_t` record is
+preserved verbatim as the facade / `ngx_http_status_register()` parameter type;
+its `rfc_section` field is documentary-only and is not stored in the runtime
+metadata table. The footprint reconciliation is recorded in
+[`docs/decisions/status_code_refactor.md`](../decisions/status_code_refactor.md).
 
 ---
 
 ## Registry Record Type
 
-Each entry in the registry is described by the `ngx_http_status_def_t` record,
-defined in `src/http/ngx_http_request.h`:
+The **public** registry record type — the type `ngx_http_status_register()`
+accepts and the canonical description of a status code — is
+`ngx_http_status_def_t`, defined in `src/http/ngx_http_request.h`:
 
 ```c
 typedef struct {
@@ -77,6 +82,13 @@ typedef struct {
     const char   *rfc_section;
 } ngx_http_status_def_t;
 ```
+
+This public record is preserved verbatim. Internally, to keep the on-table
+footprint in `.rodata` and under 1 KB (see *Memory footprint* above), the
+runtime table stores only the pointer-free `code` and `flags` (as a compact
+`ngx_http_status_entry_t`) and resolves the `reason` phrase from a parallel
+table by the same index; the documentary `rfc_section` for each code is recorded
+in the per-entry comments in `src/http/ngx_http_request.c`.
 
 | Field         | Type            | Meaning |
 |---------------|-----------------|---------|

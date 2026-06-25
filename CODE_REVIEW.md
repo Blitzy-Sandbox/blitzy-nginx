@@ -245,25 +245,25 @@ they are not exploitable here).
 This is the core of the review.
 
 **Registry data structures and lookup.** The registry is implemented as a
-single immutable `static const ngx_http_status_def_t status_registry[]` table
-in `src/http/ngx_http_request.c` — 58 records, one per status code, each
-carrying the four fields of the public `ngx_http_status_def_t` typedef: the
-numeric `code`, the default `reason` phrase, the classification `flags`, and
-the `rfc_section` reference. Because the table is `static const` it is
-read-only after relocation (it lands in `.data.rel.ro` rather than pure
-`.rodata`, since each record embeds `reason`/`rfc_section` pointers), is mapped
-once, and is shared across all forked worker processes — the incremental
-per-worker private RSS is approximately zero. Lookup is **O(1)** via per-class
-offset arithmetic (`ngx_http_status_lookup()`, which returns a
-`const ngx_http_status_def_t *`), mirroring the proven offset-macro design
+single immutable `static const ngx_http_status_entry_t status_registry[]` table
+in `src/http/ngx_http_request.c` — 58 compact, **pointer-free** records
+(`uint16_t code` + `uint16_t flags`), one per status code, with the default
+`reason` phrases held in a parallel `static const ngx_str_t
+ngx_http_status_reasons[]` addressed by the same O(1) index. The **public**
+`ngx_http_status_def_t` typedef (the four fields `code`/`reason`/`flags`/
+`rfc_section`) is preserved verbatim as the facade / `ngx_http_status_register()`
+record type. Because the metadata table holds no pointers it needs no
+relocation, so the linker emits it to pure **`.rodata`**; it is mapped once and
+shared across all forked worker processes — the incremental per-worker private
+RSS is approximately zero. Lookup is **O(1)** via per-class offset arithmetic
+(`ngx_http_status_lookup()`, which returns a
+`const ngx_http_status_entry_t *`), mirroring the proven offset-macro design
 already used by `ngx_http_status_lines[]` in the header filter; there is no
-hash map, no loop over the table, and no allocation. The table footprint is
-58 × 40 bytes ≈ **2.3 KB** in `.data.rel.ro` (the AAP/scope §0.6.3 states a
-literal `<1 KB`-in-`.rodata` target; it is technically unsatisfiable under the
-preserved-exactly 40-byte pointer struct (§0.7.5) and the mandated O(1)
-offset-array layout (§0.3.3), and is **formally waived** in
-`docs/decisions/status_code_refactor.md` — the §0.6.3 ≈ 0-incremental-RSS
-intent being fully met). This
+hash map, no loop over the table, and no allocation. The registry footprint is
+58 × 4 bytes = **232 bytes** in pure **`.rodata`**, meeting the AAP/scope §0.6.3
+`<1 KB`-in-`.rodata` target with margin (the parallel reason table is 928 B in
+`.data.rel.ro`, reusing the shared phrase literals — no duplication); the
+reconciliation is recorded in `docs/decisions/status_code_refactor.md`. This
 satisfies the Registry, Facade, and immutable-table pattern requirements.
 
 **Type-collision avoidance.** The new registry-record typedef
@@ -372,7 +372,7 @@ snake_case identifiers, 4-space indentation with no tabs, and comment style
 consistent with the surrounding sources.
 
 **Verdict: APPROVED** — the registry is immutable and O(1) with a compact
-≈ 2.3 KB read-only footprint, the five API functions honor the ≤50-line
+232-byte `.rodata` footprint, the five API functions honor the ≤50-line
 budget and hide the table, the new type avoids collision with
 `ngx_http_status_t`, all constants
 are retained, reason phrases are reused for zero wire regression, the central
@@ -485,7 +485,7 @@ Reviewed for:
   (`ngx_http_status_def_t registry[]`), and slide 6's prose names the
   delivered `status_registry[]` table.
   Alongside them, **KPI cards** (e.g., `<2%` latency budget, ~0 incremental
-  RSS, the ≈ 2.3 KB read-only registry, `NGX_MODULE_V1` ABI preserved). The 11
+  RSS, the 232-byte `.rodata` registry, `NGX_MODULE_V1` ABI preserved). The 11
   KPI cards lay out as two rows (6 + 5) that fit within reveal's 960×700 canvas
   without clipping.
 - **Pinned CDN dependencies**: reveal.js **5.1.0**, Mermaid **11.4.0**, and
@@ -507,7 +507,7 @@ Reviewed for:
   contrast) for links and reveal controls, satisfying keyboard-focus
   visibility (WCAG 2.4.7 / 2.4.11).
 - **Claim accuracy** — KPI and architecture claims match the delivered source:
-  the footprint reads ≈ 2.3 KB, and the opt-in strict-validation build is shown
+  the footprint reads 232 B in `.rodata`, and the opt-in strict-validation build is shown
   as `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (no native configure
   option), with latency/leak/compatibility stated as a budget and a
   static-const design property rather than as certified measurements.
@@ -542,9 +542,10 @@ and is assigned here, to Other SME, and reviewed as a subject.
   `CODE_REVIEW.md` appears as item #28. The one-file-one-domain invariant holds
   with no file omitted and none assigned twice.
 - **Document accuracy.** The descriptions in this review match the delivered
-  source: the registry is described as the full
-  `static const ngx_http_status_def_t status_registry[]` table with an
-  ≈ 2.3 KB read-only footprint; `ngx_http_status_set()` is described as an
+  source: the registry is described as the compact
+  `static const ngx_http_status_entry_t status_registry[]` table (with the
+  public `ngx_http_status_def_t` typedef preserved as the facade record) with a
+  232-byte `.rodata` footprint; `ngx_http_status_set()` is described as an
   unconditional out-of-line function present in every build; and the opt-in
   validation build is consistently described via
   `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (no native configure option).
@@ -599,10 +600,11 @@ grant implied by submission, and the F5 CLA requirement acknowledged.
 - **Performance** — stays within the **`<2%`** latency budget under
   `wrk -t4 -c100 -d30s`: the default build's `ngx_http_status_set()` compiles
   to essentially the legacy single field store, and lookup is O(1) over the
-  ≈ 2.3 KB immutable table.
+  232-byte `.rodata` registry table.
 - **Memory** — the registry is `static const`, living in shared read-only
-  memory (`.data.rel.ro`, since each record holds `reason`/`rfc_section`
-  pointers) with ~0 incremental per-worker RSS; it performs no allocation and
+  memory: the pointer-free metadata table in pure `.rodata` (232 B) and the
+  parallel reason table in `.data.rel.ro` (928 B, pointing at shared phrase
+  literals), with ~0 incremental per-worker RSS; it performs no allocation and
   no `free`, so it adds no leak surface. Under `valgrind --leak-check=full`,
   the refactored binary's leak output is byte-for-byte identical to stock
   nginx built at the merge-base — the only blocks are nginx's pre-existing

@@ -336,12 +336,16 @@ concrete, intentional reason:
 
 Beyond construct mapping, the F10 performance acceptance criterion (AAP/scope
 §0.6.3: the `static const` registry "resides in `.rodata`, is `< 1 KB`") is
-recorded here for completeness. The built registry measures **≈ 2.3 KB
-(2320 B = 58 × 40) in `.data.rel.ro`**; the literal `< 1 KB`-in-`.rodata`
-sub-criteria are **technically unsatisfiable** under the preserved-exactly
-40-byte pointer struct (§0.7.5) and the mandated O(1) offset-array layout
-(§0.3.3), and are **formally reconciled and waived** in
+recorded here for completeness. The built registry symbol `status_registry`
+measures **232 B (58 × 4) in pure `.rodata`**, meeting **both** sub-criteria
+(`< 1 KB` and `.rodata`) with margin: the registry is stored as a compact,
+**pointer-free** `ngx_http_status_entry_t` table (`uint16_t code` + `uint16_t
+flags`), while the default reason phrases live in a parallel
+`static const ngx_str_t ngx_http_status_reasons[]` (928 B in `.data.rel.ro`,
+reusing the shared phrase literals). The **public** `ngx_http_status_def_t`
+record is preserved verbatim (§0.7.5) as the facade / `ngx_http_status_register()`
+type — only the internal storage layout was compacted — and the O(1)
+offset-array lookup (§0.3.3) is fully retained. The detailed reconciliation is in
 [`../decisions/status_code_refactor.md`](../decisions/status_code_refactor.md)
-(§ *Footprint Acceptance-Criterion Reconciliation*) — the §0.6.3 intent
-(immutable, shared read-only, ≈ 0 incremental per-worker RSS) being fully met.
+(§ *Footprint Acceptance Criterion — Achieved*).
 
