@@ -1,0 +1,395 @@
+{
+  "$schema": "https://blitzy.com/schemas/observability/dashboard/v1.json",
+  "title": "nginx HTTP Status Code Registry",
+  "uid": "nginx-http-status-code-registry",
+  "version": 1,
+  "schemaVersion": 1,
+  "templateVersion": "1.0.0",
+  "editable": true,
+  "vendorNeutral": true,
+  "generated": false,
+  "description": "Tool-agnostic observability dashboard TEMPLATE for the nginx HTTP status-code registry refactor (RFC 9110 section 15). This is a REUSE EXTENSION of the existing ngx_http_stub_status_module metrics surface: per the Observability rule we reuse existing nginx facilities first and only ADD this template. No new runtime metrics code is introduced and no prohibited subsystem (event loop, configuration parser, memory allocator) is touched. All data sources are PLACEHOLDERS to be wired by the operator (see 'datasources' and 'templating'); no real backend is hardcoded. Panel queries under 'placeholderExpr' are illustrative examples only.",
+  "tags": [
+    "nginx",
+    "http",
+    "status-codes",
+    "rfc9110",
+    "rfc9111",
+    "observability",
+    "stub_status",
+    "registry",
+    "template"
+  ],
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "datasources": [
+    {
+      "name": "DS_LOGS",
+      "label": "nginx log scrape (access + error log)",
+      "type": "logs",
+      "placeholder": true,
+      "description": "Operator-configured log-scrape data source over nginx access_log and error_log. Supplies (a) per-response status codes from the access log (used by the status-class distribution and cacheable-ratio panels) and (b) validation-failure events emitted at NGX_LOG_ERR (used by the validation-failure panel). NOT hardcoded to any backend - choose your own (e.g. Loki, Elasticsearch, CloudWatch Logs)."
+    },
+    {
+      "name": "DS_STUB_STATUS",
+      "label": "stub_status scrape",
+      "type": "metrics",
+      "placeholder": true,
+      "description": "Operator-configured metrics data source scraping the existing ngx_http_stub_status_module endpoint (the 'stub_status' directive). Supplies the core connection/request counters reused as a baseline. NOT hardcoded to any backend - choose your own (e.g. Prometheus nginx-prometheus-exporter, Telegraf)."
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource_logs",
+        "type": "datasource",
+        "label": "Logs data source",
+        "query": "logs",
+        "current": {},
+        "placeholder": "${DS_LOGS}",
+        "description": "Select the operator-provided log-scrape data source."
+      },
+      {
+        "name": "datasource_stub_status",
+        "type": "datasource",
+        "label": "stub_status data source",
+        "query": "metrics",
+        "current": {},
+        "placeholder": "${DS_STUB_STATUS}",
+        "description": "Select the operator-provided stub_status metrics data source."
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "label": "nginx instance",
+        "multi": true,
+        "includeAll": true,
+        "current": {},
+        "placeholder": "label_values(instance)",
+        "description": "Operator-configured instance/host selector. No values are hardcoded."
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "status validation failures",
+        "datasource": "${DS_LOGS}",
+        "enable": true,
+        "iconColor": "red",
+        "placeholder": true,
+        "matchPattern": "invalid status code:|emitting non-conforming status:",
+        "description": "Marks points in time where a non-conforming status code was logged at NGX_LOG_ERR. Correlate each event back to its request using the context carried by r->connection->log (connection number and optional request id) per AAP section 0.6.5. These events only occur in builds compiled with --with-http_status_validation (NGX_HTTP_STATUS_VALIDATION)."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Status-Class Distribution (1xx-5xx)",
+      "type": "piechart",
+      "datasource": "${DS_LOGS}",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "description": "Breakdown of emitted responses by RFC 9110 section 15 status class. The classes mirror the registry classification flags defined in src/http/ngx_http_request.h: INFORMATIONAL (NGX_HTTP_STATUS_INFORMATIONAL=0x0008), CLIENT_ERROR (NGX_HTTP_STATUS_CLIENT_ERROR=0x0002) and SERVER_ERROR (NGX_HTTP_STATUS_SERVER_ERROR=0x0004) are explicit flags; SUCCESS (2xx) and REDIRECT (3xx) are derived by numeric range (no dedicated flag). Data is derived from access-log status codes via log scrape; stub_status does not break down by class.",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "1xx INFORMATIONAL",
+          "statusClass": "1xx",
+          "registryFlag": "NGX_HTTP_STATUS_INFORMATIONAL",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} | status=~\"1..\" [$__interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "2xx SUCCESS",
+          "statusClass": "2xx",
+          "registryFlag": "(range-derived; no flag)",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} | status=~\"2..\" [$__interval]))"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "3xx REDIRECT",
+          "statusClass": "3xx",
+          "registryFlag": "(range-derived; no flag)",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} | status=~\"3..\" [$__interval]))"
+        },
+        {
+          "refId": "D",
+          "legendFormat": "4xx CLIENT_ERROR",
+          "statusClass": "4xx",
+          "registryFlag": "NGX_HTTP_STATUS_CLIENT_ERROR",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} | status=~\"4..\" [$__interval]))"
+        },
+        {
+          "refId": "E",
+          "legendFormat": "5xx SERVER_ERROR",
+          "statusClass": "5xx",
+          "registryFlag": "NGX_HTTP_STATUS_SERVER_ERROR",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} | status=~\"5..\" [$__interval]))"
+        }
+      ],
+      "notes": "Per-class counts are operator-provided via log scrape (access-log $status) or an exporter that labels responses by class. The class taxonomy is aligned to the registry flags so dashboards stay consistent with the source of truth."
+    },
+    {
+      "id": 2,
+      "title": "Status Validation Failures (NGX_HTTP_STATUS_VALIDATION)",
+      "type": "stat",
+      "datasource": "${DS_LOGS}",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "description": "Count of invalid / non-conforming status codes detected by the optional validation layer. These events are emitted ONLY when nginx is built with --with-http_status_validation (compile-time macro NGX_HTTP_STATUS_VALIDATION). In the default build the validation hooks compile out and this panel reads zero. The data source is the structured error-log line emitted at NGX_LOG_ERR.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "core: invalid status code",
+          "logSource": "error_log",
+          "logLevel": "NGX_LOG_ERR",
+          "matchPattern": "invalid status code: <code>",
+          "emittedBy": [
+            "src/http/ngx_http_request.c (ngx_http_status_set)",
+            "src/http/ngx_http_core_module.c (ngx_http_send_response / ngx_http_send_header)"
+          ],
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} |= \"invalid status code:\" [$__interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "http2: non-conforming status",
+          "logSource": "error_log",
+          "logLevel": "NGX_LOG_ERR",
+          "matchPattern": "http2 emitting non-conforming status: <code>",
+          "emittedBy": [
+            "src/http/v2/ngx_http_v2_filter_module.c"
+          ],
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} |= \"http2 emitting non-conforming status:\" [$__interval]))"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "http3: non-conforming status",
+          "logSource": "error_log",
+          "logLevel": "NGX_LOG_ERR",
+          "matchPattern": "http3 emitting non-conforming status: <code>",
+          "emittedBy": [
+            "src/http/v3/ngx_http_v3_filter_module.c"
+          ],
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} |= \"http3 emitting non-conforming status:\" [$__interval]))"
+        }
+      ],
+      "notes": "The three match patterns correspond verbatim to the messages emitted by the registry setter and the HTTP/2 and HTTP/3 read-side validation hooks. All require the NGX_HTTP_STATUS_VALIDATION build flag; otherwise expect zero."
+    },
+    {
+      "id": 3,
+      "title": "Cacheable vs Non-Cacheable Responses",
+      "type": "bargauge",
+      "datasource": "${DS_LOGS}",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "description": "Ratio of responses whose status code is heuristically cacheable (RFC 9110 section 15.1 / RFC 9111) versus not. 'Cacheable' is defined by the registry: ngx_http_status_is_cacheable(code) returns non-zero iff the registry entry carries the NGX_HTTP_STATUS_CACHEABLE flag. Exactly 12 status codes are flagged cacheable.",
+      "cacheableCodes": [
+        200,
+        203,
+        204,
+        206,
+        300,
+        301,
+        308,
+        404,
+        405,
+        410,
+        414,
+        501
+      ],
+      "registryFlag": "NGX_HTTP_STATUS_CACHEABLE",
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "cacheable",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} | status=~\"200|203|204|206|300|301|308|404|405|410|414|501\" [$__interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "non-cacheable",
+          "placeholderExpr": "sum(count_over_time({job=\"nginx\"} [$__interval])) - sum(count_over_time({job=\"nginx\"} | status=~\"200|203|204|206|300|301|308|404|405|410|414|501\" [$__interval]))"
+        }
+      ],
+      "notes": "The cacheable set mirrors the NGX_HTTP_STATUS_CACHEABLE flag assigned in src/http/ngx_http_request.c. Derived from access-log status via log scrape; no new runtime metric is added."
+    },
+    {
+      "id": 4,
+      "title": "stub_status Core Counters (reused baseline)",
+      "type": "timeseries",
+      "datasource": "${DS_STUB_STATUS}",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "description": "Baseline connection/request counters reused verbatim from the existing ngx_http_stub_status_module (the 'stub_status' directive output). This refactor adds NO new runtime metric code; this panel simply reuses the existing metrics surface.",
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "Active connections",
+          "stubStatusField": "Active connections",
+          "nginxVariable": "$connections_active",
+          "atomic": "ngx_stat_active",
+          "placeholderExpr": "nginx_connections_active"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "accepts",
+          "stubStatusField": "accepts",
+          "atomic": "ngx_stat_accepted",
+          "placeholderExpr": "rate(nginx_connections_accepted_total[$__rate_interval])"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "handled",
+          "stubStatusField": "handled",
+          "atomic": "ngx_stat_handled",
+          "placeholderExpr": "rate(nginx_connections_handled_total[$__rate_interval])"
+        },
+        {
+          "refId": "D",
+          "legendFormat": "requests",
+          "stubStatusField": "requests",
+          "atomic": "ngx_stat_requests",
+          "placeholderExpr": "rate(nginx_http_requests_total[$__rate_interval])"
+        },
+        {
+          "refId": "E",
+          "legendFormat": "Reading",
+          "stubStatusField": "Reading",
+          "nginxVariable": "$connections_reading",
+          "atomic": "ngx_stat_reading",
+          "placeholderExpr": "nginx_connections_reading"
+        },
+        {
+          "refId": "F",
+          "legendFormat": "Writing",
+          "stubStatusField": "Writing",
+          "nginxVariable": "$connections_writing",
+          "atomic": "ngx_stat_writing",
+          "placeholderExpr": "nginx_connections_writing"
+        },
+        {
+          "refId": "G",
+          "legendFormat": "Waiting",
+          "stubStatusField": "Waiting",
+          "nginxVariable": "$connections_waiting",
+          "atomic": "ngx_stat_waiting",
+          "placeholderExpr": "nginx_connections_waiting"
+        }
+      ],
+      "notes": "Fields and nginx variables match ngx_http_stub_status_module exactly: Active connections / accepts / handled / requests / Reading / Writing / Waiting; variables $connections_active / $connections_reading / $connections_writing / $connections_waiting."
+    },
+    {
+      "id": 5,
+      "type": "text",
+      "title": "About this template",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "options": {
+        "mode": "markdown"
+      },
+      "content": "This dashboard is a **vendor-neutral template** for observing the nginx HTTP status-code registry (RFC 9110 section 15). It **reuses** the existing `ngx_http_stub_status_module` surface and **adds no runtime code**. Wire the `${DS_LOGS}` and `${DS_STUB_STATUS}` data sources to your own backends. The validation-failure panel only reports data when nginx is built with `--with-http_status_validation` (`NGX_HTTP_STATUS_VALIDATION`). Status classes and the cacheable set are kept consistent with the registry flags in `src/http/ngx_http_request.h` and the `ngx_http_status_is_cacheable` API in `src/http/ngx_http_request.c`."
+    }
+  ],
+  "notes": {
+    "purpose": "Observability dashboard template for the HTTP status-code registry refactor.",
+    "reuseFirst": "Reuses ngx_http_stub_status_module (existing metrics surface) and nginx structured logging (ngx_log_error at NGX_LOG_ERR; NGX_LOG_DEBUG_HTTP debug traces). No new metrics endpoint, no thread-local storage, and no changes to the event loop, configuration parser, or memory allocator.",
+    "correlation": "Correlate status events to a request via the context carried by r->connection->log (connection number and optional request id), per AAP section 0.6.5.",
+    "validationBuildFlag": "Validation-failure signals require building nginx with --with-http_status_validation (compile-time macro NGX_HTTP_STATUS_VALIDATION). The default build is permissive and emits no validation-failure events.",
+    "statusClassFlags": {
+      "1xx": "NGX_HTTP_STATUS_INFORMATIONAL (0x0008)",
+      "2xx": "range-derived (no dedicated flag)",
+      "3xx": "range-derived (no dedicated flag)",
+      "4xx": "NGX_HTTP_STATUS_CLIENT_ERROR (0x0002)",
+      "5xx": "NGX_HTTP_STATUS_SERVER_ERROR (0x0004)"
+    },
+    "cacheableCodes": [
+      200,
+      203,
+      204,
+      206,
+      300,
+      301,
+      308,
+      404,
+      405,
+      410,
+      414,
+      501
+    ],
+    "validationLogPatterns": [
+      "invalid status code: <code>",
+      "http2 emitting non-conforming status: <code>",
+      "http3 emitting non-conforming status: <code>"
+    ]
+  },
+  "references": [
+    {
+      "name": "RFC 9110 HTTP Semantics, section 15 (Status Codes)",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#section-15"
+    },
+    {
+      "name": "RFC 9111 HTTP Caching (heuristically cacheable codes)",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    },
+    {
+      "name": "ngx_http_stub_status_module (reused metrics surface)",
+      "path": "src/http/modules/ngx_http_stub_status_module.c"
+    },
+    {
+      "name": "HTTP status-code registry + facade",
+      "path": "src/http/ngx_http_request.c"
+    }
+  ]
+}
