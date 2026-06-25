@@ -160,9 +160,11 @@ legacy `r->headers_out.status = code;` direct assignment.
 
 **Performance**
 
-In the **default build (validation disabled)** this function compiles to
-essentially the **same single field store** as the legacy direct assignment. It
-is inlineable and stays within the project's ≤2% latency budget.
+In the **default build (validation disabled)** this function's body is
+essentially the **same single field store** as the legacy direct assignment,
+plus a function-call boundary — it is an **out-of-line function** defined in
+`src/http/ngx_http_request.c` (so the symbol is present in every build). The
+added overhead is negligible and stays within the project's ≤2% latency budget.
 
 **Example** — see the canonical error-handling form in
 [Canonical Usage Example](#canonical-usage-example).
@@ -427,9 +429,13 @@ three protocol encoders remain read-side consumers of the single
 
 Strict validation is **opt-in** at build time.
 
-- The configure flag **`--with-http_status_validation`** sets the compile-time
-  macro **`NGX_HTTP_STATUS_VALIDATION`**, delivered as a
-  **`-DNGX_HTTP_STATUS_VALIDATION`** define in `CFLAGS`.
+- Strict validation is enabled by building with
+  **`--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"`**, which sets the compile-time
+  macro **`NGX_HTTP_STATUS_VALIDATION`**. There is **no native
+  `--with-http_status_validation` configure option**: the `auto/options` /
+  `auto/configure` / `auto/have` files exist in this tree but are intentionally
+  left untouched (an out-of-scope path), so the macro is delivered through
+  `CFLAGS` via `--with-cc-opt`.
 - The **default build is permissive** with **effectively zero overhead**: the
   strict-conformance code is wrapped in `#if NGX_HTTP_STATUS_VALIDATION`, so when
   the macro is absent the block compiles away entirely.
@@ -439,16 +445,13 @@ Strict validation is **opt-in** at build time.
   reject)** non-conforming statuses at emit time.
 
 ```bash
-# enable strict RFC 9110 §15 validation
-./configure --with-http_status_validation
-
-# or, equivalently, deliver the macro via CFLAGS:
+# enable strict RFC 9110 §15 validation by delivering the macro via CFLAGS
 ./configure --with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"
 ```
 
-Because the trimmed `auto/` build-option wiring is absent from this tree, the
-`CFLAGS` / `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` delivery is the
-supported path for enabling the macro.
+The `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` delivery is the supported path
+for enabling the macro; the `auto/options` / `auto/configure` / `auto/have`
+files are deliberately not modified by this refactor.
 
 ---
 

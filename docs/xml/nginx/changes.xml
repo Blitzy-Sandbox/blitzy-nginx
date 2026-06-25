@@ -22,12 +22,16 @@ following RFC&nbsp;9110.
 
 <change type="feature">
 <para lang="ru">
-параметр сборки <nobr>--with-http_status_validation</nobr>
-включает строгую проверку кодов состояния HTTP по RFC&nbsp;9110.
+строгая проверка кодов состояния HTTP по RFC&nbsp;9110, включаемая
+при сборке с
+<nobr>--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"</nobr>
+(макрос NGX_HTTP_STATUS_VALIDATION).
 </para>
 <para lang="en">
-the <nobr>"--with-http_status_validation"</nobr> build option
-enables strict validation of HTTP status codes per RFC&nbsp;9110.
+strict validation of HTTP status codes per RFC&nbsp;9110, enabled at
+build time with
+<nobr>--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"</nobr>
+(the NGX_HTTP_STATUS_VALIDATION macro).
 </para>
 </change>
 

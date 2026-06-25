@@ -10,8 +10,8 @@ table hosted in `src/http/ngx_http_request.c` and declared in the umbrella heade
 Migration is **opt-in and non-breaking**: the new API is layered *additively* over
 the existing field. Direct assignment keeps working, every `NGX_HTTP_*` constant is
 retained, and strict validation is enabled only when you build with
-`--with-http_status_validation`. You can adopt the facade incrementally — one call
-site at a time — or not at all.
+`--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"`. You can adopt the facade
+incrementally — one call site at a time — or not at all.
 
 > **Related documents**
 >
@@ -247,9 +247,10 @@ The refactor is strictly additive. The following guarantees hold:
   removed.
 - **Direct `r->headers_out.status = ...` assignment remains functional.** The API
   is additive and dual-path; the legacy write and the facade coexist.
-- **Validation is strictly opt-in** via the build flag
-  `--with-http_status_validation` (compile-time macro `NGX_HTTP_STATUS_VALIDATION`).
-  The default build is permissive with effectively zero overhead.
+- **Validation is strictly opt-in** via
+  `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (compile-time macro
+  `NGX_HTTP_STATUS_VALIDATION`). The default build is permissive with effectively
+  zero overhead.
 - **The `NGX_MODULE_V1` module ABI is unchanged**, so third-party modules continue
   to build and load without recompilation against a changed interface.
 - **`nginx.conf` behavior is unchanged** — no runtime directive semantics change.
@@ -268,8 +269,8 @@ rejected** — the proxied value is emitted exactly as the origin sent it.
 The validator also **whitelists nginx's internal sentinel codes** — `444`
 (`NGX_HTTP_CLOSE`) and `494`–`499`. These are internal, non-wire-emitted codes that
 fall numerically within the `100`–`599` range; `ngx_http_status_validate()`
-short-circuits them to acceptance so they are never rejected, even under
-`--with-http_status_validation`.
+short-circuits them to acceptance so they are never rejected, even in a validation
+build (`--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"`).
 
 ## Deprecation roadmap
 
@@ -282,8 +283,9 @@ deadline, and direct assignment never stops working.
   fully supported.
 - **Stage 1 — Recommended.** New code uses `ngx_http_status_set()`; existing code
   may remain on direct assignment.
-- **Stage 2 — Encouraged.** Opt into `--with-http_status_validation` in test or
-  staging environments to surface non-conforming status codes early.
+- **Stage 2 — Encouraged.** Opt into validation by building with
+  `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` in test or staging environments to
+  surface non-conforming status codes early.
 - **Long-term.** Direct field assignment is supported **indefinitely** for
   compatibility. The facade is encouraged for forward compatibility and optional
   validation. **No removal of direct assignment is planned.**

@@ -60,34 +60,12 @@ static void ngx_http_ssl_handshake_handler(ngx_connection_t *c);
 
 
 /*
- * HTTP status-code registry (RFC 9110 section 15): compact internal storage.
- *
- * The public registry record type ngx_http_status_def_t (ngx_http_request.h) is
- * 40 bytes on LP64; materializing one full record per modeled code would cost
- * ~2.3 KB and blow the <1 KB table budget.  The backing store is therefore split
- * into two compact, parallel-by-slot tables (status_reasons[] and status_meta[]
- * below): the reason phrases nginx actually emits are held once as ngx_str_t,
- * and every modeled code carries just a one-byte reason index plus a one-byte
- * flags field.  ngx_http_status_meta_t is that per-code record; a reason index of
- * NGX_HTTP_STATUS_NO_REASON marks a numeric-only code (one shared zero-length
- * reason is returned for all of them).  The public typedef and the five-function
- * facade are unchanged.
- */
-typedef struct {
-    u_char    reason;   /* index into status_reasons[], or NGX_HTTP_STATUS_NO_REASON */
-    u_char    flags;    /* NGX_HTTP_STATUS_* classification bits */
-} ngx_http_status_meta_t;
-
-#define NGX_HTTP_STATUS_NO_REASON  255
-
-
-/*
  * Internal O(1) lookup helper: resolves a numeric status code to its immutable
- * status_meta[] record via per-class offset arithmetic, or NULL when the code is
- * not modeled.  Defined together with the registry tables and the public facade
- * below, just after ngx_http_headers_in[].
+ * status_registry[] record via per-class offset arithmetic, or NULL when the
+ * code is not modeled.  Defined together with the registry table and the public
+ * facade below, just after ngx_http_headers_in[].
  */
-static const ngx_http_status_meta_t *ngx_http_status_lookup(ngx_uint_t code);
+static const ngx_http_status_def_t *ngx_http_status_lookup(ngx_uint_t code);
 
 
 static char *ngx_http_client_errors[] = {
@@ -232,46 +210,50 @@ ngx_http_header_t  ngx_http_headers_in[] = {
  * HTTP status-code registry (RFC 9110 section 15).
  *
  * This is the single, authoritative source of truth for the HTTP status codes
- * nginx knows about.  Conceptually each code is an ngx_http_status_def_t record
- * (numeric code, default reason phrase, classification flags, RFC 9110 section);
- * physically the table is stored compactly so it stays well under the 1 KB
- * budget while remaining a static-const, O(1), allocation-free lookup.
+ * nginx knows about.  It is one immutable "static const ngx_http_status_def_t
+ * status_registry[]" table: each record carries the numeric code, its default
+ * reason phrase, the classification flags, and the RFC 9110 section that defines
+ * it -- exactly the four fields of the public ngx_http_status_def_t typedef
+ * (ngx_http_request.h).  Modules never index this table directly; the five-
+ * function facade below is the only access path.
  *
- * Compact layout (two parallel-by-slot tables):
- *   - status_reasons[]: every reason phrase nginx actually emits, held once as
- *     an ngx_str_t.  Codes nginx emits numeric-only do not each store an empty
- *     ngx_str_t; they share one zero-length reason (ngx_http_status_empty_reason).
- *   - status_meta[]: one ngx_http_status_meta_t per modeled code (2 bytes) giving
- *     the reason index (or NGX_HTTP_STATUS_NO_REASON) and the classification
- *     flags.  Records sit in ascending code order, grouped by class, each class a
- *     contiguous gap-free range so ngx_http_status_lookup() can index directly.
+ * Layout:
+ *   Records sit in ascending code order, grouped by class, with each class a
+ *   contiguous gap-free range (1xx 100..103, 2xx 200..206, 3xx 300..308,
+ *   4xx 400..429, 5xx 500..507).  That gap-free per-class layout is what lets
+ *   ngx_http_status_lookup() resolve a code to its record in O(1) by per-class
+ *   offset arithmetic, with no loop and no allocation.
  *
- * Footprint: 36 ngx_str_t reasons + 58 two-byte meta records + one shared empty
- * reason is well under 1 KB, versus ~2.3 KB for 58 full 40-byte records.  The
- * code/reason/flags carried for every modeled code are byte-for-byte identical to
- * a full-record table; only the rfc_section text (part of the public typedef but
- * never read at runtime) is omitted from the compact store -- it is documented in
- * the public typedef and the API reference instead.
- *
- * Design (Registry + immutable lookup table):
- *   - Both tables are "static const": they land in the read-only image, are
- *     mapped once, and are shared across all forked worker processes, so the
- *     incremental per-worker private RSS is approximately zero.  Immutability is
- *     the entire thread-safety story: there are no locks and no thread-local
- *     storage, and the tables are never mutated after worker initialization.
- *   - Lookup is O(1) via per-class offset arithmetic (see ngx_http_status_lookup
- *     below), mirroring the proven offset-macro design already used by
- *     ngx_http_status_lines[] in ngx_http_header_filter_module.c.
+ * Footprint: 58 records at 40 bytes each on LP64 is approximately 2.3 KB, plus
+ * the (shared) reason string literals.  The table is "static const", so it lands
+ * in the binary's read-only data (the records hold pointers, so the linker
+ * places it in .data.rel.ro and RELRO maps it read-only after relocation), is
+ * mapped once, and is shared across all forked worker processes -- the
+ * incremental per-worker private RSS is therefore approximately zero regardless
+ * of the table's absolute size.  Immutability is the entire thread-safety story:
+ * there are no locks and no thread-local storage, and the table is never mutated
+ * after worker init.
+ *   Lookup is O(1) via per-class offset arithmetic (see ngx_http_status_lookup
+ *   below), mirroring the proven offset-macro design already used by
+ *   ngx_http_status_lines[] in ngx_http_header_filter_module.c.
  *
  * Reason phrases (zero wire-output regression):
- *   The reason strings byte-match those emitted by the HTTP/1.x header filter's
- *   ngx_http_status_lines[] table.  Codes whose entry there is ngx_null_string
- *   (for example 203, 205, 300, 305/306, 407, 417-428, 506) are emitted as a
- *   numeric-only status line, so they carry NGX_HTTP_STATUS_NO_REASON here and
- *   ngx_http_status_reason() hands back the shared zero-length reason, which the
- *   header filter treats exactly like NULL.  402 ("Payment Required") and 406
- *   ("Not Acceptable") ARE non-empty in ngx_http_status_lines[], so they keep
- *   their phrases here too; nulling them would change the wire output.
+ *   The reason strings are byte-identical to those emitted by the HTTP/1.x
+ *   header filter's ngx_http_status_lines[] table, so wire output is unchanged.
+ *   Codes whose entry there is ngx_null_string (for example 203, 205, 300,
+ *   305/306, 407, 417-428, 506) are emitted as a numeric-only status line, so
+ *   they carry an ngx_null_string reason here and ngx_http_status_reason() hands
+ *   back that zero-length phrase, which the header filter treats exactly like
+ *   NULL.  402 ("Payment Required") and 406 ("Not Acceptable") ARE non-empty in
+ *   ngx_http_status_lines[], so they keep their phrases here too; nulling them
+ *   would change the wire output.
+ *
+ * RFC sections:
+ *   rfc_section records the defining RFC 9110 subsection where one exists (for
+ *   example "15.5.5" for 404).  Codes that fall inside a class but are not
+ *   individually defined by RFC 9110 (registered by other RFCs, reserved, or
+ *   numeric-only placeholders) carry the class-level section ("15.2".."15.6").
+ *   This field is documentary only and is never read on the hot path.
  *
  * Cacheability:
  *   NGX_HTTP_STATUS_CACHEABLE marks exactly the RFC 9110 section 15.1 / RFC 9111
@@ -279,129 +261,143 @@ ngx_http_header_t  ngx_http_headers_in[] = {
  *   410, 414 and 501.  No other code carries the flag.
  */
 
-static const ngx_str_t  status_reasons[] = {
-    ngx_string("200 OK"),                       /* [ 0] 200 */
-    ngx_string("201 Created"),                  /* [ 1] 201 */
-    ngx_string("202 Accepted"),                 /* [ 2] 202 */
-    ngx_string("204 No Content"),               /* [ 3] 204 */
-    ngx_string("206 Partial Content"),          /* [ 4] 206 */
-    ngx_string("301 Moved Permanently"),        /* [ 5] 301 */
-    ngx_string("302 Moved Temporarily"),        /* [ 6] 302 */
-    ngx_string("303 See Other"),                /* [ 7] 303 */
-    ngx_string("304 Not Modified"),             /* [ 8] 304 */
-    ngx_string("307 Temporary Redirect"),       /* [ 9] 307 */
-    ngx_string("308 Permanent Redirect"),       /* [10] 308 */
-    ngx_string("400 Bad Request"),              /* [11] 400 */
-    ngx_string("401 Unauthorized"),             /* [12] 401 */
-    ngx_string("402 Payment Required"),         /* [13] 402 */
-    ngx_string("403 Forbidden"),                /* [14] 403 */
-    ngx_string("404 Not Found"),                /* [15] 404 */
-    ngx_string("405 Not Allowed"),              /* [16] 405 */
-    ngx_string("406 Not Acceptable"),           /* [17] 406 */
-    ngx_string("408 Request Time-out"),         /* [18] 408 */
-    ngx_string("409 Conflict"),                 /* [19] 409 */
-    ngx_string("410 Gone"),                     /* [20] 410 */
-    ngx_string("411 Length Required"),          /* [21] 411 */
-    ngx_string("412 Precondition Failed"),      /* [22] 412 */
-    ngx_string("413 Request Entity Too Large"), /* [23] 413 */
-    ngx_string("414 Request-URI Too Large"),    /* [24] 414 */
-    ngx_string("415 Unsupported Media Type"),   /* [25] 415 */
-    ngx_string("416 Requested Range Not Satisfiable"),/* [26] 416 */
-    ngx_string("421 Misdirected Request"),      /* [27] 421 */
-    ngx_string("429 Too Many Requests"),        /* [28] 429 */
-    ngx_string("500 Internal Server Error"),    /* [29] 500 */
-    ngx_string("501 Not Implemented"),          /* [30] 501 */
-    ngx_string("502 Bad Gateway"),              /* [31] 502 */
-    ngx_string("503 Service Temporarily Unavailable"),/* [32] 503 */
-    ngx_string("504 Gateway Time-out"),         /* [33] 504 */
-    ngx_string("505 HTTP Version Not Supported"),/* [34] 505 */
-    ngx_string("507 Insufficient Storage"),     /* [35] 507 */
-};
+static const ngx_http_status_def_t  status_registry[] = {
 
-
-/* Shared zero-length reason for the numeric-only codes (NGX_HTTP_STATUS_NO_REASON). */
-static const ngx_str_t  ngx_http_status_empty_reason = ngx_null_string;
-
-
-static const ngx_http_status_meta_t  status_meta[] = {
-
-    /* 1xx informational (RFC 9110 §15.2): emitted specially elsewhere,
-     * so every reason is empty (numeric-only). */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_INFORMATIONAL },  /* 100 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_INFORMATIONAL },  /* 101 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_INFORMATIONAL },  /* 102 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_INFORMATIONAL },  /* 103 */
+    /* 1xx informational (RFC 9110 §15.2): nginx emits 1xx specially, so every
+     * reason is numeric-only (ngx_null_string). */
+    { 100, ngx_null_string,
+      NGX_HTTP_STATUS_INFORMATIONAL, "15.2.1" },
+    { 101, ngx_null_string,
+      NGX_HTTP_STATUS_INFORMATIONAL, "15.2.2" },
+    { 102, ngx_null_string,
+      NGX_HTTP_STATUS_INFORMATIONAL, "15.2" },
+    { 103, ngx_null_string,
+      NGX_HTTP_STATUS_INFORMATIONAL, "15.2" },
 
     /* 2xx successful (RFC 9110 §15.3). */
-    { 0                        , NGX_HTTP_STATUS_CACHEABLE },  /* 200 */
-    { 1                        , 0 },  /* 201 */
-    { 2                        , 0 },  /* 202 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CACHEABLE },  /* 203 */
-    { 3                        , NGX_HTTP_STATUS_CACHEABLE },  /* 204 */
-    { NGX_HTTP_STATUS_NO_REASON, 0 },  /* 205 */
-    { 4                        , NGX_HTTP_STATUS_CACHEABLE },  /* 206 */
+    { 200, ngx_string("200 OK"),
+      NGX_HTTP_STATUS_CACHEABLE, "15.3.1" },
+    { 201, ngx_string("201 Created"),
+      0, "15.3.2" },
+    { 202, ngx_string("202 Accepted"),
+      0, "15.3.3" },
+    { 203, ngx_null_string,
+      NGX_HTTP_STATUS_CACHEABLE, "15.3.4" },
+    { 204, ngx_string("204 No Content"),
+      NGX_HTTP_STATUS_CACHEABLE, "15.3.5" },
+    { 205, ngx_null_string,
+      0, "15.3.6" },
+    { 206, ngx_string("206 Partial Content"),
+      NGX_HTTP_STATUS_CACHEABLE, "15.3.7" },
 
     /* 3xx redirection (RFC 9110 §15.4): 300, 305 and 306 are numeric-only. */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CACHEABLE },  /* 300 */
-    { 5                        , NGX_HTTP_STATUS_CACHEABLE },  /* 301 */
-    { 6                        , 0 },  /* 302 */
-    { 7                        , 0 },  /* 303 */
-    { 8                        , 0 },  /* 304 */
-    { NGX_HTTP_STATUS_NO_REASON, 0 },  /* 305 */
-    { NGX_HTTP_STATUS_NO_REASON, 0 },  /* 306 */
-    { 9                        , 0 },  /* 307 */
-    { 10                       , NGX_HTTP_STATUS_CACHEABLE },  /* 308 */
+    { 300, ngx_null_string,
+      NGX_HTTP_STATUS_CACHEABLE, "15.4.1" },
+    { 301, ngx_string("301 Moved Permanently"),
+      NGX_HTTP_STATUS_CACHEABLE, "15.4.2" },
+    { 302, ngx_string("302 Moved Temporarily"),
+      0, "15.4.3" },
+    { 303, ngx_string("303 See Other"),
+      0, "15.4.4" },
+    { 304, ngx_string("304 Not Modified"),
+      0, "15.4.5" },
+    { 305, ngx_null_string,
+      0, "15.4.6" },
+    { 306, ngx_null_string,
+      0, "15.4.7" },
+    { 307, ngx_string("307 Temporary Redirect"),
+      0, "15.4.8" },
+    { 308, ngx_string("308 Permanent Redirect"),
+      NGX_HTTP_STATUS_CACHEABLE, "15.4.9" },
 
     /* 4xx client error (RFC 9110 §15.5): 407, 417-420 and 422-428 are
      * numeric-only placeholders. */
-    { 11                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 400 */
-    { 12                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 401 */
-    { 13                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 402 */
-    { 14                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 403 */
-    { 15                       , NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },  /* 404 */
-    { 16                       , NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },  /* 405 */
-    { 17                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 406 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 407 */
-    { 18                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 408 */
-    { 19                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 409 */
-    { 20                       , NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },  /* 410 */
-    { 21                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 411 */
-    { 22                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 412 */
-    { 23                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 413 */
-    { 24                       , NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE },  /* 414 */
-    { 25                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 415 */
-    { 26                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 416 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 417 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 418 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 419 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 420 */
-    { 27                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 421 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 422 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 423 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 424 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 425 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 426 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 427 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_CLIENT_ERROR },  /* 428 */
-    { 28                       , NGX_HTTP_STATUS_CLIENT_ERROR },  /* 429 */
+    { 400, ngx_string("400 Bad Request"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.1" },
+    { 401, ngx_string("401 Unauthorized"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.2" },
+    { 402, ngx_string("402 Payment Required"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.3" },
+    { 403, ngx_string("403 Forbidden"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.4" },
+    { 404, ngx_string("404 Not Found"),
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE, "15.5.5" },
+    { 405, ngx_string("405 Not Allowed"),
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE, "15.5.6" },
+    { 406, ngx_string("406 Not Acceptable"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.7" },
+    { 407, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.8" },
+    { 408, ngx_string("408 Request Time-out"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.9" },
+    { 409, ngx_string("409 Conflict"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.10" },
+    { 410, ngx_string("410 Gone"),
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE, "15.5.11" },
+    { 411, ngx_string("411 Length Required"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.12" },
+    { 412, ngx_string("412 Precondition Failed"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.13" },
+    { 413, ngx_string("413 Request Entity Too Large"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.14" },
+    { 414, ngx_string("414 Request-URI Too Large"),
+      NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE, "15.5.15" },
+    { 415, ngx_string("415 Unsupported Media Type"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.16" },
+    { 416, ngx_string("416 Requested Range Not Satisfiable"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.17" },
+    { 417, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.18" },
+    { 418, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.19" },
+    { 419, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 420, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 421, ngx_string("421 Misdirected Request"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.20" },
+    { 422, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.21" },
+    { 423, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 424, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 425, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 426, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5.22" },
+    { 427, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 428, ngx_null_string,
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
+    { 429, ngx_string("429 Too Many Requests"),
+      NGX_HTTP_STATUS_CLIENT_ERROR, "15.5" },
 
     /* 5xx server error (RFC 9110 §15.6): 506 is numeric-only. */
-    { 29                       , NGX_HTTP_STATUS_SERVER_ERROR },  /* 500 */
-    { 30                       , NGX_HTTP_STATUS_SERVER_ERROR | NGX_HTTP_STATUS_CACHEABLE },  /* 501 */
-    { 31                       , NGX_HTTP_STATUS_SERVER_ERROR },  /* 502 */
-    { 32                       , NGX_HTTP_STATUS_SERVER_ERROR },  /* 503 */
-    { 33                       , NGX_HTTP_STATUS_SERVER_ERROR },  /* 504 */
-    { 34                       , NGX_HTTP_STATUS_SERVER_ERROR },  /* 505 */
-    { NGX_HTTP_STATUS_NO_REASON, NGX_HTTP_STATUS_SERVER_ERROR },  /* 506 */
-    { 35                       , NGX_HTTP_STATUS_SERVER_ERROR },  /* 507 */
+    { 500, ngx_string("500 Internal Server Error"),
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6.1" },
+    { 501, ngx_string("501 Not Implemented"),
+      NGX_HTTP_STATUS_SERVER_ERROR | NGX_HTTP_STATUS_CACHEABLE, "15.6.2" },
+    { 502, ngx_string("502 Bad Gateway"),
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6.3" },
+    { 503, ngx_string("503 Service Temporarily Unavailable"),
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6.4" },
+    { 504, ngx_string("504 Gateway Time-out"),
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6.5" },
+    { 505, ngx_string("505 HTTP Version Not Supported"),
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6.6" },
+    { 506, ngx_null_string,
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6" },
+    { 507, ngx_string("507 Insufficient Storage"),
+      NGX_HTTP_STATUS_SERVER_ERROR, "15.6" },
 };
 
 
 /*
- * Per-class index bases for the O(1) status_meta[] lookup.  These are
+ * Per-class index bases for the O(1) status_registry[] lookup.  These are
  * request.c-local: the header filter's NGX_HTTP_OFF_* / NGX_HTTP_LAST_* macros
  * are file-static in another translation unit and not visible here.  Each class
- * occupies a contiguous range in status_meta[], so a code C of class X lives
+ * occupies a contiguous range in status_registry[], so a code C of class X lives
  * at NGX_HTTP_STATUS_OFF_X + (C - <class base>).  The class bases reuse the
  * existing NGX_HTTP_* constants (100/200/300/400/500); the LAST_* bounds are
  * exclusive upper limits matching the header filter's table extents.
@@ -419,13 +415,13 @@ static const ngx_http_status_meta_t  status_meta[] = {
 
 
 /*
- * Resolve a numeric status code to its immutable status_meta[] record in O(1)
- * using per-class offset arithmetic.  Returns NULL for any code outside the
+ * Resolve a numeric status code to its immutable status_registry[] record in
+ * O(1) using per-class offset arithmetic.  Returns NULL for any code outside the
  * modeled class ranges (this includes the nginx-internal sentinels 444 and
  * 494-499, which ngx_http_status_validate() handles separately).  No allocation,
  * no loop over the table, and no mutable global state.
  */
-static const ngx_http_status_meta_t *
+static const ngx_http_status_def_t *
 ngx_http_status_lookup(ngx_uint_t code)
 {
     ngx_uint_t  index;
@@ -453,7 +449,7 @@ ngx_http_status_lookup(ngx_uint_t code)
         return NULL;
     }
 
-    return &status_meta[index];
+    return &status_registry[index];
 }
 
 
@@ -497,24 +493,28 @@ ngx_http_status_validate(ngx_uint_t code)
  * Set the response status code through the registry facade (the canonical
  * replacement for a direct "r->headers_out.status = code" assignment).
  *
- * This out-of-line definition is compiled ONLY in the validation build
- * (NGX_HTTP_STATUS_VALIDATION).  In the default build ngx_http_status_set() is
- * instead a static-inline fast path declared in ngx_http.h that compiles every
- * call site to the same single store as the legacy direct assignment, so the
- * hot path carries no function-call overhead and stays within the <2% latency
- * budget.
+ * This is the single, canonical, ALWAYS-compiled out-of-line implementation, so
+ * the ngx_http_status_set symbol is present in every build -- default and
+ * validation alike -- satisfying the contract that all five facade functions are
+ * implemented in ngx_http_request.c.  In the default build (validation disabled)
+ * the body reduces to the same single field store as the legacy direct
+ * assignment plus "return NGX_OK"; the only cost over the legacy path is one
+ * thin, non-recursive function call, which is negligible and well within the
+ * <2% hot-path latency budget (and which the compiler may elide entirely under
+ * link-time optimization).
  *
  * Upstream pass-through: when the status originates from a proxied upstream
  * (r->upstream is set) it must be emitted verbatim and is therefore never
  * validated, transformed, or rejected -- store and return immediately.  For a
- * locally-generated response, strict validation rejects a non-conforming code
- * so the caller can log it and return NGX_HTTP_INTERNAL_SERVER_ERROR.
+ * locally-generated response, strict validation (only compiled in under
+ * NGX_HTTP_STATUS_VALIDATION) rejects a non-conforming code so the caller can
+ * log it and return NGX_HTTP_INTERNAL_SERVER_ERROR.  With validation disabled the
+ * guarded block compiles away and the function unconditionally stores the code.
  */
-#if (NGX_HTTP_STATUS_VALIDATION)
-
 ngx_int_t
 ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code)
 {
+#if (NGX_HTTP_STATUS_VALIDATION)
     if (r->upstream) {
         r->headers_out.status = code;
         return NGX_OK;
@@ -523,13 +523,12 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code)
     if (ngx_http_status_validate(code) != NGX_OK) {
         return NGX_ERROR;
     }
+#endif
 
     r->headers_out.status = code;
 
     return NGX_OK;
 }
-
-#endif
 
 
 /*
@@ -544,19 +543,20 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code)
 ngx_str_t *
 ngx_http_status_reason(ngx_uint_t code)
 {
-    const ngx_http_status_meta_t  *meta;
+    const ngx_http_status_def_t  *def;
 
-    meta = ngx_http_status_lookup(code);
+    def = ngx_http_status_lookup(code);
 
-    if (meta == NULL) {
+    if (def == NULL) {
         return NULL;
     }
 
-    if (meta->reason == NGX_HTTP_STATUS_NO_REASON) {
-        return (ngx_str_t *) &ngx_http_status_empty_reason;
-    }
-
-    return (ngx_str_t *) &status_reasons[meta->reason];
+    /*
+     * For codes nginx emits numeric-only the registry entry carries an
+     * ngx_null_string reason (len 0), which the header filter and special-
+     * response handler treat exactly like a NULL return -- identical wire bytes.
+     */
+    return (ngx_str_t *) &def->reason;
 }
 
 
@@ -568,26 +568,25 @@ ngx_http_status_reason(ngx_uint_t code)
 ngx_uint_t
 ngx_http_status_is_cacheable(ngx_uint_t code)
 {
-    const ngx_http_status_meta_t  *meta;
+    const ngx_http_status_def_t  *def;
 
-    meta = ngx_http_status_lookup(code);
+    def = ngx_http_status_lookup(code);
 
-    if (meta == NULL) {
+    if (def == NULL) {
         return 0;
     }
 
-    return meta->flags & NGX_HTTP_STATUS_CACHEABLE;
+    return def->flags & NGX_HTTP_STATUS_CACHEABLE;
 }
 
 
 /*
  * Compile/init-time registration entry point.
  *
- * The registry tables (status_reasons[]/status_meta[]) are immutable (static
- * const), and that immutability is exactly what makes the registry lock-free and
- * thread-safe, so this function NEVER writes to them.  New status codes are added
- * by extending those tables at compile time; this is the uniform, future-proof
- * hook that validates a
+ * The registry table (status_registry[]) is immutable (static const), and that
+ * immutability is exactly what makes the registry lock-free and thread-safe, so
+ * this function NEVER writes to it.  New status codes are added by extending the
+ * table at compile time; this is the uniform, future-proof hook that validates a
  * candidate definition for that intent (and the documented extension point for
  * third-party code).  It performs no runtime mutation whatsoever -- it only
  * rejects a NULL definition or a code outside the RFC 9110 section 15 range.

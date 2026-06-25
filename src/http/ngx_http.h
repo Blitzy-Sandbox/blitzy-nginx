@@ -120,42 +120,25 @@ ngx_int_t ngx_http_parse_chunked(ngx_http_request_t *r, ngx_buf_t *b,
     ngx_http_chunked_t *ctx, ngx_uint_t keep_trailers);
 
 
-/* HTTP status-code registry facade (RFC 9110 §15) */
+/*
+ * HTTP status-code registry facade (RFC 9110 §15).
+ *
+ * All five functions are declared here in the umbrella header and implemented
+ * out-of-line in src/http/ngx_http_request.c, so every facade symbol -- including
+ * ngx_http_status_set() -- is present and linked identically in both the default
+ * and the NGX_HTTP_STATUS_VALIDATION builds.  In the default build
+ * ngx_http_status_set() reduces to the same single field store as the legacy
+ * "r->headers_out.status = code;" assignment plus "return NGX_OK"; the strict
+ * upstream-guard / validation path is compiled in only under
+ * NGX_HTTP_STATUS_VALIDATION.  Keeping a single canonical out-of-line definition
+ * (rather than a header-inline fast path) is what guarantees the API contract
+ * holds regardless of how the macro is set in any separately compiled consumer.
+ */
+ngx_int_t ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code);
 ngx_int_t ngx_http_status_validate(ngx_uint_t code);
 ngx_str_t *ngx_http_status_reason(ngx_uint_t code);
 ngx_int_t ngx_http_status_register(const ngx_http_status_def_t *def);
 ngx_uint_t ngx_http_status_is_cacheable(ngx_uint_t code);
-
-#if (NGX_HTTP_STATUS_VALIDATION)
-
-/*
- * Validation build: ngx_http_status_set() is an out-of-line function (defined
- * in ngx_http_request.c) that runs the upstream pass-through guard and strict
- * RFC 9110 §15 validation before storing the code, so a non-conforming,
- * locally-generated status is rejected at the point it is set.
- */
-ngx_int_t ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code);
-
-#else
-
-/*
- * Default build (validation disabled): ngx_http_status_set() is a static-inline
- * fast path, so every call site compiles to the same single store as the legacy
- * "r->headers_out.status = code;" assignment -- no out-of-line call overhead,
- * honoring the <2% hot-path latency budget.  With validation off, the
- * out-of-line variant's upstream guard and validation hook both collapse to
- * this same unconditional store, so the two forms are behaviorally identical.
- * It always returns NGX_OK, letting the compiler fold away the caller's
- * "!= NGX_OK" error branch.
- */
-static ngx_inline ngx_int_t
-ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t code)
-{
-    r->headers_out.status = code;
-    return NGX_OK;
-}
-
-#endif
 
 
 ngx_http_request_t *ngx_http_create_request(ngx_connection_t *c);

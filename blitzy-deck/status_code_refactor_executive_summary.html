@@ -10,14 +10,14 @@
 
   Dependencies:
     - Local theme (ONLY local dependency): references/blitzy-reveal-theme.css
-    - CDN (pinned, exact): reveal.js 5.1.0, Mermaid 11.4.0, Lucide 0.460.0
+    - CDN (pinned, exact): reveal.js 5.1.0, Mermaid 11.15.0, Lucide 0.460.0
 
   Runtime note: rendering requires network access to the pinned CDNs above.
   ===========================================================================
 -->
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NGINX HTTP Status-Code Registry Refactor — Executive Summary</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
 <link rel="stylesheet" href="references/blitzy-reveal-theme.css">
@@ -33,20 +33,22 @@
     font-feature-settings: "liga" 0, "calt" 0;
   }
 
-  /* KPI dashboard slide: 10 cards must fit within reveal's 960x700 slide
-     without vertical clipping. Pin a 5-column grid (two rows of five) and
-     compact the cards slightly versus the theme default so the whole grid
-     stays inside the slide. Scoped to this slide only via .kpi-dashboard. */
+  /* KPI dashboard slide: 11 cards must fit within reveal's 960x700 slide
+     without vertical clipping. Pin a 6-column grid so the 11 cards lay out as
+     two rows (6 + 5) rather than three; two rows fit inside the 700px canvas
+     even when the grid stretches its rows. Cards are compacted slightly versus
+     the theme default to suit the narrower 6-column track. Scoped to this slide
+     only via .kpi-dashboard. */
   .reveal .kpi-dashboard .kpi-grid {
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0.5em;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.45em;
   }
   .reveal .kpi-dashboard .kpi-card {
-    padding: 0.5em 0.6em;
-    gap: 0.18em;
+    padding: 0.45em 0.5em;
+    gap: 0.16em;
   }
-  .reveal .kpi-dashboard .kpi-value { font-size: 1.3em; }
-  .reveal .kpi-dashboard .kpi-label { font-size: 0.36em; }
+  .reveal .kpi-dashboard .kpi-value { font-size: 1.15em; }
+  .reveal .kpi-dashboard .kpi-label { font-size: 0.34em; }
   @media (max-width: 700px) {
     .reveal .kpi-dashboard .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   }
@@ -174,7 +176,7 @@ graph TD
 graph TD
     M2["~44 modules<br/>(Pattern A sites adopt API)"]
     API["ngx_http_status_set(r, code)<br/>+ validate / reason / is_cacheable / register"]
-    REG["ngx_http_status_def_t registry[]<br/>(single source of truth, static const)"]
+    REG["status_registry[]<br/>(ngx_http_status_def_t, static const)"]
     F2["r->headers_out.status"]
     H2["HTTP/1.x header filter<br/>reason() consumer"]
     SR2["special_response.c<br/>reason()/is_cacheable() consumer"]
@@ -204,7 +206,7 @@ typedef struct {
     const char   *rfc_section;
 } ngx_http_status_def_t;
       </code></pre>
-      <p class="legend">Offset-indexed <strong>O(1)</strong> lookup · branch-predictable · zero allocation · lives in read-only <code>.rodata</code> · <strong>&lt; 1 KB</strong> · reuses existing reason phrases.</p>
+      <p class="legend">Offset-indexed <strong>O(1)</strong> lookup · branch-predictable · zero allocation · read-only after relocation (<code>.data.rel.ro</code>) · <strong>&#8776; 2.3 KB</strong>, ~0 per-worker RSS · reuses existing reason phrases.</p>
     </section>
 
     <!-- ===== Slide 7 — The Facade API ===== -->
@@ -266,8 +268,8 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
     <section>
       <h2 class="section-title"><i data-lucide="check-circle"></i> Opt-in Validation</h2>
       <ul>
-        <li>Configure with <code>--with-http_status_validation</code> → compile macro <code>NGX_HTTP_STATUS_VALIDATION</code></li>
-        <li>Delivered via <code>-DNGX_HTTP_STATUS_VALIDATION</code> in CFLAGS (no <code>auto/options</code> wiring required)</li>
+        <li>Enable with <code>--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"</code> → compile macro <code>NGX_HTTP_STATUS_VALIDATION</code></li>
+        <li>No native <code>--with-http_status_validation</code> option is added; <code>auto/*</code> is intentionally left untouched (out-of-scope)</li>
         <li><strong>Permissive default</strong>: when disabled, <code>ngx_http_status_set()</code> compiles to the same single store — <strong>zero overhead</strong></li>
       </ul>
       <p class="legend">Classification flags: <code>NGX_HTTP_STATUS_CACHEABLE</code>, <code>NGX_HTTP_STATUS_CLIENT_ERROR</code>, <code>NGX_HTTP_STATUS_SERVER_ERROR</code>, <code>NGX_HTTP_STATUS_INFORMATIONAL</code>.</p>
@@ -279,8 +281,8 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       <div class="kpi-grid">
         <div class="kpi-card">
           <i data-lucide="database"></i>
-          <span class="kpi-value">&lt; 1 KB</span>
-          <span class="kpi-label">Registry footprint in <code>.rodata</code></span>
+          <span class="kpi-value">&#8776; 2.3 KB</span>
+          <span class="kpi-label">Registry footprint · read-only after relocation</span>
         </div>
         <div class="kpi-card">
           <i data-lucide="server"></i>
@@ -300,7 +302,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
         <div class="kpi-card">
           <i data-lucide="shield-check"></i>
           <span class="kpi-value">zero</span>
-          <span class="kpi-label">valgrind leaks</span>
+          <span class="kpi-label">valgrind leaks · static-const, no allocation</span>
         </div>
         <div class="kpi-card">
           <i data-lucide="layers"></i>
@@ -375,7 +377,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       <p><strong>One registry. One API. Behavior-preserving. Extensible.</strong></p>
       <ul style="display:inline-block; text-align:left;">
         <li>Single immutable source of truth plus a 5-function facade</li>
-        <li>&lt; 2% latency, zero leaks, 100% backward compatible</li>
+        <li>Within the &lt; 2% latency budget · zero-leak static-const design · 100% backward compatible</li>
         <li>Opt-in RFC 9110 §15 validation; cross-protocol consistency with no encoder edits</li>
       </ul>
       <p class="brand">blitzy-nginx — NGINX HTTP status code registry refactoring with RFC 9110 compliance</p>
@@ -391,12 +393,20 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
 
 <!-- (b) ES-module block: Mermaid + deferred-render coordination with reveal.js. -->
 <script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs';
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs';
 
   // Do NOT auto-run on load; reveal.js controls slide layout/scaling.
   mermaid.initialize({
     startOnLoad: false,
-    securityLevel: 'loose',   // allows <br/> in node labels
+    // 'antiscript' is stricter than 'loose' (it strips <script> from labels,
+    // removing the injection surface) yet still renders the trusted, static
+    // <br/> line breaks these diagrams rely on. 'strict' would HTML-escape the
+    // <br/> tags (labels would show literal "<br/>"); 'sandbox' renders each
+    // diagram inside a sandboxed <iframe>, which breaks reveal.js slide scaling
+    // and puts the SVG out of reach of this deck's own post-render SVG/Lucide
+    // passes below. The runtime is also pinned to the non-vulnerable
+    // mermaid@11.15.0 above, so the diagram input is both trusted and static.
+    securityLevel: 'antiscript',
     theme: 'dark',            // tuned to the Blitzy dark palette
     themeVariables: { fontSize: '13px' },  // smaller label font narrows both
                               // viewBoxes so the wide "After" diagram fits the

@@ -18,7 +18,7 @@
  * Self-contained: pure CSS, no @import of remote fonts (system/web-safe font
  *             stacks with graceful degradation). No build step / preprocessor.
  *
- * Compatible with: the deck's Mermaid 11.4.0 (theme:'dark', diagrams in
+ * Compatible with: the deck's Mermaid 11.15.0 (theme:'dark', diagrams in
  *             <pre class="mermaid">), Lucide 0.460.0 (<i data-lucide> -> inline
  *             <svg class="lucide ...">), and the optional reveal highlight
  *             plugin monokai.css (<pre><code class="language-c">).
@@ -257,6 +257,28 @@
   transition: color 0.15s ease;
 }
 .reveal a:hover { color: var(--r-link-color-hover); text-shadow: none; border: none; }
+
+/* Keyboard focus affordance (WCAG 2.4.7 / 2.4.11). :focus-visible draws a
+ * high-contrast ring for keyboard users only, without altering mouse/touch
+ * interaction. The cyan accent (#22d3ee) on the deep-navy backdrop (#0b1020)
+ * exceeds the WCAG 3:1 non-text contrast requirement for focus indicators. */
+.reveal a:focus-visible,
+.reveal button:focus-visible,
+.reveal .controls button:focus-visible,
+.reveal .slide-number a:focus-visible,
+.reveal [tabindex]:focus-visible {
+  outline: 3px solid var(--blitzy-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+  color: var(--blitzy-primary-bright);
+}
+
+/* Non-keyboard (mouse/touch) activation should not paint the ring. */
+.reveal a:focus:not(:focus-visible),
+.reveal button:focus:not(:focus-visible),
+.reveal .controls button:focus:not(:focus-visible) {
+  outline: none;
+}
 
 .reveal .progress { color: var(--blitzy-primary); height: 4px; }
 .reveal .controls { color: var(--blitzy-primary); }

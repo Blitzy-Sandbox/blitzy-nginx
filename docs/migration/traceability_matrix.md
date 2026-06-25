@@ -226,13 +226,14 @@ verbatim.
 
 These remain read-side consumers of `r->headers_out.status`; no encoder logic
 changes. The optional validation hook calls `ngx_http_status_validate()` and is
-compiled out unless the `--with-http_status_validation` build flag
-(`NGX_HTTP_STATUS_VALIDATION`) is set.
+compiled out unless the binary is built with
+`--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (compile-time macro
+`NGX_HTTP_STATUS_VALIDATION`).
 
 | File | Line | Surface | Notes |
 |---|---|---|---|
-| `src/http/v2/ngx_http_v2_filter_module.c` | 166–167 | HPACK `:status` | `#if (NGX_HTTP_STATUS_VALIDATION)` → `ngx_http_status_validate(...)` |
-| `src/http/v3/ngx_http_v3_filter_module.c` | 122–123 | QPACK `:status` | `#if (NGX_HTTP_STATUS_VALIDATION)` → `ngx_http_status_validate(...)` |
+| `src/http/v2/ngx_http_v2_filter_module.c` | 167 | HPACK `:status` | `ngx_http_status_validate(...)` call at L167, guarded by `#if (NGX_HTTP_STATUS_VALIDATION)` at L166 |
+| `src/http/v3/ngx_http_v3_filter_module.c` | 123 | QPACK `:status` | `ngx_http_status_validate(...)` call at L123, guarded by `#if (NGX_HTTP_STATUS_VALIDATION)` at L122 |
 
 ### Out-of-scope and pass-through surfaces
 

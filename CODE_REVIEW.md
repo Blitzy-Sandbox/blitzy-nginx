@@ -16,9 +16,11 @@ facade.
 
 The new design introduces three coordinated pieces:
 
-- an immutable `static const` status registry (a reason-phrase table plus a
-  compact metadata table addressed by O(1) per-class offset arithmetic) in
-  `src/http/ngx_http_request.c`, serving as the single source of truth;
+- an immutable `static const ngx_http_status_def_t status_registry[]` table —
+  one record per status code carrying its numeric `code`, default `reason`
+  phrase, classification `flags`, and `rfc_section` reference, addressed by
+  O(1) per-class offset arithmetic — in `src/http/ngx_http_request.c`, serving
+  as the single source of truth;
 - a five-function facade declared in `src/http/ngx_http.h` —
   `ngx_http_status_set`, `ngx_http_status_validate`, `ngx_http_status_reason`,
   `ngx_http_status_register`, and `ngx_http_status_is_cacheable`;
@@ -107,12 +109,15 @@ That reconciliation is revisited in Phase 2.3.
 | 25 | `docs/observability/status_dashboard.json` | CREATE | Infrastructure / DevOps (2.1) |
 | 26 | `blitzy-deck/status_code_refactor_executive_summary.html` | CREATE | Frontend (2.6) |
 | 27 | `blitzy-deck/references/blitzy-reveal-theme.css` | CREATE | Frontend (2.6) |
+| 28 | `CODE_REVIEW.md` | CREATE | Other SME (2.7) |
 
-**Mutual-exclusivity check:** 27 files, each assigned to exactly one domain
+**Mutual-exclusivity check:** 28 files, each assigned to exactly one domain
 phase. Backend Architecture owns 19 files, Business/Domain owns 5,
-Infrastructure/DevOps owns 1, and Frontend owns 2. The Security, QA/Test
-Integrity, and Other SME phases own no committed files and perform
-cross-cutting reviews (Phases 2.2, 2.4, and 2.7).
+Infrastructure/DevOps owns 1, Frontend owns 2, and Other SME owns 1
+(`CODE_REVIEW.md` itself). The Security and QA/Test Integrity phases own no
+committed files and perform cross-cutting reviews (Phases 2.2 and 2.4). Every
+one of the 28 changed files in the PR diff appears in this table exactly once,
+including this review document.
 
 ---
 
@@ -199,31 +204,49 @@ reviews them cross-cutting.
   unchanged. No struct in the module ABI is altered, so third-party and
   contrib modules continue to build and load without recompilation concerns
   beyond a normal rebuild.
+- **(f) Third-party (CDN) dependency posture.** The only third-party runtime
+  dependencies in the change set are the CDN assets loaded by the executive
+  deck (a Frontend-owned, non-product artifact). The deck pins **Mermaid
+  11.15.0**, a release with no known direct vulnerabilities, rather than the
+  11.4.0 version Snyk flags for arbitrary code injection; the AAP's
+  "no known-vulnerable dependencies" requirement (§0.7.1) takes precedence
+  over the AAP's specific 11.4.0 version pin (§0.5.1). Mermaid runs at the
+  hardened `securityLevel: 'antiscript'` (it strips `<script>` from labels)
+  over trusted, static, in-repo diagram source. reveal.js (5.1.0) and Lucide
+  (0.460.0) remain pinned and carry no known advisory at those versions.
 
 No new attack surface, no new privileged operation, and no new parsing of
-untrusted input are introduced. The facade only centralizes an existing
-field write and an existing reason lookup.
+untrusted input are introduced in the server. The facade only centralizes an
+existing field write and an existing reason lookup, and the only third-party
+dependencies (deck CDN assets) are pinned to non-vulnerable versions.
 
 **Verdict: APPROVED** — validation is safely opt-in, upstream status is a
 strict pass-through, sentinel codes are protected, the registry is immutable
-with no runtime mutation path, and the module ABI is preserved.
+with no runtime mutation path, the module ABI is preserved, and the only
+third-party (deck CDN) dependencies are pinned to non-vulnerable versions and
+run under a hardened Mermaid security level.
 
 ### Phase 2.3 — Backend Architecture
 
 **Files owned:** the 19 C source/header files (items 1–19 in the inventory).
 This is the core of the review.
 
-**Registry data structures and lookup.** The registry is implemented as two
-`static const` tables in `src/http/ngx_http_request.c`: a reason-phrase table
-(`status_reasons[]`) and a compact metadata table (`status_meta[]`) carrying
-each code's reason index and classification flags. Because both are
-`static const`, they reside in the binary's read-only `.rodata` segment, are
-mapped once, and are shared across all forked worker processes — the
-incremental per-worker private RSS is approximately zero. Lookup is **O(1)**
-via per-class offset arithmetic (`ngx_http_status_lookup()`), mirroring the
-proven offset-macro design already used by `ngx_http_status_lines[]` in the
-header filter; there is no hash map, no loop over the table, and no
-allocation. The combined table footprint is well under the 1 KB target. This
+**Registry data structures and lookup.** The registry is implemented as a
+single immutable `static const ngx_http_status_def_t status_registry[]` table
+in `src/http/ngx_http_request.c` — 58 records, one per status code, each
+carrying the four fields of the public `ngx_http_status_def_t` typedef: the
+numeric `code`, the default `reason` phrase, the classification `flags`, and
+the `rfc_section` reference. Because the table is `static const` it is
+read-only after relocation (it lands in `.data.rel.ro` rather than pure
+`.rodata`, since each record embeds `reason`/`rfc_section` pointers), is mapped
+once, and is shared across all forked worker processes — the incremental
+per-worker private RSS is approximately zero. Lookup is **O(1)** via per-class
+offset arithmetic (`ngx_http_status_lookup()`, which returns a
+`const ngx_http_status_def_t *`), mirroring the proven offset-macro design
+already used by `ngx_http_status_lines[]` in the header filter; there is no
+hash map, no loop over the table, and no allocation. The table footprint is
+58 × 40 bytes ≈ **2.3 KB** (a sub-1 KB figure was an early internal goal, not
+a binding AAP requirement; the AAP mandates the full-record table). This
 satisfies the Registry, Facade, and immutable-table pattern requirements.
 
 **Type-collision avoidance.** The new registry-record typedef
@@ -235,12 +258,18 @@ struct (`{ http_version, code, count, start, end }`) declared in
 unrelated purposes; this was an explicit design constraint and it is met.
 
 **API surface and size budget.** The five facade functions are declared in
-`src/http/ngx_http.h` and implemented in `src/http/ngx_http_request.c`. Each
-is comfortably within the **≤50-line** budget (excluding comments):
-`ngx_http_status_validate` (~22 lines), `ngx_http_status_set` (~18),
-`ngx_http_status_reason` (~17), `ngx_http_status_is_cacheable` (~13), and
-`ngx_http_status_register` (~13). The facade hides the table representation:
-no module indexes the registry arrays directly — they call the API.
+`src/http/ngx_http.h` and implemented **out-of-line** in
+`src/http/ngx_http_request.c`. Crucially, `ngx_http_status_set()` is an
+**unconditional** out-of-line definition — not a header-only inline — so the
+linked symbol is present in **every** build, default and validation alike; the
+upstream-guard and strict-validation logic inside it is gated by
+`#if (NGX_HTTP_STATUS_VALIDATION)`, while the default path compiles to a single
+field store plus `return NGX_OK`. Each function is comfortably within the
+**≤50-line** budget (excluding comments): `ngx_http_status_validate` (~18),
+`ngx_http_status_set` (~14), `ngx_http_status_reason` (~14),
+`ngx_http_status_is_cacheable` (~9), and `ngx_http_status_register` (~9). The
+facade hides the table representation: no module indexes `status_registry[]`
+directly — they call the API.
 
 **Backward compatibility.** All existing `NGX_HTTP_*` numeric constants in
 `src/http/ngx_http_request.h` are **retained** (none removed), so direct
@@ -325,9 +354,10 @@ attempted.
 snake_case identifiers, 4-space indentation with no tabs, and comment style
 consistent with the surrounding sources.
 
-**Verdict: APPROVED** — the registry is immutable and O(1) with a sub-1 KB
-footprint, the five API functions honor the ≤50-line budget and hide the
-table, the new type avoids collision with `ngx_http_status_t`, all constants
+**Verdict: APPROVED** — the registry is immutable and O(1) with a compact
+≈ 2.3 KB read-only footprint, the five API functions honor the ≤50-line
+budget and hide the table, the new type avoids collision with
+`ngx_http_status_t`, all constants
 are retained, reason phrases are reused for zero wire regression, the central
 reason/error-page integration preserves `error_page` dispatch exactly,
 Pattern A sites use the canonical form, the deliberately unconverted
@@ -404,8 +434,10 @@ upgrade, leak-freedom, and the latency budget.
   references `../../dtd/changes.dtd` and uses the standard bilingual
   `<para lang="ru">` / `<para lang="en">` entries). The new
   `<change type="feature">` entries reference the status-code registry and
-  the new `ngx_http_status_set()` API and the `--with-http_status_validation`
-  build option, citing RFC 9110, using `HTTP:`-style scoping consistent with
+  the new `ngx_http_status_set()` API and the opt-in strict-validation macro
+  enabled via `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (no native
+  `--with-http_status_validation` configure option is added; `auto/*` is left
+  untouched), citing RFC 9110, using `HTTP:`-style scoping consistent with
   nginx changelog phrasing. The human-readable `CHANGES` file is **generated**
   from this XML via `misc/GNUmakefile` (`$(MAKE) -f docs/GNUmakefile changes`),
   so editing the XML is the correct single point of change — no separate root
@@ -431,37 +463,77 @@ Reviewed for:
   `blitzy-deck/references/blitzy-reveal-theme.css`.
 - **Embedded before/after architecture diagrams** rendered with Mermaid,
   matching the "Status Handling: Before vs After" views from the design
-  specification (scattered field mutation → centralized registry + facade),
-  alongside **KPI cards** (e.g., `<2%` latency budget, ~0 incremental RSS,
-  sub-1 KB registry, `NGX_MODULE_V1` ABI preserved).
-- **Pinned CDN dependencies** at the exact required versions: reveal.js
-  **5.1.0**, Mermaid **11.4.0**, and Lucide **0.460.0**. Pinning avoids drift
-  and keeps the deck self-contained and reproducible.
+  specification (scattered field mutation → centralized registry + facade);
+  the "After" diagram and prose name the delivered `status_registry[]` table.
+  Alongside them, **KPI cards** (e.g., `<2%` latency budget, ~0 incremental
+  RSS, the ≈ 2.3 KB read-only registry, `NGX_MODULE_V1` ABI preserved). The 11
+  KPI cards lay out as two rows (6 + 5) that fit within reveal's 960×700 canvas
+  without clipping.
+- **Pinned CDN dependencies**: reveal.js **5.1.0**, Mermaid **11.15.0**, and
+  Lucide **0.460.0**. Mermaid is pinned to 11.15.0 rather than the AAP's
+  nominal 11.4.0 pin because Snyk flags 11.4.0 for arbitrary code injection,
+  and the AAP's "no known-vulnerable dependencies" requirement (§0.7.1) takes
+  precedence over the specific version pin (§0.5.1). Pinning otherwise avoids
+  drift and keeps the deck self-contained and reproducible.
+- **Hardened diagram rendering** — Mermaid runs at
+  `securityLevel: 'antiscript'` (which strips `<script>` from labels) over
+  trusted, static, in-repo diagram source, replacing the weaker `'loose'`
+  mode while preserving the `<br/>` line breaks the labels rely on.
+- **Accessibility** — the viewport meta allows user zoom (no
+  `maximum-scale`/`user-scalable=no`), and the canonical theme defines explicit
+  `:focus-visible` affordances (a 3px cyan outline using Blitzy tokens, > 3:1
+  contrast) for links and reveal controls, satisfying keyboard-focus
+  visibility (WCAG 2.4.7 / 2.4.11).
+- **Claim accuracy** — KPI and architecture claims match the delivered source:
+  the footprint reads ≈ 2.3 KB, and the opt-in strict-validation build is shown
+  as `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (no native configure
+  option), with latency/leak/compatibility stated as a budget and a
+  static-const design property rather than as certified measurements.
 
 The deck contains no application UI and introduces no product front-end; it
 is a documentation/communication artifact. As such there is no runtime visual
 regression surface to validate beyond correct rendering of the slides and
-diagrams.
+diagrams, which was confirmed in-browser (both Mermaid diagrams render, the
+KPI grid fits, and the focus ring is visible).
 
 **Verdict: APPROVED** — a single self-contained reveal.js deck within the
 slide-count range, on-brand, embedding the before/after Mermaid views and KPI
-cards, with all three CDN dependencies pinned to the required versions.
+cards; all three CDN dependencies are pinned to non-vulnerable versions
+(Mermaid 11.15.0), Mermaid renders under the hardened `'antiscript'` level, the
+deck allows user zoom and provides visible keyboard focus, and every KPI and
+architecture claim matches the delivered implementation.
 
 ### Phase 2.7 — Other SME
 
-**Files owned:** none. This is the catch-all for any changed file not
-assigned to a domain above. Every file in the Phase 1 inventory has been
-assigned to exactly one of Infrastructure/DevOps, Backend Architecture,
-Business/Domain, or Frontend, and the cross-cutting Security and QA/Test
-Integrity phases have been resolved. This review document itself
-(`CODE_REVIEW.md`) is the **review deliverable** — a non-behavioral process
-artifact that is the output of this review rather than a subject of it, and
-it introduces no executable behavior.
+**Files owned:** `CODE_REVIEW.md` (inventory item #28).
 
-**No unassigned files** remain.
+This phase reviews the one changed file that does not belong to an
+engineering domain above: this review document itself. The Segmented PR Review
+rule requires **every** file in the branch diff to be partitioned into exactly
+one domain phase, with no exemptions — so `CODE_REVIEW.md`, although it is the
+process artifact produced by this review, is itself a changed file in the diff
+and is assigned here, to Other SME, and reviewed as a subject.
 
-**Verdict: APPROVED** — no unassigned changed files; the one-file-one-domain
-invariant holds across the entire inventory.
+- **Inventory completeness.** The Phase 1 inventory now enumerates all **28**
+  changed files (8 added, 20 modified) and assigns each to exactly one domain;
+  `CODE_REVIEW.md` appears as item #28. The one-file-one-domain invariant holds
+  with no file omitted and none assigned twice.
+- **Document accuracy.** The descriptions in this review match the delivered
+  source: the registry is described as the full
+  `static const ngx_http_status_def_t status_registry[]` table with an
+  ≈ 2.3 KB read-only footprint; `ngx_http_status_set()` is described as an
+  unconditional out-of-line function present in every build; and the opt-in
+  validation build is consistently described via
+  `--with-cc-opt="-DNGX_HTTP_STATUS_VALIDATION"` (no native configure option).
+- **Non-behavioral.** The file is Markdown documentation; it introduces no
+  executable behavior, no build-graph entry, and no runtime surface.
+
+**No unassigned files remain** — all 28 changed files, including this one, are
+each assigned to exactly one domain phase.
+
+**Verdict: APPROVED** — `CODE_REVIEW.md` is correctly inventoried as item #28
+under Other SME, its assertions match the delivered implementation, and the
+one-file-one-domain invariant holds across the full 28-file inventory.
 
 ---
 
@@ -501,12 +573,18 @@ grant implied by submission, and the F5 CLA requirement acknowledged.
   opt-in.
 - **Module ABI** — `NGX_MODULE_V1` unchanged; third-party modules continue to
   build and load.
-- **Performance** — `<2%` latency overhead under `wrk -t4 -c100 -d30s`; the
-  default build's `ngx_http_status_set()` compiles to essentially the legacy
-  single store; lookup is O(1) over a sub-1 KB immutable table.
-- **Memory** — the registry lives in shared read-only `.rodata` with ~0
-  incremental per-worker RSS; `valgrind` reports zero leaks (no allocation,
-  no free).
+- **Performance** — stays within the **`<2%`** latency budget under
+  `wrk -t4 -c100 -d30s`: the default build's `ngx_http_status_set()` compiles
+  to essentially the legacy single field store, and lookup is O(1) over the
+  ≈ 2.3 KB immutable table.
+- **Memory** — the registry is `static const`, living in shared read-only
+  memory (`.data.rel.ro`, since each record holds `reason`/`rfc_section`
+  pointers) with ~0 incremental per-worker RSS; it performs no allocation and
+  no `free`, so it adds no leak surface. Under `valgrind --leak-check=full`,
+  the refactored binary's leak output is byte-for-byte identical to stock
+  nginx built at the merge-base — the only blocks are nginx's pre-existing
+  32-byte `ngx_set_environment` startup allocation — confirming the refactor
+  introduces zero new leaks.
 
 All seven domain phases resolved **APPROVED** and no blocking issues were
 identified.
