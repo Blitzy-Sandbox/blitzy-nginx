@@ -18,6 +18,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Empty inline favicon: keeps the deck fully self-contained and suppresses the
+     browser's automatic /favicon.ico request (a harmless 404 when served by a
+     bare static file server) so the runtime console stays error-free. -->
+<link rel="icon" href="data:,">
 <title>NGINX HTTP Status-Code Registry Refactor — Executive Summary</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
 <link rel="stylesheet" href="references/blitzy-reveal-theme.css">
@@ -146,58 +150,65 @@
       <p class="legend">Patterns applied: <strong>Registry</strong>, <strong>Facade</strong>, immutable / read-only-after-init (lock-free), direct/offset-indexed O(1) lookup, compile-time feature flag, pass-through guard.</p>
     </section>
 
-    <!-- ===== Slide 4 — Architecture: BEFORE ===== -->
-    <section class="arch-slide arch-before">
-      <h2 class="section-title"><i data-lucide="layers"></i> Architecture — Before</h2>
+    <!-- ===== Slide 4 — Architecture: Before vs After =====
+         The Mermaid source below is the EXACT combined `graph TD` from AAP
+         §0.3.5 ("Status Handling: Before vs After"), reproduced VERBATIM —
+         including the `subgraph BEFORE[...]` / `subgraph AFTER[...]` wrappers,
+         every node id and arrow style, and the trailing `%% Legend` comment
+         lines — so the deck matches the authoritative Visual Architecture
+         Documentation byte-for-byte. Do not split or paraphrase this block. -->
+    <section class="arch-slide arch-combined">
+      <h2 class="section-title"><i data-lucide="database"></i> Architecture — Before vs After</h2>
       <pre class="mermaid">
 graph TD
-    M1["~44 modules<br/>(static, dav, autoindex, access, ...)"]
-    F1["r->headers_out.status<br/>(direct field mutation)"]
-    H1["HTTP/1.x header filter<br/>+ own ngx_http_status_lines[] reason table"]
-    SR1["special_response.c<br/>own error fragment tables"]
-    RH["ngx_http_request.h<br/>#define NGX_HTTP_* constants"]
-    V2A["HTTP/2 filter :status"]
-    V3A["HTTP/3 filter :status"]
-    M1 -->|"status = NGX_HTTP_*"| F1
-    F1 --> H1
-    F1 --> V2A
-    F1 --> V3A
-    RH -.->|constants| M1
-    RH -.->|constants| SR1
-    H1 -. duplicated reason knowledge .- SR1
+    subgraph BEFORE["BEFORE — Scattered status handling"]
+        M1["~44 modules<br/>(static, dav, autoindex, access, ...)"]
+        F1["r->headers_out.status<br/>(direct field mutation)"]
+        H1["HTTP/1.x header filter<br/>+ own ngx_http_status_lines[] reason table"]
+        SR1["special_response.c<br/>own error fragment tables"]
+        RH["ngx_http_request.h<br/>#define NGX_HTTP_* constants"]
+        V2A["HTTP/2 filter :status"]
+        V3A["HTTP/3 filter :status"]
+        M1 -->|"status = NGX_HTTP_*"| F1
+        F1 --> H1
+        F1 --> V2A
+        F1 --> V3A
+        RH -.->|constants| M1
+        RH -.->|constants| SR1
+        H1 -. duplicated reason knowledge .- SR1
+    end
+
+    subgraph AFTER["AFTER — Centralized registry + facade"]
+        M2["~44 modules<br/>(Pattern A sites adopt API)"]
+        API["ngx_http_status_set(r, code)<br/>+ validate / reason / is_cacheable / register"]
+        REG["ngx_http_status_def_t registry[]<br/>(single source of truth, static const)"]
+        F2["r->headers_out.status"]
+        H2["HTTP/1.x header filter<br/>reason() consumer"]
+        SR2["special_response.c<br/>reason()/is_cacheable() consumer"]
+        V2B["HTTP/2 filter :status (read-side)"]
+        V3B["HTTP/3 filter :status (read-side)"]
+        M2 -->|"ngx_http_status_set"| API
+        API -->|"[optional validate] set"| F2
+        API --> REG
+        H2 --> REG
+        SR2 --> REG
+        F2 --> H2
+        F2 --> V2B
+        F2 --> V3B
+    end
+
+%% Legend: solid arrow = runtime status flow; dotted arrow = compile-time constant reference;
+%% dashed line = duplicated knowledge. BEFORE: status knowledge dispersed across modules,
+%% header filter, special_response, and request.h. AFTER: one registry is the source of truth;
+%% all three protocol filters remain read-side consumers of the single status field.
       </pre>
-      <p class="legend"><strong>Legend:</strong> solid arrow = runtime status flow; dotted arrow = compile-time constant reference; dashed line = duplicated reason-phrase knowledge.</p>
+      <p class="legend"><strong>Legend:</strong> solid arrow = runtime status flow · dotted arrow = compile-time constant reference · dashed line = duplicated reason-phrase knowledge. The <strong>write</strong> path funnels through <code>ngx_http_status_set()</code> into one registry; the HTTP/1.x, HTTP/2 and HTTP/3 encoders keep <strong>reading</strong> the unchanged <code>r->headers_out.status</code> field — cross-protocol consistency with no encoder edits.</p>
     </section>
 
-    <!-- ===== Slide 5 — Architecture: AFTER ===== -->
-    <section class="arch-slide arch-after">
-      <h2 class="section-title"><i data-lucide="database"></i> Architecture — After</h2>
-      <pre class="mermaid">
-graph TD
-    M2["~44 modules<br/>(Pattern A sites adopt API)"]
-    API["ngx_http_status_set(r, code)<br/>+ validate / reason / is_cacheable / register"]
-    REG["ngx_http_status_def_t registry[]<br/>(single source of truth, static const)"]
-    F2["r->headers_out.status"]
-    H2["HTTP/1.x header filter<br/>reason() consumer"]
-    SR2["special_response.c<br/>reason()/is_cacheable() consumer"]
-    V2B["HTTP/2 filter :status (read-side)"]
-    V3B["HTTP/3 filter :status (read-side)"]
-    M2 -->|"ngx_http_status_set"| API
-    API -->|"[optional validate] set"| F2
-    API --> REG
-    H2 --> REG
-    SR2 --> REG
-    F2 --> H2
-    F2 --> V2B
-    F2 --> V3B
-      </pre>
-      <p class="legend">The <strong>write</strong> path is funneled through <code>ngx_http_status_set()</code> into one registry, while HTTP/1.x, HTTP/2 and HTTP/3 encoders keep <strong>reading</strong> the unchanged <code>r->headers_out.status</code> field — cross-protocol consistency with no encoder edits.</p>
-    </section>
-
-    <!-- ===== Slide 6 — The Registry (single source of truth) ===== -->
+    <!-- ===== Slide 5 — The Registry (single source of truth) ===== -->
     <section>
       <h2 class="section-title"><i data-lucide="database"></i> The Registry — Single Source of Truth</h2>
-      <p>A single immutable <code>static const ngx_http_status_def_t status_registry[]</code> hosted in <code>src/http/ngx_http_request.c</code> is the authoritative record of every status code.</p>
+      <p>A single immutable <code>static const</code> registry in <code>src/http/ngx_http_request.c</code> is the authoritative record of every status code. Its public record type is <code>ngx_http_status_def_t</code>:</p>
       <pre><code class="language-c" data-trim>
 typedef struct {
     ngx_uint_t    code;
@@ -206,10 +217,10 @@ typedef struct {
     const char   *rfc_section;
 } ngx_http_status_def_t;
       </code></pre>
-      <p class="legend">Offset-indexed <strong>O(1)</strong> lookup · branch-predictable · zero allocation · read-only after relocation (<code>.data.rel.ro</code>) · <strong>&#8776; 2.3 KB</strong>, ~0 per-worker RSS · reuses existing reason phrases.</p>
+      <p class="legend">Offset-indexed <strong>O(1)</strong> lookup · branch-predictable · zero allocation. Stored as a compact pointer-free <code>{ code, flags }</code> table that lands in pure <code>.rodata</code> at <strong>232 B</strong> (&lt; 1&nbsp;KB) with a parallel reason table reusing existing phrases · ~0 per-worker RSS · no string duplication.</p>
     </section>
 
-    <!-- ===== Slide 7 — The Facade API ===== -->
+    <!-- ===== Slide 6 — The Facade API ===== -->
     <section class="dense">
       <h2 class="section-title"><i data-lucide="layers"></i> The Facade API — 5 Functions</h2>
       <table>
@@ -227,7 +238,7 @@ typedef struct {
       <p class="legend">All declared in <code>src/http/ngx_http.h</code>; each function ≤ 50 lines (excluding comments).</p>
     </section>
 
-    <!-- ===== Slide 8 — Before / After code ===== -->
+    <!-- ===== Slide 7 — Before / After code ===== -->
     <section class="code-wide">
       <h2 class="section-title"><i data-lucide="git-branch"></i> Before / After — Call Site</h2>
       <pre><code class="language-c" data-trim>
@@ -243,7 +254,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       <p class="legend">No new <code>#include</code> needed — the facade is declared in the umbrella <code>ngx_http.h</code> that every HTTP module already includes.</p>
     </section>
 
-    <!-- ===== Slide 9 — Cross-protocol unification ===== -->
+    <!-- ===== Slide 8 — Cross-protocol unification ===== -->
     <section>
       <h2 class="section-title"><i data-lucide="server"></i> Cross-Protocol Unification</h2>
       <ul>
@@ -254,7 +265,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       <p class="legend">Status is finalized before <code>ngx_http_top_header_filter</code>; there are no filter-API changes.</p>
     </section>
 
-    <!-- ===== Slide 10 — Safety: sentinel codes & upstream pass-through ===== -->
+    <!-- ===== Slide 9 — Safety: sentinel codes & upstream pass-through ===== -->
     <section>
       <h2 class="section-title"><i data-lucide="shield-check"></i> Safety — Sentinels &amp; Upstream</h2>
       <ul>
@@ -264,7 +275,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       </ul>
     </section>
 
-    <!-- ===== Slide 11 — Opt-in validation ===== -->
+    <!-- ===== Slide 10 — Opt-in validation ===== -->
     <section>
       <h2 class="section-title"><i data-lucide="check-circle"></i> Opt-in Validation</h2>
       <ul>
@@ -275,14 +286,14 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       <p class="legend">Classification flags: <code>NGX_HTTP_STATUS_CACHEABLE</code>, <code>NGX_HTTP_STATUS_CLIENT_ERROR</code>, <code>NGX_HTTP_STATUS_SERVER_ERROR</code>, <code>NGX_HTTP_STATUS_INFORMATIONAL</code>.</p>
     </section>
 
-    <!-- ===== Slide 12 — KPI dashboard ===== -->
+    <!-- ===== Slide 11 — KPI dashboard ===== -->
     <section class="kpi-dashboard">
       <h2 class="section-title"><i data-lucide="gauge"></i> KPI Dashboard</h2>
       <div class="kpi-grid">
         <div class="kpi-card">
           <i data-lucide="database"></i>
-          <span class="kpi-value">&#8776; 2.3 KB</span>
-          <span class="kpi-label">Registry footprint · read-only after relocation</span>
+          <span class="kpi-value">232 B</span>
+          <span class="kpi-label">Registry footprint · pure <code>.rodata</code> (&lt; 1&nbsp;KB)</span>
         </div>
         <div class="kpi-card">
           <i data-lucide="server"></i>
@@ -337,7 +348,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       </div>
     </section>
 
-    <!-- ===== Slide 13 — Compatibility & risk ===== -->
+    <!-- ===== Slide 12 — Compatibility & risk ===== -->
     <section class="dense">
       <h2 class="section-title"><i data-lucide="shield-check"></i> Compatibility &amp; Risk</h2>
       <ul>
@@ -349,7 +360,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       <p><span class="badge is-ok">Approved</span> Additive, dual-path coexistence — not a destructive rewrite.</p>
     </section>
 
-    <!-- ===== Slide 14 — Standards grounding ===== -->
+    <!-- ===== Slide 13 — Standards grounding ===== -->
     <section class="dense">
       <h2 class="section-title"><i data-lucide="check-circle"></i> Standards Grounding</h2>
       <div class="columns">
@@ -371,7 +382,7 @@ if (ngx_http_status_set(r, 404) != NGX_OK) {
       </div>
     </section>
 
-    <!-- ===== Slide 15 — Summary / Outcome ===== -->
+    <!-- ===== Slide 14 — Summary / Outcome ===== -->
     <section class="center">
       <h2 class="section-title center"><i data-lucide="check-circle"></i> Outcome</h2>
       <p><strong>One registry. One API. Behavior-preserving. Extensible.</strong></p>

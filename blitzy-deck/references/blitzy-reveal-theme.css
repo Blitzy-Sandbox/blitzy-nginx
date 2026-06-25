@@ -288,6 +288,46 @@
   color: var(--blitzy-text-muted);
   font-family: var(--r-main-font);
   border-radius: 6px 0 0 0;
+  /* Let the inner <a> own the full tap area (padding moved onto the link). */
+  padding: 0;
+}
+
+/* =========================================================================
+ * Touch-target sizing (WCAG 2.5.5 Target Size — 44x44px guidance).
+ * Reveal's default arrow controls (~36x36px) and the slide-number link
+ * (~44x17px) present an interactive area below 44x44px (QA Frontend Issue 3).
+ * Enlarge the *interactive box* to >=44x44px so a runtime getBoundingClientRect
+ * check passes, WITHOUT reflowing any slide content: the controls are
+ * absolutely positioned by reveal in the lower-right cluster and the
+ * slide-number sits in the bottom-right corner, so growing their boxes only
+ * grows overlay chrome, never the slide body. The painted arrow glyph keeps
+ * its size and is re-centered via flex; the keyboard focus rings defined above
+ * still apply. The accent-colored cluster spacing is widened just enough that
+ * the four 44px arrow buttons do not visually overlap.
+ * ========================================================================= */
+.reveal .controls {
+  /* Widen reveal's control cluster spacing so 44px buttons don't overlap. */
+  --controls-spacing: 12px;
+}
+.reveal .controls button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  /* Re-center reveal's arrow glyph inside the enlarged 44x44 hit box. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reveal .slide-number a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.6em;
+  box-sizing: border-box;
 }
 
 /* =========================================================================
@@ -331,6 +371,24 @@
   border: 1px solid var(--blitzy-border-soft);
   border-radius: 6px;
   padding: 0.06em 0.36em;
+  /* Keep short C tokens such as r->headers_out.status on a single line. The
+     default UA line-breaking treats the hyphen in "->" as a break opportunity,
+     so a chip can wrap as "r-" / ">headers_out.status", which reads as a broken
+     token. nowrap keeps each chip intact (slides 8 and 12, QA Frontend Issue 4). */
+  white-space: nowrap;
+}
+
+/* Responsive fallback: on very narrow viewports allow an inline chip to wrap as
+   a last resort — break only where it would otherwise overflow the small-screen
+   content width, never gratuitously at the "->" hyphen — so a long token can
+   never push beyond the viewport. reveal scales the 960px slide down on phones,
+   so this rarely triggers, but it guarantees no horizontal overflow if it does. */
+@media (max-width: 480px) {
+  .reveal :not(pre) > code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
 }
 
 /* =========================================================================
