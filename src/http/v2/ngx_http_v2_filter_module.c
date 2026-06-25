@@ -163,6 +163,14 @@ ngx_http_v2_header_filter(ngx_http_request_t *r)
         r->header_only = 1;
     }
 
+#if (NGX_HTTP_STATUS_VALIDATION)
+    if (ngx_http_status_validate(r->headers_out.status) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "http2 emitting non-conforming status: %ui",
+                      r->headers_out.status);
+    }
+#endif
+
     switch (r->headers_out.status) {
 
     case NGX_HTTP_OK:

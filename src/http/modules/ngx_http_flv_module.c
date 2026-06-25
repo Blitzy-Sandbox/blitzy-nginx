@@ -184,7 +184,12 @@ ngx_http_flv_handler(ngx_http_request_t *r)
 
     log->action = "sending flv to client";
 
-    r->headers_out.status = NGX_HTTP_OK;
+    if (ngx_http_status_set(r, NGX_HTTP_OK) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "invalid status code: %ui", (ngx_uint_t) NGX_HTTP_OK);
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+
     r->headers_out.content_length_n = len;
     r->headers_out.last_modified_time = of.mtime;
 
