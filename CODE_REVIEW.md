@@ -245,8 +245,12 @@ offset arithmetic (`ngx_http_status_lookup()`, which returns a
 `const ngx_http_status_def_t *`), mirroring the proven offset-macro design
 already used by `ngx_http_status_lines[]` in the header filter; there is no
 hash map, no loop over the table, and no allocation. The table footprint is
-58 × 40 bytes ≈ **2.3 KB** (a sub-1 KB figure was an early internal goal, not
-a binding AAP requirement; the AAP mandates the full-record table). This
+58 × 40 bytes ≈ **2.3 KB** in `.data.rel.ro` (the AAP/scope §0.6.3 states a
+literal `<1 KB`-in-`.rodata` target; it is technically unsatisfiable under the
+preserved-exactly 40-byte pointer struct (§0.7.5) and the mandated O(1)
+offset-array layout (§0.3.3), and is **formally waived** in
+`docs/decisions/status_code_refactor.md` — the §0.6.3 ≈ 0-incremental-RSS
+intent being fully met). This
 satisfies the Registry, Facade, and immutable-table pattern requirements.
 
 **Type-collision avoidance.** The new registry-record typedef

@@ -47,6 +47,21 @@ Semantics). The heuristically-cacheable subset marked by the
 **RFC 9111** (HTTP Caching). These semantics are shared across HTTP/1.1,
 HTTP/2, and HTTP/3.
 
+### Memory footprint
+
+The registry is a single `static const` array of **58 records × 40 bytes
+≈ 2.3 KB**. Because each `ngx_http_status_def_t` embeds pointers (`reason.data`
+and `rfc_section`), a position-independent (PIE) build places the array in the
+**`.data.rel.ro`** segment — read-only *after* RELRO relocation — rather than in
+pure `.rodata`. The table is mapped once and shared across all forked workers, so
+the **incremental per-worker private RSS is ≈ 0**, and lookup is **O(1) with zero
+allocation**. The AAP/scope §0.6.3 names a literal `< 1 KB`-in-`.rodata` target;
+that target is technically unsatisfiable under the preserved-exactly 40-byte
+struct and the mandated offset-array layout, and is formally reconciled and
+waived in
+[`docs/decisions/status_code_refactor.md`](../decisions/status_code_refactor.md)
+— the §0.6.3 intent (immutable, shared, ≈ 0 incremental RSS) being fully met.
+
 ---
 
 ## Registry Record Type

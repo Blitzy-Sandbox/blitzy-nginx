@@ -230,7 +230,12 @@ ngx_http_header_t  ngx_http_headers_in[] = {
  * places it in .data.rel.ro and RELRO maps it read-only after relocation), is
  * mapped once, and is shared across all forked worker processes -- the
  * incremental per-worker private RSS is therefore approximately zero regardless
- * of the table's absolute size.  Immutability is the entire thread-safety story:
+ * of the table's absolute size.  (A literal sub-1-KB / pure-.rodata footprint
+ * target is technically unsatisfiable under this preserved pointer-bearing struct
+ * and the offset-array layout; it is reconciled and formally waived in
+ * docs/decisions/status_code_refactor.md, the immutable / shared / ~0
+ * incremental-RSS intent being fully met.)  Immutability is the entire
+ * thread-safety story:
  * there are no locks and no thread-local storage, and the table is never mutated
  * after worker init.
  *   Lookup is O(1) via per-class offset arithmetic (see ngx_http_status_lookup

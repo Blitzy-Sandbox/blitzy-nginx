@@ -295,3 +295,16 @@ concrete, intentional reason:
 | `perl/nginx.xs` writes | 2 | Out of scope (embedded Perl) |
 | Upstream pass-through modules | 6 | Origin status passed through unchanged |
 
+### Acceptance-criterion note — F10 footprint (`<1 KB` in `.rodata`)
+
+Beyond construct mapping, the F10 performance acceptance criterion (AAP/scope
+§0.6.3: the `static const` registry "resides in `.rodata`, is `< 1 KB`") is
+recorded here for completeness. The built registry measures **≈ 2.3 KB
+(2320 B = 58 × 40) in `.data.rel.ro`**; the literal `< 1 KB`-in-`.rodata`
+sub-criteria are **technically unsatisfiable** under the preserved-exactly
+40-byte pointer struct (§0.7.5) and the mandated O(1) offset-array layout
+(§0.3.3), and are **formally reconciled and waived** in
+[`../decisions/status_code_refactor.md`](../decisions/status_code_refactor.md)
+(§ *Footprint Acceptance-Criterion Reconciliation*) — the §0.6.3 intent
+(immutable, shared read-only, ≈ 0 incremental per-worker RSS) being fully met.
+
