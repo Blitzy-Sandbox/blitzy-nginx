@@ -186,7 +186,6 @@
           "logLevel": "NGX_LOG_ERR",
           "matchPattern": "invalid status code: <code>",
           "emittedBy": [
-            "src/http/ngx_http_request.c (ngx_http_status_set)",
             "src/http/ngx_http_core_module.c (ngx_http_send_response / ngx_http_send_header)"
           ],
           "placeholderExpr": "sum(count_over_time({job=\"nginx\"} |= \"invalid status code:\" [$__interval]))"
@@ -214,7 +213,7 @@
           "placeholderExpr": "sum(count_over_time({job=\"nginx\"} |= \"http3 emitting non-conforming status:\" [$__interval]))"
         }
       ],
-      "notes": "The three match patterns correspond verbatim to the messages emitted by the registry setter and the HTTP/2 and HTTP/3 read-side validation hooks. All require the NGX_HTTP_STATUS_VALIDATION build flag; otherwise expect zero."
+      "notes": "The three match patterns correspond verbatim to the messages emitted by the setter's callers when ngx_http_status_set rejects a code (ngx_http_core_module.c send_response/send_header) and by the HTTP/2 and HTTP/3 read-side validation hooks. All require the NGX_HTTP_STATUS_VALIDATION build flag; otherwise expect zero."
     },
     {
       "id": 3,
