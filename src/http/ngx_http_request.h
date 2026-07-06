@@ -71,6 +71,12 @@
 #define NGX_HTTP_LOG_UNSAFE                1
 
 
+/*
+ * HTTP status codes.  These numeric constants are retained for source-level
+ * backward compatibility.  RFC 9110 status metadata (reason phrase, class
+ * flags, and RFC section) is maintained by the centralized status registry
+ * declared in ngx_http_status.h.
+ */
 #define NGX_HTTP_CONTINUE                  100
 #define NGX_HTTP_SWITCHING_PROTOCOLS       101
 #define NGX_HTTP_PROCESSING                102

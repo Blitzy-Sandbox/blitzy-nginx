@@ -77,7 +77,8 @@ if [ $HTTP = YES ]; then
                          src/http/ngx_http_variables.h \
                          src/http/ngx_http_script.h \
                          src/http/ngx_http_upstream.h \
-                         src/http/ngx_http_upstream_round_robin.h"
+                         src/http/ngx_http_upstream_round_robin.h \
+                         $HTTP_STATUS_DEPS"
         ngx_module_srcs="src/http/ngx_http.c \
                          src/http/ngx_http_core_module.c \
                          src/http/ngx_http_special_response.c \
@@ -88,7 +89,8 @@ if [ $HTTP = YES ]; then
                          src/http/ngx_http_variables.c \
                          src/http/ngx_http_script.c \
                          src/http/ngx_http_upstream.c \
-                         src/http/ngx_http_upstream_round_robin.c"
+                         src/http/ngx_http_upstream_round_robin.c \
+                         $HTTP_STATUS_SRCS"
         ngx_module_libs=
         ngx_module_link=YES
 
@@ -104,6 +106,11 @@ if [ $HTTP = YES ]; then
 
     if [ $HTTP_V2 = YES -o $HTTP_V3 = YES ]; then
         HTTP_SRCS="$HTTP_SRCS $HTTP_HUFF_SRCS"
+    fi
+
+
+    if [ $HTTP_STATUS_VALIDATION = YES ]; then
+        have=NGX_HTTP_STATUS_VALIDATION . auto/have
     fi
 
 
