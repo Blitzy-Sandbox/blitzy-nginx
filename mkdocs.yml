@@ -1,6 +1,15 @@
 site_name: 'blitzy-nginx'
 nav:
   - Home: index.md
+  - API Reference:
+      - Status Code API: api/status_codes.md
+  - Migration Guide:
+      - Status Code API Migration: migration/status_code_api.md
+  - Refactor:
+      - Decision Log: refactor/decision_log.md
+      - Traceability Matrix: refactor/traceability_matrix.md
+  - Observability:
+      - Overview: observability/observability.md
 plugins:
   - techdocs-core
   - mermaid2

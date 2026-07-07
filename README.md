@@ -21,6 +21,7 @@ Enterprise distributions, commercial support and training are available from [F5
 # Table of contents
 - [How it works](#how-it-works)
   - [Modules](#modules)
+  - [HTTP status code registry](#http-status-code-registry)
   - [Configurations](#configurations)
   - [Runtime](#runtime)
 - [Downloading and installing](#downloading-and-installing)
@@ -64,6 +65,20 @@ NGINX modules can be built and distributed as static or dynamic modules. Static 
 nginx -V
 ```
 > See [Configuring the build](#configuring-the-build) for information on how to include specific Static modules into your nginx build.
+
+## HTTP status code registry
+This fork centralizes HTTP response status handling through a status registry module (`ngx_http_status`), which acts as the single authority for status code metadata, reason phrases ([RFC 9110 §15](https://datatracker.ietf.org/doc/html/rfc9110#section-15)), and status class flags. A compact public API mediates every status write and reason-phrase lookup so that status codes flow through one authoritative module rather than being set and rendered in scattered locations:
+
+- `ngx_http_status_set()` — the single sanctioned path for setting a response status code.
+- `ngx_http_status_validate()` — checks a status code against RFC 9110 semantics.
+- `ngx_http_status_reason()` — returns the canonical reason phrase for a status code.
+- `ngx_http_status_register()` — seeds the registry during the configuration phase.
+- `ngx_http_status_is_cacheable()` — reports whether a status code is cacheable by default.
+
+An optional RFC 9110 compliance validation layer can be enabled at build time with the `--with-http_status_validation` configure flag. This flag is **off by default**, so the default build is byte-identical to upstream behavior.
+
+> [!NOTE]
+> Full backward compatibility is preserved: all existing `NGX_HTTP_*` numeric constants remain defined, and direct `r->headers_out.status` assignment continues to work. For details, see the [HTTP status code API reference](docs/api/status_codes.md) and the [status code API migration guide](docs/migration/status_code_api.md).
 
 ## Configurations
 NGINX is highly flexible and configurable. Provisioning the software is achieved via text-based config file(s) accepting parameters called "[Directives](https://nginx.org/en/docs/dirindex.html)". See [Configuration File's Structure](https://nginx.org/en/docs/beginners_guide.html#conf_structure) for a comprehensive description of how NGINX configuration files work.
