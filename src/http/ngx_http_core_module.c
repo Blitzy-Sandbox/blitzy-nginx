@@ -1863,7 +1863,14 @@ ngx_http_send_header(ngx_http_request_t *r)
         if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
             ngx_http_status_log(r, NGX_LOG_WARN, "error status set failed",
                                 r->err_status);
-            /* err_status is internally determined; proceed */
+            /*
+             * A rejected err_status (possible only under strict validation)
+             * must not reach the wire as a degenerate status line: fall back
+             * to a uniform 500 through the same sanctioned write path.  This
+             * is unreachable for upstream requests, whose codes always pass
+             * through unvalidated, so backend status is never affected.
+             */
+            (void) ngx_http_status_set(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         }
         r->headers_out.status_line.len = 0;
     }

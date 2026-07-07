@@ -15,9 +15,13 @@
 
 /*
  * ngx_http_status_def_t is one row of the centralized status registry (see
- * ngx_http_status.c).  reason and reason_len are an ngx_str_t-style
- * (data, length) pair for the wire reason-phrase literal, exposed to callers
- * as a proper ngx_str_t by ngx_http_status_reason(); a NULL/0 pair marks a
+ * ngx_http_status.c).  line and line_len are an ngx_str_t-style (data, length)
+ * pair for the full wire status-line literal -- the numeric code, a single
+ * space, and the reason phrase, for example "200 OK" -- exposed to callers as
+ * a proper ngx_str_t by ngx_http_status_line(), so the hot-path header filter
+ * emits it with one copy and no per-response formatting.
+ * ngx_http_status_reason() returns the bare reason phrase ("OK") by skipping
+ * the invariant four-character "NNN " code prefix.  A NULL/0 pair marks a
  * numeric-only code.  code, flags (the NGX_HTTP_STATUS_* bits below), and
  * rfc_section are 16-bit, so a row is 16 bytes and the full table stays under
  * 1 KB per worker.  rfc_section packs the code's RFC 9110 section 15 reference
@@ -28,8 +32,8 @@
  */
 
 typedef struct {
-    const char   *reason;
-    uint16_t      reason_len;
+    const char   *line;
+    uint16_t      line_len;
     uint16_t      code;
     uint16_t      flags;
     uint16_t      rfc_section;
@@ -46,14 +50,16 @@ typedef struct {
 
 /*
  * Centralized HTTP status registry API.  ngx_http_status_set() is the single
- * write path for r->headers_out.status and ngx_http_status_reason() is the
- * single source of the wire reason phrase.  The registry is seeded once during
- * the configuration phase, before the first worker fork, and is read-only
- * afterwards, so all worker processes share it without locking.
+ * write path for r->headers_out.status; ngx_http_status_line() is the single
+ * source of the full wire status line ("200 OK") and ngx_http_status_reason()
+ * the single source of the bare reason phrase ("OK").  The registry is seeded
+ * once during the configuration phase, before the first worker fork, and is
+ * read-only afterwards, so all worker processes share it without locking.
  */
 
 ngx_int_t    ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status);
 ngx_int_t    ngx_http_status_validate(ngx_uint_t status);
+ngx_str_t    ngx_http_status_line(ngx_uint_t status);
 ngx_str_t    ngx_http_status_reason(ngx_uint_t status);
 ngx_int_t    ngx_http_status_register(void);
 ngx_uint_t   ngx_http_status_is_cacheable(ngx_uint_t status);

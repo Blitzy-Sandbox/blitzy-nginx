@@ -20,6 +20,7 @@ through `src/http/ngx_http.h`:
 ```c
 ngx_int_t    ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status);
 ngx_int_t    ngx_http_status_validate(ngx_uint_t status);
+ngx_str_t    ngx_http_status_line(ngx_uint_t status);
 ngx_str_t    ngx_http_status_reason(ngx_uint_t status);
 ngx_int_t    ngx_http_status_register(void);
 ngx_uint_t   ngx_http_status_is_cacheable(ngx_uint_t status);
@@ -30,11 +31,15 @@ ngx_uint_t   ngx_http_status_is_cacheable(ngx_uint_t status);
   success (always, in the default build for the normal path).
 - `ngx_http_status_validate()` — RFC 9110 range/class check; a no-op returning
   `NGX_OK` unless the validation feature is compiled in.
-- `ngx_http_status_reason()` — the single reason-phrase lookup (for example,
-  `200` yields `OK` — the bare phrase, with no numeric prefix); returns an
-  empty `ngx_str_t` for codes with no registry phrase (the caller then renders
-  the numeric code). The HTTP/1.x header filter prepends the numeric code and a
-  space to form the wire status line `200 OK`.
+- `ngx_http_status_line()` — the single wire-status-line lookup (for example,
+  `200` yields the full `200 OK`); returns an empty `ngx_str_t` for codes with
+  no registry entry (the caller then renders the numeric code). The HTTP/1.x
+  header filter emits this precomputed line with a single copy — no per-response
+  formatting.
+- `ngx_http_status_reason()` — the single **bare** reason-phrase lookup (for
+  example, `200` yields `OK`, with no numeric prefix), derived from the combined
+  line by skipping the `"NNN "` prefix; returns an empty `ngx_str_t` for codes
+  with no registry phrase. Consumed by the error-page diagnostic.
 - `ngx_http_status_register()` — config-phase seeding/finalization of the
   registry (runs once before workers fork; no runtime mutation).
 - `ngx_http_status_is_cacheable()` — returns non-zero if the code is flagged
@@ -103,9 +108,9 @@ Notes on the conversion:
   compiled in and rejects an out-of-range code. In the default build the call
   always succeeds on the normal (non-upstream) path, so the branch is a
   no-cost safeguard.
-- Reason-phrase rendering is now automatic: after `ngx_http_status_set()`, the
-  header filter obtains the reason string from `ngx_http_status_reason()`.
-  Callers must not set a private reason phrase.
+- Status-line rendering is now automatic: after `ngx_http_status_set()`, the
+  header filter obtains the full wire status line from `ngx_http_status_line()`
+  (a single precomputed copy). Callers must not set a private reason phrase.
 
 ## Backward Compatibility
 

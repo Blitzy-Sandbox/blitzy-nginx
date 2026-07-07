@@ -10,8 +10,8 @@ Each registry entry is described by a single record type, defined in `src/http/n
 
 ```c
 typedef struct {
-    const char   *reason;        /* reason-phrase bytes, e.g. "OK" (no code prefix) */
-    uint16_t      reason_len;    /* length of reason, in bytes */
+    const char   *line;          /* full wire status line, e.g. "200 OK" */
+    uint16_t      line_len;      /* length of line, in bytes */
     uint16_t      code;          /* numeric HTTP status code (e.g., 200, 404) */
     uint16_t      flags;         /* class/behavior flags (bit field) */
     uint16_t      rfc_section;   /* packed RFC 9110 §15 back-reference (see below) */
@@ -20,7 +20,7 @@ typedef struct {
 
 The record is deliberately compact: four `uint16_t` fields pack alongside the leading pointer so each entry is 16 bytes on common LP64 targets, keeping the whole registry table well under the 1 KB-per-worker budget the design mandates.
 
-- `reason` and `reason_len` — the reason phrase, stored as a `const char *` / length pair that forms an `ngx_str_t`-style value. The public accessor `ngx_http_status_reason()` returns this pair as a genuine `ngx_str_t`. The registry holds nginx's historical reason text and nothing more — `reason` is `"OK"` for `200`, `"Not Found"` for `404`, `"Not Allowed"` for `405`; it does **not** include the numeric code. The HTTP/1.x header filter prepends the numeric code and a space to render the full wire status line (`200 OK`, `404 Not Found`, `405 Not Allowed`). Codes that nginx ships without a phrase carry a `NULL`/`0` pair (`reason == NULL`, `reason_len == 0`).
+- `line` and `line_len` — the full precomputed **wire status line**, stored as a `const char *` / length pair that forms an `ngx_str_t`-style value: the numeric code, a single space, and the reason phrase, for example `"200 OK"` for `200`, `"404 Not Found"` for `404`, `"405 Not Allowed"` for `405`. The public accessor `ngx_http_status_line()` returns this pair as a genuine `ngx_str_t`, so the HTTP/1.x header filter emits the status line with a single copy and no per-response formatting. The bare reason phrase (`"OK"`, `"Not Found"`) is derived on demand by `ngx_http_status_reason()`, which skips the invariant four-character `"NNN "` code prefix. Codes that nginx ships without a phrase carry a `NULL`/`0` pair (`line == NULL`, `line_len == 0`).
 - `code` — the numeric HTTP status code the entry describes (for example `200` or `404`).
 - `flags` — a bitwise OR of the `NGX_HTTP_STATUS_*` flags below, encoding the code's status class and cacheability.
 - `rfc_section` — a packed back-reference to the RFC 9110 §15 subsection that defines the code, encoded as `(subsection << 8) | item`. For example `200` (§15.3.1) is `0x0301`, `404` (§15.5.5) is `0x0505`, and `500` (§15.6.1) is `0x0601`. Codes not defined in RFC 9110 §15 — such as `429` (RFC 6585), `507` (RFC 4918), and the unseeded gap rows — use `NGX_HTTP_STATUS_RFC_NONE` (`0`), meaning "no RFC 9110 §15 reference". Validation logging decodes the value back into `15.<subsection>.<item>` form (see `ngx_http_status_validate`, below).
@@ -72,18 +72,30 @@ An RFC 9110 range and class check. Strict versus standard behavior is selected a
 - Strict mode (built with `--with-http_status_validation`, i.e. `#if (NGX_HTTP_STATUS_VALIDATION)`): rejects codes outside the range 100–599 with `NGX_ERROR`. In this build `ngx_http_status_set()` additionally logs rejected codes and, via `ngx_http_status_check()`, logs RFC 9110 violations — decoding each offending code's packed `rfc_section` into `15.<subsection>.<item>` form.
 - Standard mode (default): purely permissive — always returns `NGX_OK` and performs no rejection. Diagnostic logging in this mode is done by `ngx_http_status_set()`, not by `validate()`: in a debug build (`NGX_DEBUG`) it logs locally generated out-of-range codes at `NGX_LOG_DEBUG_HTTP`. In a non-debug default build that diagnostic compiles to nothing, so the write path carries no extra cost and wire output is byte-identical to historical nginx.
 
+### `ngx_http_status_line`
+
+```c
+ngx_str_t  ngx_http_status_line(ngx_uint_t status);
+```
+
+The single source of the full **wire status line** — the numeric code, a single space, and the reason phrase (`200 OK`, `404 Not Found`, `301 Moved Permanently`, `500 Internal Server Error`). The lookup is an O(1) direct array index — there is no hashing and no search.
+
+- Parameters: `status` — the numeric status code to look up.
+- Returns: the registry entry's precomputed `line` as an `ngx_str_t`. For gap codes with no shipped phrase (for example `203`, `205`, `305`, `306`, `407`, `417`, `506`) and for out-of-range codes, it returns an empty `ngx_str_t` (`{ 0, NULL }`, i.e. `.len == 0`), signalling the caller to render the numeric status instead.
+- This is the accessor the HTTP/1.x header filter uses on the hot path: because the line is precomputed and interned in the registry, the filter emits it with a single copy and performs **no** per-response formatting. When it returns an empty value the filter falls back to the `"%03ui "` numeric writer. The HTTP/2 and HTTP/3 serializers do **not** call it — their `:status` pseudo-header is numeric-only (HPACK/QPACK carry no reason phrase).
+
 ### `ngx_http_status_reason`
 
 ```c
 ngx_str_t  ngx_http_status_reason(ngx_uint_t status);
 ```
 
-The single source of the reason phrase. The lookup is an O(1) direct array index — there is no hashing and no search.
+The single source of the **bare** reason phrase — the reason text with no numeric code prefix. The lookup is an O(1) direct array index — there is no hashing and no search.
 
 - Parameters: `status` — the numeric status code to look up.
-- Returns: the registry entry's `reason` as an `ngx_str_t`. For gap codes with no shipped phrase (for example `203`, `205`, `305`, `306`, `407`, `417`, `506`) and for out-of-range codes, it returns an empty `ngx_str_t` (`{ 0, NULL }`, i.e. `.len == 0`), signalling the caller to render the numeric status instead.
-- The returned phrase uses nginx's historical spelling (for example `OK`, `Not Found`, `Not Allowed`). The HTTP/1.x header filter prepends the numeric code and a space to produce the full wire status line, such as `200 OK`, `404 Not Found`, `301 Moved Permanently`, and `500 Internal Server Error`.
-- This function is delegated to by the HTTP/1.x header filter and the error-page funnel (`ngx_http_special_response.c`), which render a textual status line. The HTTP/2 and HTTP/3 serializers do **not** call this function: their `:status` pseudo-header is numeric-only (HPACK/QPACK carry no reason phrase), so those code paths read the numeric `r->headers_out.status` field directly and never emit a reason string.
+- Returns: the bare reason phrase as an `ngx_str_t`, derived from the registry's combined `line` by skipping the invariant four-character `"NNN "` prefix (so `200` yields `OK`, `404` yields `Not Found`). For gap codes with no shipped phrase (for example `203`, `205`, `305`, `306`, `407`, `417`, `506`) and for out-of-range codes, it returns an empty `ngx_str_t` (`{ 0, NULL }`, i.e. `.len == 0`), signalling the caller to render the numeric status instead.
+- The returned phrase uses nginx's historical spelling (for example `OK`, `Not Found`, `Not Allowed`); the numeric code and space that complete the wire line are already carried by `ngx_http_status_line()` (above).
+- This function is consumed by the error-page funnel (`ngx_http_special_response.c`) for a debug-level diagnostic. The HTTP/1.x header filter renders the wire status line via `ngx_http_status_line()`, **not** via this function. The HTTP/2 and HTTP/3 serializers do **not** call it either: their `:status` pseudo-header is numeric-only (HPACK/QPACK carry no reason phrase), so those code paths read the numeric `r->headers_out.status` field directly and never emit a reason string.
 
 ### `ngx_http_status_register`
 

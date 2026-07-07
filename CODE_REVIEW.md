@@ -29,10 +29,12 @@ file is deliberately review-focused: findings and verdicts only.
 This is an in-place refactor of `blitzy-nginx` (nginx 1.29.5) that replaces scattered
 `#define`-constant-based HTTP status handling with a single, centralized, registry-backed status API
 in `src/http/ngx_http_status.c` / `src/http/ngx_http_status.h`. All status writes route through
-`ngx_http_status_set()`; all reason-phrase lookups route through `ngx_http_status_reason()`; a static
-`ngx_http_status_def_t` registry is the single authority. Each row is a compact 16-byte record —
-`const char *reason` with a `uint16_t reason_len`, plus `uint16_t` `code`, `flags`, and a packed
-`rfc_section` (RFC 9110 §15 back-reference) — so the 54-row table is 864 bytes, under the 1 KB budget.
+`ngx_http_status_set()`; the full wire status line is served by `ngx_http_status_line()` and the bare
+reason phrase by `ngx_http_status_reason()`; a static `ngx_http_status_def_t` registry is the single
+authority. Each row is a compact 16-byte record — `const char *line` with a `uint16_t line_len` (the
+precomputed `"NNN reason"` wire literal, e.g. `"200 OK"`), plus `uint16_t` `code`, `flags`, and a
+packed `rfc_section` (RFC 9110 §15 back-reference) — so the 54-row table is 864 bytes, under the 1 KB
+budget.
 Optional RFC 9110 validation is gated behind `--with-http_status_validation` (default OFF → the
 default binary produces byte-identical wire output, confirmed at runtime for both the response status
 line and the `stub_status` payload; see [Final Re-Verification](#final-re-verification)). Backward
@@ -135,8 +137,8 @@ build edits are correct, minimal, and non-breaking.
 
 | File | Op | Role in the change |
 |------|----|--------------------|
-| `src/http/ngx_http_status.h` | CREATED | Declares the compact 16-byte `ngx_http_status_def_t {const char *reason; uint16_t reason_len; uint16_t code; uint16_t flags; uint16_t rfc_section;}` (reason/reason_len form the `ngx_str_t`-style phrase; `rfc_section` packs the RFC 9110 §15 reference), the `NGX_HTTP_STATUS_*` flag macros, and the five API prototypes. |
-| `src/http/ngx_http_status.c` | CREATED | Static registry array + O(1) lookup; implements `set` / `validate` / `reason` / `register` / `is_cacheable`. |
+| `src/http/ngx_http_status.h` | CREATED | Declares the compact 16-byte `ngx_http_status_def_t {const char *line; uint16_t line_len; uint16_t code; uint16_t flags; uint16_t rfc_section;}` (line/line_len form the full `"NNN reason"` wire status line exposed by `ngx_http_status_line()`, from which `ngx_http_status_reason()` derives the bare phrase; `rfc_section` packs the RFC 9110 §15 reference), the `NGX_HTTP_STATUS_*` flag macros, and the API prototypes (`set`/`validate`/`line`/`reason`/`register`/`is_cacheable`). |
+| `src/http/ngx_http_status.c` | CREATED | Static registry array + O(1) lookup; implements `set` / `validate` / `line` / `reason` / `register` / `is_cacheable`. |
 
 **Core HTTP units (updated)**
 
@@ -198,18 +200,21 @@ build edits are correct, minimal, and non-breaking.
 - [x] **Backward compatibility.** All 45 `NGX_HTTP_*` numeric constants remain defined; direct
   `r->headers_out.status = …` assignment still compiles and works, so third-party and unconverted
   code is unaffected.
-- [x] **Reason-phrase parity.** The registry seeds the same bare reason phrases already shipped —
-  `ngx_http_status_reason(200)` returns `"OK"` (len 2) and `reason(404)` returns `"Not Found"`, **not**
-  `"200 OK"` / `"404 Not Found"`. The header filter prepends the numeric code (`"%03ui "`) and its
-  `status_line.len` fast-path is retained, so the assembled wire status line ("200 OK", "404 Not Found")
-  is byte-identical when validation is off. Gap codes (registry miss) fall through to the numeric-only
-  `"%03ui "` write exactly as the original offset table did — machine-proven identical across codes
-  0–1023 (see [CP5 review-finding adjudication](#cp5-review-finding-adjudication)).
+- [x] **Status-line and reason parity.** The registry stores the same combined wire status lines
+  already shipped — `ngx_http_status_line(200)` returns `"200 OK"` and `line(404)` returns
+  `"404 Not Found"` — and the header filter emits the precomputed line with a **single `ngx_copy`**
+  (restoring stock's hot path; see the [QA-fix re-verification](#qa-fix-re-verification-for-f-perf-1-and-info-1)
+  below), with its caller-supplied `status_line.len` fast-path retained, so the wire status line is
+  byte-identical when validation is off. `ngx_http_status_reason()` derives the bare phrase (`"OK"`,
+  `"Not Found"`) by skipping the invariant four-character `"NNN "` prefix, for the error-page
+  diagnostic. Gap codes (registry miss) fall through to the numeric-only `"%03ui "` write exactly as
+  the original offset table did — machine-proven identical across codes 0–1023 (see
+  [CP5 review-finding adjudication](#cp5-review-finding-adjudication)).
 - [x] **Compile-time validation gate.** The `ngx_http_status_validate()` strict path is wrapped in
   `#ifdef NGX_HTTP_STATUS_VALIDATION`; when the feature is not compiled in, the validation branch is
   absent — zero runtime cost and byte-identical output on the response hot path.
 - [x] **Custom error-page HTML preserved exactly.** The per-code HTML tables in
-  `ngx_http_special_response.c` (`ngx_http_error_301_page` … `ngx_http_error_411_page`) are
+  `ngx_http_special_response.c` (`ngx_http_error_301_page` … `ngx_http_error_507_page`) are
   unchanged; only the *source* of the default reason string is centralized — error-page **selection**
   logic and `error_page` directive parsing are untouched.
 
@@ -340,9 +345,13 @@ re-checked against the full change set:
    `NGX_HTTP_STATUS_VALIDATION` is undefined, the strict validation branch is compiled out, and the
    registry seeds the same reason phrases already shipped — the default build reproduces baseline wire
    output. This was confirmed at **runtime**, not just by inspection: (a) the HTTP/1.x response status
-   line is emitted by the unchanged header filter — an exhaustive C harness compared the original
-   offset-table logic against the registry `ngx_http_status_reason()` path for **all codes 0–1023**
-   with **0 mismatches** (see [CP5 review-finding adjudication](#cp5-review-finding-adjudication)); and
+   line is emitted by the header filter via `ngx_http_status_line()` (a single precomputed copy —
+   restored by the F-PERF-1 fix, see the
+   [QA-fix re-verification](#qa-fix-re-verification-for-f-perf-1-and-info-1)); byte-identity was proven both
+   by the original exhaustive C harness across **all codes 0–1023** with **0 mismatches** (see
+   [CP5 review-finding adjudication](#cp5-review-finding-adjudication)) and by a raw-socket wire diff
+   of the final binary against the stock `07a11cf77` baseline across **69 codes** (registry + gap +
+   boundary/out-of-range) plus the default error bodies, again **0 mismatches**; and
    (b) the `stub_status` payload is a byte-for-byte match of the historical 4-line output in a default
    build (97 bytes), with the added status-class metric lines appearing only when the validation flag
    is compiled in. **Confirmed.**
@@ -376,7 +385,10 @@ runtime before this final verdict:
   through to the same numeric write. An exhaustive harness (`blitzy_adhoc_test_hdrline.c`, ad-hoc — not
   committed) embedded the verbatim original offset table and compared its emitted status line against
   the registry path for **every code 0–1023**: **0 mismatches**. Applying the reviewer's suggested
-  "fix" would have introduced a divergence, so the header filter is intentionally left **unchanged**.
+  "fix" would have introduced a divergence, so **no byte-identity change** was made on that basis. (The
+  header filter *was* subsequently modified for the F-PERF-1 performance fix — restoring the
+  single-copy render via `ngx_http_status_line()` — which preserved this byte-identity result across
+  all codes; see the [QA-fix re-verification](#qa-fix-re-verification-for-f-perf-1-and-info-1) below.)
 
 - **CP5-#14 — `stub_status` payload regression: REAL, remediated by gating.** The status-class metric
   lines and their counter reads had been added to the `stub_status` handler unconditionally, which
@@ -387,6 +399,38 @@ runtime before this final verdict:
   (byte-identical, confirmed with `od -c`), while a `--with-http_status_validation` build returns
   **10 lines / 265 bytes** (the 4 baseline lines plus `nginx_status_1xx_total` … `_5xx_total` and
   `nginx_status_validation_rejections_total`).
+
+### QA-fix re-verification for F-PERF-1 and Info-1
+
+After the four domain phases were approved, a QA testing pass raised one CRITICAL performance finding
+(F-PERF-1) and one INFO finding (Info-1). Both were remediated within the file sets already owned by
+**Phase 2 — Backend Architecture** (the C sources) and **Phase 4 — Documentation & Release** (the
+traceability matrix, decision log, API and migration docs); those phases were re-reviewed and their
+verdicts re-confirmed `APPROVED` against the amended code.
+
+- **F-PERF-1 (CRITICAL, Performance) — RESOLVED.** The reason-only registry plus a per-response
+  `ngx_sprintf("%03ui ", status)` in the header filter exceeded the < 2% latency budget on a
+  `return 200;` endpoint (reproduced at **+2.26% CPU-time/req** vs. the stock `07a11cf77` baseline).
+  Remediation: intern the full `"NNN reason"` wire literal in the registry (`line`/`line_len`), expose
+  it via `ngx_http_status_line()`, and emit it from the header filter with a **single `ngx_copy`** —
+  exactly the stock mechanism; `ngx_http_status_reason()` still derives the bare phrase by skipping the
+  `"NNN "` prefix, so the registry remains the single source and the row stays 16 bytes (table 864 B).
+  Re-verified: clean `-Werror` build of both variants; **byte-identical** to stock across 69 codes and
+  the default error bodies; fixed CPU-time/req **+0.76%** (within budget); isolated microbench
+  20.98 → 3.88 ns/op (81.5% render reduction). Files: `ngx_http_status.h`, `ngx_http_status.c`,
+  `ngx_http_header_filter_module.c` (all Phase 2).
+- **Info-1 (INFO, validation build) — RESOLVED.** Under `--with-http_status_validation`, a rejected
+  local out-of-range `err_status` rendered a degenerate `"000"` status line. Remediation: in
+  `ngx_http_send_header()` (`ngx_http_core_module.c`), route a rejected `err_status` to a uniform
+  `500` through the sanctioned `ngx_http_status_set()` seam. Re-verified: the validation build renders
+  `500` for `return 99/600/999` (was `000`) with a request-id-correlated rejection log; the fallback is
+  a dead branch in the default build (byte-identity preserved) and **unreachable for upstream**
+  requests (the `r->upstream` guard makes `ngx_http_status_set()` always return `NGX_OK`), so the
+  upstream pass-through stays byte-for-byte for standard, non-standard, and out-of-range (999) backend
+  codes in both variants. File: `ngx_http_core_module.c` (Phase 2).
+
+Both fixes preserve every binding invariant listed above; each modified file remains within its
+originally assigned domain phase, so the phase partition is unchanged and the overall verdict stands.
 
 **Final Verdict: APPROVED**
 

@@ -81,7 +81,7 @@ ngx_http_header_filter(ngx_http_request_t *r)
 {
     u_char                    *p;
     size_t                     len;
-    ngx_str_t                  host, *status_line, status_reason;
+    ngx_str_t                  host, *status_line, status_line_str;
     ngx_buf_t                 *b;
     ngx_uint_t                 status, i, port;
     ngx_chain_t                out;
@@ -143,8 +143,8 @@ ngx_http_header_filter(ngx_http_request_t *r)
 
         /*
          * Preserve the status-specific side effects that the centralized
-         * status registry does not carry: ngx_http_status_reason() returns
-         * only the reason phrase, so the header-only and header-clearing
+         * status registry does not carry: ngx_http_status_line() returns only
+         * the wire status line, so the header-only and header-clearing
          * behavior for 204 and 304 is retained here explicitly.
          */
 
@@ -161,21 +161,20 @@ ngx_http_header_filter(ngx_http_request_t *r)
         }
 
         /*
-         * The centralized status registry is the single source of the reason
-         * phrase.  A non-empty phrase is emitted as "<code> <reason>"; the
-         * numeric code and separating space are written by the status-line
-         * writer below, so the phrase itself carries no code prefix.  An empty
-         * phrase (a code the registry does not seed) falls through to
-         * numeric-only rendering, exactly as the previous offset-indexed
-         * status-line table did for its unset entries and out-of-range codes.
+         * The centralized status registry is the single source of the wire
+         * status line.  ngx_http_status_line() returns the full "<code>
+         * <reason>" literal (for example "200 OK"), so the hot path emits it
+         * with one copy and no per-response formatting.  A code the registry
+         * does not seed yields an empty line and falls through to numeric-only
+         * rendering, exactly as the previous offset-indexed status-line table
+         * did for its unset entries and out-of-range codes.
          */
 
-        status_reason = ngx_http_status_reason(status);
+        status_line_str = ngx_http_status_line(status);
 
-        if (status_reason.len) {
-            /* registry codes are 100-599: 3-digit code (%03ui) + SP + reason */
-            len += sizeof("000 ") - 1 + status_reason.len;
-            status_line = &status_reason;
+        if (status_line_str.len) {
+            len += status_line_str.len;
+            status_line = &status_line_str;
 
         } else {
             len += NGX_INT_T_LEN + 1 /* SP */;
@@ -346,25 +345,24 @@ ngx_http_header_filter(ngx_http_request_t *r)
     b->last = ngx_cpymem(b->last, "HTTP/1.1 ", sizeof("HTTP/1.x ") - 1);
 
     /* status line */
-    if (r->headers_out.status_line.len) {
+    if (status_line) {
 
-        /* a caller-supplied status line already carries its own code */
+        /*
+         * A caller-supplied status line and a registry status line each carry
+         * their own numeric code, so either is emitted with a single copy.
+         */
+
         b->last = ngx_copy(b->last, status_line->data, status_line->len);
 
     } else {
 
         /*
-         * Registry path: write the numeric code and a separating space, then
-         * append the reason phrase from ngx_http_status_reason() when the
-         * registry supplied one.  A code with no registry phrase renders
-         * numeric-only, matching the previous table's ngx_null_string entries.
+         * A code the registry does not seed (with no caller-supplied line)
+         * renders numeric-only, matching the previous table's ngx_null_string
+         * entries and out-of-range codes.
          */
 
         b->last = ngx_sprintf(b->last, "%03ui ", status);
-
-        if (status_line) {
-            b->last = ngx_copy(b->last, status_line->data, status_line->len);
-        }
     }
     *b->last++ = CR; *b->last++ = LF;
 
