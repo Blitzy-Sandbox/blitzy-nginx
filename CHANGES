@@ -10,8 +10,8 @@ Changes with nginx 1.29.5                                        06 Jul 2026
 
     *) Feature: optional RFC 9110 status code validation, enabled with the
        new "--with-http_status_validation" configure option; validation is
-       disabled by default, and the default build remains byte-identical in
-       behavior.
+       disabled by default, and with it disabled the default build produces
+       byte-identical wire output, including the stub_status response.
 
     *) Change: the response status line and default error page reason
        phrases are now obtained from the status registry via

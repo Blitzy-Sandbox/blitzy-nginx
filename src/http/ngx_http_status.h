@@ -15,11 +15,16 @@
 
 /*
  * ngx_http_status_def_t is one row of the centralized status registry (see
- * ngx_http_status.c).  reason is the wire reason-phrase literal and reason_len
- * its length; a NULL/0 pair marks a numeric-only code.  code and flags (the
- * NGX_HTTP_STATUS_* bits below) are 16-bit so the whole table stays compact.
- * ngx_http_request_t is forward-declared by ngx_http.h, which includes this
- * header, so ngx_http_request.h is intentionally not included here.
+ * ngx_http_status.c).  reason and reason_len are an ngx_str_t-style
+ * (data, length) pair for the wire reason-phrase literal, exposed to callers
+ * as a proper ngx_str_t by ngx_http_status_reason(); a NULL/0 pair marks a
+ * numeric-only code.  code, flags (the NGX_HTTP_STATUS_* bits below), and
+ * rfc_section are 16-bit, so a row is 16 bytes and the full table stays under
+ * 1 KB per worker.  rfc_section packs the code's RFC 9110 section 15 reference
+ * as (subsection << 8) | item (for example 0x0301 for section 15.3.1, status
+ * 200); codes not defined in RFC 9110 section 15 carry 0.  ngx_http_request_t
+ * is forward-declared by ngx_http.h, which includes this header, so
+ * ngx_http_request.h is intentionally not included here.
  */
 
 typedef struct {
@@ -27,6 +32,7 @@ typedef struct {
     uint16_t      reason_len;
     uint16_t      code;
     uint16_t      flags;
+    uint16_t      rfc_section;
 } ngx_http_status_def_t;
 
 

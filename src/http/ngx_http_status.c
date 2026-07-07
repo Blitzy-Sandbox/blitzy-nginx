@@ -33,12 +33,25 @@
 #define NGX_HTTP_STATUS_LAST_5XX   508
 
 
+/*
+ * RFC 9110 section 15 back-reference for a row, packed as
+ * (subsection << 8) | item so each row stays 16 bytes and the whole table
+ * stays under 1 KB per worker.  For example section 15.3.1 (status 200) packs
+ * to 0x0301.  Codes not defined in RFC 9110 section 15 (for example 429 from
+ * RFC 6585 or 507 from RFC 4918) and undefined gap rows carry
+ * NGX_HTTP_STATUS_RFC_NONE.
+ */
+
+#define NGX_HTTP_STATUS_RFC(sub, item)   ((uint16_t) (((sub) << 8) | (item)))
+#define NGX_HTTP_STATUS_RFC_NONE         ((uint16_t) 0)
+
+
 /* Registry row constructors: a known reason phrase, or a numeric-only gap. */
 
-#define NGX_HTTP_STATUS_ROW(code, reason, flags)                              \
-    { (reason), (uint16_t) (sizeof(reason) - 1), (code), (flags) }
-#define NGX_HTTP_STATUS_GAP(code, flags)                                      \
-    { NULL, 0, (code), (flags) }
+#define NGX_HTTP_STATUS_ROW(code, reason, flags, rfc)                         \
+    { (reason), (uint16_t) (sizeof(reason) - 1), (code), (flags), (rfc) }
+#define NGX_HTTP_STATUS_GAP(code, flags, rfc)                                 \
+    { NULL, 0, (code), (flags), (rfc) }
 
 
 /*
@@ -51,81 +64,118 @@
 
 static const ngx_http_status_def_t  ngx_http_status_defs[] = {
 
-    /* 2xx successful */
-    NGX_HTTP_STATUS_ROW(200, "OK", NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(201, "Created", 0),
-    NGX_HTTP_STATUS_ROW(202, "Accepted", 0),
-    NGX_HTTP_STATUS_GAP(203, NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(204, "No Content", NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_GAP(205, 0),
-    NGX_HTTP_STATUS_ROW(206, "Partial Content", NGX_HTTP_STATUS_CACHEABLE),
+    /* 2xx successful (RFC 9110 15.3) */
+    NGX_HTTP_STATUS_ROW(200, "OK", NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(3, 1)),
+    NGX_HTTP_STATUS_ROW(201, "Created", 0, NGX_HTTP_STATUS_RFC(3, 2)),
+    NGX_HTTP_STATUS_ROW(202, "Accepted", 0, NGX_HTTP_STATUS_RFC(3, 3)),
+    NGX_HTTP_STATUS_GAP(203, NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(3, 4)),
+    NGX_HTTP_STATUS_ROW(204, "No Content", NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(3, 5)),
+    NGX_HTTP_STATUS_GAP(205, 0, NGX_HTTP_STATUS_RFC(3, 6)),
+    NGX_HTTP_STATUS_ROW(206, "Partial Content", NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(3, 7)),
 
-    /* 3xx redirection */
-    NGX_HTTP_STATUS_GAP(300, NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(301, "Moved Permanently", NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(302, "Moved Temporarily", 0),
-    NGX_HTTP_STATUS_ROW(303, "See Other", 0),
-    NGX_HTTP_STATUS_ROW(304, "Not Modified", 0),
-    NGX_HTTP_STATUS_GAP(305, 0),
-    NGX_HTTP_STATUS_GAP(306, 0),
-    NGX_HTTP_STATUS_ROW(307, "Temporary Redirect", 0),
-    NGX_HTTP_STATUS_ROW(308, "Permanent Redirect", NGX_HTTP_STATUS_CACHEABLE),
+    /* 3xx redirection (RFC 9110 15.4) */
+    NGX_HTTP_STATUS_GAP(300, 0, NGX_HTTP_STATUS_RFC(4, 1)),
+    NGX_HTTP_STATUS_ROW(301, "Moved Permanently", NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(4, 2)),
+    NGX_HTTP_STATUS_ROW(302, "Moved Temporarily", 0,
+        NGX_HTTP_STATUS_RFC(4, 3)),
+    NGX_HTTP_STATUS_ROW(303, "See Other", 0, NGX_HTTP_STATUS_RFC(4, 4)),
+    NGX_HTTP_STATUS_ROW(304, "Not Modified", 0, NGX_HTTP_STATUS_RFC(4, 5)),
+    NGX_HTTP_STATUS_GAP(305, 0, NGX_HTTP_STATUS_RFC(4, 6)),
+    NGX_HTTP_STATUS_GAP(306, 0, NGX_HTTP_STATUS_RFC(4, 7)),
+    NGX_HTTP_STATUS_ROW(307, "Temporary Redirect", 0,
+        NGX_HTTP_STATUS_RFC(4, 8)),
+    NGX_HTTP_STATUS_ROW(308, "Permanent Redirect", NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(4, 9)),
 
-    /* 4xx client error */
-    NGX_HTTP_STATUS_ROW(400, "Bad Request", NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_ROW(401, "Unauthorized", NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_ROW(402, "Payment Required", NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_ROW(403, "Forbidden", NGX_HTTP_STATUS_CLIENT_ERROR),
+    /* 4xx client error (RFC 9110 15.5) */
+    NGX_HTTP_STATUS_ROW(400, "Bad Request", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 1)),
+    NGX_HTTP_STATUS_ROW(401, "Unauthorized", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 2)),
+    NGX_HTTP_STATUS_ROW(402, "Payment Required", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 3)),
+    NGX_HTTP_STATUS_ROW(403, "Forbidden", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 4)),
     NGX_HTTP_STATUS_ROW(404, "Not Found",
-        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE),
+        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(5, 5)),
     NGX_HTTP_STATUS_ROW(405, "Not Allowed",
-        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(406, "Not Acceptable", NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(407, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_ROW(408, "Request Time-out", NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_ROW(409, "Conflict", NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(5, 6)),
+    NGX_HTTP_STATUS_ROW(406, "Not Acceptable", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 7)),
+    NGX_HTTP_STATUS_GAP(407, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 8)),
+    NGX_HTTP_STATUS_ROW(408, "Request Time-out", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 9)),
+    NGX_HTTP_STATUS_ROW(409, "Conflict", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 10)),
     NGX_HTTP_STATUS_ROW(410, "Gone",
-        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(411, "Length Required", NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(5, 11)),
+    NGX_HTTP_STATUS_ROW(411, "Length Required", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 12)),
     NGX_HTTP_STATUS_ROW(412, "Precondition Failed",
-        NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR, NGX_HTTP_STATUS_RFC(5, 13)),
     NGX_HTTP_STATUS_ROW(413, "Request Entity Too Large",
-        NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR, NGX_HTTP_STATUS_RFC(5, 14)),
     NGX_HTTP_STATUS_ROW(414, "Request-URI Too Large",
-        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE),
+        NGX_HTTP_STATUS_CLIENT_ERROR | NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(5, 15)),
     NGX_HTTP_STATUS_ROW(415, "Unsupported Media Type",
-        NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR, NGX_HTTP_STATUS_RFC(5, 16)),
     NGX_HTTP_STATUS_ROW(416, "Requested Range Not Satisfiable",
-        NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(417, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(418, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(419, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(420, NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR, NGX_HTTP_STATUS_RFC(5, 17)),
+    NGX_HTTP_STATUS_GAP(417, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 18)),
+    NGX_HTTP_STATUS_GAP(418, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 19)),
+    NGX_HTTP_STATUS_GAP(419, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_GAP(420, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
     NGX_HTTP_STATUS_ROW(421, "Misdirected Request",
-        NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(422, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(423, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(424, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(425, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(426, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(427, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_GAP(428, NGX_HTTP_STATUS_CLIENT_ERROR),
-    NGX_HTTP_STATUS_ROW(429, "Too Many Requests", NGX_HTTP_STATUS_CLIENT_ERROR),
+        NGX_HTTP_STATUS_CLIENT_ERROR, NGX_HTTP_STATUS_RFC(5, 20)),
+    NGX_HTTP_STATUS_GAP(422, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 21)),
+    NGX_HTTP_STATUS_GAP(423, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_GAP(424, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_GAP(425, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_GAP(426, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC(5, 22)),
+    NGX_HTTP_STATUS_GAP(427, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_GAP(428, NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_ROW(429, "Too Many Requests", NGX_HTTP_STATUS_CLIENT_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
 
-    /* 5xx server error */
+    /* 5xx server error (RFC 9110 15.6) */
     NGX_HTTP_STATUS_ROW(500, "Internal Server Error",
-        NGX_HTTP_STATUS_SERVER_ERROR),
+        NGX_HTTP_STATUS_SERVER_ERROR, NGX_HTTP_STATUS_RFC(6, 1)),
     NGX_HTTP_STATUS_ROW(501, "Not Implemented",
-        NGX_HTTP_STATUS_SERVER_ERROR | NGX_HTTP_STATUS_CACHEABLE),
-    NGX_HTTP_STATUS_ROW(502, "Bad Gateway", NGX_HTTP_STATUS_SERVER_ERROR),
+        NGX_HTTP_STATUS_SERVER_ERROR | NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(6, 2)),
+    NGX_HTTP_STATUS_ROW(502, "Bad Gateway", NGX_HTTP_STATUS_SERVER_ERROR,
+        NGX_HTTP_STATUS_RFC(6, 3)),
     NGX_HTTP_STATUS_ROW(503, "Service Temporarily Unavailable",
-        NGX_HTTP_STATUS_SERVER_ERROR),
-    NGX_HTTP_STATUS_ROW(504, "Gateway Time-out", NGX_HTTP_STATUS_SERVER_ERROR),
+        NGX_HTTP_STATUS_SERVER_ERROR, NGX_HTTP_STATUS_RFC(6, 4)),
+    NGX_HTTP_STATUS_ROW(504, "Gateway Time-out", NGX_HTTP_STATUS_SERVER_ERROR,
+        NGX_HTTP_STATUS_RFC(6, 5)),
     NGX_HTTP_STATUS_ROW(505, "HTTP Version Not Supported",
-        NGX_HTTP_STATUS_SERVER_ERROR),
-    NGX_HTTP_STATUS_GAP(506, NGX_HTTP_STATUS_SERVER_ERROR),
+        NGX_HTTP_STATUS_SERVER_ERROR, NGX_HTTP_STATUS_RFC(6, 6)),
+    NGX_HTTP_STATUS_GAP(506, NGX_HTTP_STATUS_SERVER_ERROR,
+        NGX_HTTP_STATUS_RFC_NONE),
     NGX_HTTP_STATUS_ROW(507, "Insufficient Storage",
-        NGX_HTTP_STATUS_SERVER_ERROR)
+        NGX_HTTP_STATUS_SERVER_ERROR, NGX_HTTP_STATUS_RFC_NONE)
 };
 
 
@@ -246,11 +296,19 @@ ngx_http_status_validate(ngx_uint_t status)
 }
 
 
-/* Increment the status-class counter for a valid code; ignore out-of-range. */
+/*
+ * Increment the status-class counter for a valid code; ignore out-of-range.
+ * The counters back the validation-only stub_status metric lines, so the body
+ * is compiled in only when validation is enabled.  In the default build this
+ * is a no-op, so the write path carries no extra atomic and the stub_status
+ * output stays byte-identical to historical nginx.
+ */
 
 static ngx_inline void
 ngx_http_status_count(ngx_uint_t status)
 {
+#if (NGX_HTTP_STATUS_VALIDATION)
+
     ngx_uint_t  slot;
 
     if (status < 100 || status > 599) {
@@ -260,6 +318,12 @@ ngx_http_status_count(ngx_uint_t status)
     slot = status / 100 - 1;
 
     (void) ngx_atomic_fetch_add(&ngx_http_status_counters[slot], 1);
+
+#else
+
+    (void) status;
+
+#endif
 }
 
 
@@ -340,12 +404,31 @@ ngx_http_status_log(ngx_http_request_t *r, ngx_uint_t level,
 static void
 ngx_http_status_check(ngx_http_request_t *r, ngx_uint_t status)
 {
-    ngx_uint_t  prev;
+    ngx_uint_t                    prev;
+    const ngx_http_status_def_t  *def;
 
     prev = r->headers_out.status;
 
     if (status < NGX_HTTP_OK) {
         if (prev >= NGX_HTTP_OK) {
+
+            /*
+             * A 1xx must precede the final status (RFC 9110 15.2).  Identify
+             * the offending final status by its RFC 9110 section, decoded from
+             * the registry row's packed rfc_section field; an unregistered
+             * final status decodes to section 0.0.
+             */
+
+            def = ngx_http_status_lookup(prev);
+
+            ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
+                          "http informational status %ui sent after final "
+                          "status %ui (RFC 9110 15.%ui.%ui)", status, prev,
+                          def ? (ngx_uint_t) (def->rfc_section >> 8)
+                              : (ngx_uint_t) 0,
+                          def ? (ngx_uint_t) (def->rfc_section & 0xff)
+                              : (ngx_uint_t) 0);
+
             ngx_http_status_log(r, NGX_LOG_WARN,
                 "informational status after final status", status);
         }
@@ -387,6 +470,20 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 
         return NGX_OK;
     }
+
+#if !(NGX_HTTP_STATUS_VALIDATION) && (NGX_DEBUG)
+    /*
+     * Standard-mode diagnostics: with strict validation compiled out, surface
+     * locally generated codes outside the 100..599 range at debug level only.
+     * This block is absent from non-debug and validation builds, so the write
+     * path carries no extra cost there.
+     */
+    if (status < 100 || status > 599) {
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "http suspicious status %ui set (standard mode)",
+                       status);
+    }
+#endif
 
     if (ngx_http_status_validate(status) != NGX_OK) {
         ngx_http_status_log(r, NGX_LOG_ERR, "invalid HTTP status rejected",

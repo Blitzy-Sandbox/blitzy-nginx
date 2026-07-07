@@ -88,7 +88,9 @@ ngx_http_stub_status_handler(ngx_http_request_t *r)
     ngx_buf_t         *b;
     ngx_chain_t        out;
     ngx_atomic_int_t   ap, hn, ac, rq, rd, wr, wa;
+#if (NGX_HTTP_STATUS_VALIDATION)
     ngx_atomic_int_t   c1xx, c2xx, c3xx, c4xx, c5xx, crej;
+#endif
 
     if (!(r->method & (NGX_HTTP_GET|NGX_HTTP_HEAD))) {
         return NGX_HTTP_NOT_ALLOWED;
@@ -107,12 +109,15 @@ ngx_http_stub_status_handler(ngx_http_request_t *r)
     size = sizeof("Active connections:  \n") + NGX_ATOMIC_T_LEN
            + sizeof("server accepts handled requests\n") - 1
            + 6 + 3 * NGX_ATOMIC_T_LEN
-           + sizeof("Reading:  Writing:  Waiting:  \n") + 3 * NGX_ATOMIC_T_LEN
-           /* status-class counters: five "nginx_status_Nxx_total" lines plus
-              the validation-rejections line, each carrying one atomic value */
-           + 5 * (sizeof("nginx_status_1xx_total \n") - 1 + NGX_ATOMIC_T_LEN)
-           + sizeof("nginx_status_validation_rejections_total \n") - 1
-           + NGX_ATOMIC_T_LEN;
+           + sizeof("Reading:  Writing:  Waiting:  \n") + 3 * NGX_ATOMIC_T_LEN;
+
+#if (NGX_HTTP_STATUS_VALIDATION)
+    /* status-class counters: five "nginx_status_Nxx_total" lines plus
+       the validation-rejections line, each carrying one atomic value */
+    size += 5 * (sizeof("nginx_status_1xx_total \n") - 1 + NGX_ATOMIC_T_LEN)
+            + sizeof("nginx_status_validation_rejections_total \n") - 1
+            + NGX_ATOMIC_T_LEN;
+#endif
 
     b = ngx_create_temp_buf(r->pool, size);
     if (b == NULL) {
@@ -140,11 +145,14 @@ ngx_http_stub_status_handler(ngx_http_request_t *r)
     b->last = ngx_sprintf(b->last, "Reading: %uA Writing: %uA Waiting: %uA \n",
                           rd, wr, wa);
 
+#if (NGX_HTTP_STATUS_VALIDATION)
     /*
-     * Status-class counters maintained by ngx_http_status_set().  These are
-     * appended after the historical stub_status payload so the original four
-     * lines remain byte-identical; the labels double as the exported metric
-     * series consumed by the status-metrics dashboard.
+     * Status-class counters maintained by ngx_http_status_set().  They are
+     * emitted only when the status-validation feature is compiled in
+     * (--with-http_status_validation); the default build therefore reproduces
+     * the historical four-line stub_status payload byte-for-byte, while the
+     * validation build additionally exports these metric series for the
+     * status-metrics dashboard.
      */
     c1xx = ngx_http_status_counters[NGX_HTTP_STATUS_CLASS_1XX];
     c2xx = ngx_http_status_counters[NGX_HTTP_STATUS_CLASS_2XX];
@@ -161,6 +169,7 @@ ngx_http_stub_status_handler(ngx_http_request_t *r)
     b->last = ngx_sprintf(b->last,
                           "nginx_status_validation_rejections_total %uA\n",
                           crej);
+#endif
 
     if (ngx_http_status_set(r, NGX_HTTP_OK) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;

@@ -630,7 +630,7 @@ graph TD
     SET["ngx_http_status_set()"]
     VAL["ngx_http_status_validate()<br/>compile-time gate"]
     REASON["ngx_http_status_reason()"]
-    TABLE["static ngx_http_status_def_t[]<br/>code, reason, flags<br/>O(1) index, 864 B &lt; 1 KB, read-only"]
+    TABLE["static ngx_http_status_def_t[]<br/>code, reason, flags, rfc_section<br/>O(1) index, 864 B &lt; 1 KB, read-only"]
   end
 
   FIELD["r-&gt;headers_out.status"]
@@ -819,7 +819,7 @@ graph TD
 
   <!-- Pinned CDN scripts (classic UMD builds so file:// works without module/CORS issues) -->
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 
   <script>
@@ -828,7 +828,7 @@ graph TD
     mermaid.initialize({
       startOnLoad: false,
       theme: 'base',
-      securityLevel: 'loose',
+      securityLevel: 'antiscript',
       themeVariables: {
         background: '#0A0E1A',
         primaryColor: '#141A29',

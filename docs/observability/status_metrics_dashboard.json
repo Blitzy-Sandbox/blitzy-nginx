@@ -38,10 +38,21 @@
       "datasource": "${DS_PROMETHEUS}",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
       "targets": [
-        { "refId": "A", "legendFormat": "2xx", "expr": "rate(nginx_status_2xx_total[5m])" },
-        { "refId": "B", "legendFormat": "3xx", "expr": "rate(nginx_status_3xx_total[5m])" },
-        { "refId": "C", "legendFormat": "4xx", "expr": "rate(nginx_status_4xx_total[5m])" },
-        { "refId": "D", "legendFormat": "5xx", "expr": "rate(nginx_status_5xx_total[5m])" }
+        { "refId": "A", "legendFormat": "1xx", "expr": "rate(nginx_status_1xx_total[5m])" },
+        { "refId": "B", "legendFormat": "2xx", "expr": "rate(nginx_status_2xx_total[5m])" },
+        { "refId": "C", "legendFormat": "3xx", "expr": "rate(nginx_status_3xx_total[5m])" },
+        { "refId": "D", "legendFormat": "4xx", "expr": "rate(nginx_status_4xx_total[5m])" },
+        { "refId": "E", "legendFormat": "5xx", "expr": "rate(nginx_status_5xx_total[5m])" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Total 1xx Responses",
+      "type": "stat",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 8 },
+      "targets": [
+        { "refId": "A", "legendFormat": "1xx", "expr": "nginx_status_1xx_total" }
       ]
     },
     {
@@ -49,7 +60,7 @@
       "title": "Total 2xx Responses",
       "type": "stat",
       "datasource": "${DS_PROMETHEUS}",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 8 },
       "targets": [
         { "refId": "A", "legendFormat": "2xx", "expr": "nginx_status_2xx_total" }
       ]
@@ -59,7 +70,7 @@
       "title": "Total 3xx Responses",
       "type": "stat",
       "datasource": "${DS_PROMETHEUS}",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 8 },
       "targets": [
         { "refId": "A", "legendFormat": "3xx", "expr": "nginx_status_3xx_total" }
       ]
@@ -69,7 +80,7 @@
       "title": "Total 4xx Responses",
       "type": "stat",
       "datasource": "${DS_PROMETHEUS}",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 8 },
       "targets": [
         { "refId": "A", "legendFormat": "4xx", "expr": "nginx_status_4xx_total" }
       ]
@@ -79,7 +90,7 @@
       "title": "Total 5xx Responses",
       "type": "stat",
       "datasource": "${DS_PROMETHEUS}",
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 8 },
       "targets": [
         { "refId": "A", "legendFormat": "5xx", "expr": "nginx_status_5xx_total" }
       ]

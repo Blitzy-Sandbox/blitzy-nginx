@@ -30,10 +30,14 @@ This is an in-place refactor of `blitzy-nginx` (nginx 1.29.5) that replaces scat
 `#define`-constant-based HTTP status handling with a single, centralized, registry-backed status API
 in `src/http/ngx_http_status.c` / `src/http/ngx_http_status.h`. All status writes route through
 `ngx_http_status_set()`; all reason-phrase lookups route through `ngx_http_status_reason()`; a static
-`ngx_http_status_def_t` registry (`code`, `reason`, `flags`, `rfc_section`) is the single authority.
+`ngx_http_status_def_t` registry is the single authority. Each row is a compact 16-byte record —
+`const char *reason` with a `uint16_t reason_len`, plus `uint16_t` `code`, `flags`, and a packed
+`rfc_section` (RFC 9110 §15 back-reference) — so the 54-row table is 864 bytes, under the 1 KB budget.
 Optional RFC 9110 validation is gated behind `--with-http_status_validation` (default OFF → the
-default binary is byte-identical to baseline). Backward compatibility is preserved: all 45
-`NGX_HTTP_*` constants are retained; direct `r->headers_out.status` assignment still works.
+default binary produces byte-identical wire output, confirmed at runtime for both the response status
+line and the `stub_status` payload; see [Final Re-Verification](#final-re-verification)). Backward
+compatibility is preserved: all 45 `NGX_HTTP_*` constants are retained; direct
+`r->headers_out.status` assignment still works.
 
 ## Legend — Phase Verdicts
 
@@ -46,7 +50,7 @@ Each domain phase resolves to **exactly one** verdict token. A phase is only mar
 every file assigned to it passes its checklist; any unmet requirement yields `BLOCKED` with a
 concrete remediation note.
 
-## Changed-File Inventory (36 files: 11 created + 25 updated)
+## Changed-File Inventory (35 files: 11 created + 24 updated)
 
 Every file below is assigned to **exactly one** domain phase — no omissions, no duplicates. The
 per-phase file tables in Sections 1–4 are the authoritative partition; the
@@ -57,7 +61,7 @@ per-phase file tables in Sections 1–4 are the authoritative partition; the
   `docs/refactor/decision_log.md`, `docs/refactor/traceability_matrix.md`,
   `docs/presentation/executive_summary.html`, `docs/observability/observability.md`,
   `docs/observability/status_metrics_dashboard.json`.
-- **Updated (25):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `auto/modules`,
+- **Updated (24):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `auto/modules`,
   `src/http/ngx_http.h`,
   `src/http/ngx_http_request.h`, `src/http/ngx_http_request.c`, `src/http/ngx_http_core_module.c`,
   `src/http/ngx_http_header_filter_module.c`, `src/http/ngx_http_special_response.c`,
@@ -69,8 +73,9 @@ per-phase file tables in Sections 1–4 are the authoritative partition; the
   `src/http/modules/ngx_http_gzip_static_module.c`,
   `src/http/modules/ngx_http_image_filter_module.c`, `src/http/modules/ngx_http_mp4_module.c`,
   `src/http/modules/ngx_http_flv_module.c`, `src/http/modules/ngx_http_dav_module.c`,
-  `src/http/modules/ngx_http_stub_status_module.c`, `src/http/v2/ngx_http_v2_filter_module.c`,
-  `src/http/v3/ngx_http_v3_filter_module.c`.
+  `src/http/modules/ngx_http_stub_status_module.c`, `src/http/v2/ngx_http_v2_filter_module.c`.
+  (`src/http/v3/ngx_http_v3_filter_module.c` is **not** changed — the HTTP/3 serializer already
+  emitted a numeric-only `:status` and needed no edit, so it is excluded from this inventory.)
 
 ---
 
@@ -124,13 +129,13 @@ build edits are correct, minimal, and non-breaking.
 - **Domain:** The C registry/API core plus every HTTP translation unit that writes a status or
   renders a status/reason phrase.
 
-### Files in this phase (22)
+### Files in this phase (21)
 
 **Registry / API core (created)**
 
 | File | Op | Role in the change |
 |------|----|--------------------|
-| `src/http/ngx_http_status.h` | CREATED | Declares `ngx_http_status_def_t {code, reason, flags, rfc_section}`, the `NGX_HTTP_STATUS_*` flag macros, and the five API prototypes. |
+| `src/http/ngx_http_status.h` | CREATED | Declares the compact 16-byte `ngx_http_status_def_t {const char *reason; uint16_t reason_len; uint16_t code; uint16_t flags; uint16_t rfc_section;}` (reason/reason_len form the `ngx_str_t`-style phrase; `rfc_section` packs the RFC 9110 §15 reference), the `NGX_HTTP_STATUS_*` flag macros, and the five API prototypes. |
 | `src/http/ngx_http_status.c` | CREATED | Static registry array + O(1) lookup; implements `set` / `validate` / `reason` / `register` / `is_cacheable`. |
 
 **Core HTTP units (updated)**
@@ -161,21 +166,24 @@ build edits are correct, minimal, and non-breaking.
 | `src/http/modules/ngx_http_dav_module.c` | UPDATED | `= status` (computed variable) |
 | `src/http/modules/ngx_http_stub_status_module.c` | UPDATED | `= NGX_HTTP_OK` |
 
-**Protocol serializers (updated, 2)**
+**Protocol serializers (updated, 1)**
 
 | File | Op | Role in the change |
 |------|----|--------------------|
-| `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | Status switch/serialization reads the status field; reason text sourced consistently with the registry. |
-| `src/http/v3/ngx_http_v3_filter_module.c` | UPDATED | `:status` serialization reads the status field; reason text sourced consistently with the registry. |
+| `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | Emits a numeric-only `:status` pseudo-header from `r->headers_out.status`; HPACK carries no reason phrase, so it does **not** call `ngx_http_status_reason()`. The only edit is a clarifying comment recording this invariant. |
+
+> `src/http/v3/ngx_http_v3_filter_module.c` is **not** in this phase (or the changed-file inventory): the HTTP/3 serializer already emitted a numeric-only `:status` (QPACK carries no reason phrase) and required no edit.
 
 ### Review checklist
 
 - [x] **Single write seam.** `ngx_http_status_set()` is the one sanctioned write path; the converted
   direct-assignment sites (17 assignments across 14 files) route through it following the
   OLD → NEW pattern `r->headers_out.status = CODE;` → `if (ngx_http_status_set(r, CODE) != NGX_OK) { … }`.
-- [x] **Single read seam.** `ngx_http_status_reason()` is the one reason-phrase source; the header
-  filter, the `special_response` funnel, and the HTTP/2 and HTTP/3 serializers all resolve reason
-  text consistently against the registry rather than private tables.
+- [x] **Single read seam.** `ngx_http_status_reason()` is the one reason-phrase source for the two
+  paths that render reason text: the HTTP/1.x header filter and the `special_response` funnel both
+  resolve the default reason phrase against the registry rather than private tables. The HTTP/2 and
+  HTTP/3 serializers do **not** participate — they emit a numeric-only `:status` pseudo-header
+  (HPACK/QPACK carry no reason phrase) and read `r->headers_out.status` directly.
 - [x] **Static O(1) registry, < 1 KB, read-only after init.** The `ngx_http_status_def_t` array is a
   direct-indexed static table (no hashing, no search), seeded once during the configuration phase
   **before the first worker fork**, and read-only thereafter — lock-free for all workers, with no
@@ -190,9 +198,13 @@ build edits are correct, minimal, and non-breaking.
 - [x] **Backward compatibility.** All 45 `NGX_HTTP_*` numeric constants remain defined; direct
   `r->headers_out.status = …` assignment still compiles and works, so third-party and unconverted
   code is unaffected.
-- [x] **Reason-phrase parity.** The registry seeds the same reason strings already shipped (e.g.
-  "200 OK", "404 Not Found"); the header filter's `status_line.len` fast-path is retained, so wire
-  output is unchanged when validation is off.
+- [x] **Reason-phrase parity.** The registry seeds the same bare reason phrases already shipped —
+  `ngx_http_status_reason(200)` returns `"OK"` (len 2) and `reason(404)` returns `"Not Found"`, **not**
+  `"200 OK"` / `"404 Not Found"`. The header filter prepends the numeric code (`"%03ui "`) and its
+  `status_line.len` fast-path is retained, so the assembled wire status line ("200 OK", "404 Not Found")
+  is byte-identical when validation is off. Gap codes (registry miss) fall through to the numeric-only
+  `"%03ui "` write exactly as the original offset table did — machine-proven identical across codes
+  0–1023 (see [CP5 review-finding adjudication](#cp5-review-finding-adjudication)).
 - [x] **Compile-time validation gate.** The `ngx_http_status_validate()` strict path is wrapped in
   `#ifdef NGX_HTTP_STATUS_VALIDATION`; when the feature is not compiled in, the validation branch is
   absent — zero runtime cost and byte-identical output on the response hot path.
@@ -302,7 +314,7 @@ build edits are correct, minimal, and non-breaking.
   `techdocs-core` and `mermaid2` plugins remain intact so diagrams still render.
 - [x] **`README.md` note is additive.** The README gains a short, additive note about the new
   status-registry module without removing or altering existing content.
-- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 36 changed files across
+- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 35 changed files across
   the four domain phases with a final re-verification verdict, satisfying the Segmented PR Review rule.
 
 **Verdict: APPROVED**
@@ -317,7 +329,7 @@ All four domain phases resolved to `APPROVED`:
 | Phase | Domain | Reviewer role | Files | Verdict |
 |-------|--------|---------------|:-----:|:-------:|
 | 1 | Infrastructure / DevOps | Build / Release Engineer | 3 | `APPROVED` |
-| 2 | Backend Architecture | Core C / nginx Maintainer | 22 | `APPROVED` |
+| 2 | Backend Architecture | Core C / nginx Maintainer | 21 | `APPROVED` |
 | 3 | QA / Test Integrity | QA / SRE | 4 | `APPROVED` |
 | 4 | Documentation & Release (Other SME) | Docs / DevRel | 7 | `APPROVED` |
 
@@ -327,7 +339,13 @@ re-checked against the full change set:
 1. **Byte-identical default binary.** With `--with-http_status_validation` not passed,
    `NGX_HTTP_STATUS_VALIDATION` is undefined, the strict validation branch is compiled out, and the
    registry seeds the same reason phrases already shipped — the default build reproduces baseline wire
-   output. **Confirmed.**
+   output. This was confirmed at **runtime**, not just by inspection: (a) the HTTP/1.x response status
+   line is emitted by the unchanged header filter — an exhaustive C harness compared the original
+   offset-table logic against the registry `ngx_http_status_reason()` path for **all codes 0–1023**
+   with **0 mismatches** (see [CP5 review-finding adjudication](#cp5-review-finding-adjudication)); and
+   (b) the `stub_status` payload is a byte-for-byte match of the historical 4-line output in a default
+   build (97 bytes), with the added status-class metric lines appearing only when the validation flag
+   is compiled in. **Confirmed.**
 2. **`error_page 500 502 503 504 /50x.html` still functional (Constraint C-010).** The
    `special_response` `err_status` funnel drives error-page **selection** exactly as before; only the
    default reason-phrase *source* is centralized, and `error_page` directive parsing is untouched.
@@ -343,11 +361,38 @@ and single read seam (`ngx_http_status_reason()`); each API function ≤ 50 line
 O(1) registry under 1 KB per worker; nginx code style (C-004); POSIX-shell configure (C-009);
 validation off-by-default.
 
+### CP5 review-finding adjudication
+
+The two CRITICAL findings raised by the CP5 FINAL review were adjudicated against the source and at
+runtime before this final verdict:
+
+- **CP5-#13 — header-filter reason rendering: FALSE POSITIVE (no code change).** The review asserted
+  that routing the status line through `ngx_http_status_reason()` would change the wire bytes for
+  status codes with no registry reason ("gap" codes). Inspection of the original
+  `ngx_http_header_filter_module.c` shows it already routed gap codes (whose `ngx_http_status_lines[]`
+  entry is `ngx_null_string`, i.e. `len == 0`) to the numeric-only `"%03ui "` branch via the
+  `if (status_line && status_line->len == 0) { status_line = NULL; }` guard. The current registry path
+  reproduces exactly this: `reason()` returns an empty `ngx_str_t` for gap codes, so the filter falls
+  through to the same numeric write. An exhaustive harness (`blitzy_adhoc_test_hdrline.c`, ad-hoc — not
+  committed) embedded the verbatim original offset table and compared its emitted status line against
+  the registry path for **every code 0–1023**: **0 mismatches**. Applying the reviewer's suggested
+  "fix" would have introduced a divergence, so the header filter is intentionally left **unchanged**.
+
+- **CP5-#14 — `stub_status` payload regression: REAL, remediated by gating.** The status-class metric
+  lines and their counter reads had been added to the `stub_status` handler unconditionally, which
+  altered the default `stub_status` response. This is fixed by wrapping the added variable
+  declarations, the size calculation, and the six metric `sprintf` lines in
+  `#if (NGX_HTTP_STATUS_VALIDATION)`; the `ngx_http_status_set(r, NGX_HTTP_OK)` conversion is kept
+  unconditional. Runtime verification: a default build returns the historical **4 lines / 97 bytes**
+  (byte-identical, confirmed with `od -c`), while a `--with-http_status_validation` build returns
+  **10 lines / 265 bytes** (the 4 baseline lines plus `nginx_status_1xx_total` … `_5xx_total` and
+  `nginx_status_validation_rejections_total`).
+
 **Final Verdict: APPROVED**
 
 ## Coverage Checklist
 
-All **36** changed files (11 created + 25 updated) are each assigned to **exactly one** phase — no
+All **35** changed files (11 created + 24 updated) are each assigned to **exactly one** phase — no
 omissions, no duplicates.
 
 | # | File | Op | Phase |
@@ -376,18 +421,17 @@ omissions, no duplicates.
 | 22 | `src/http/modules/ngx_http_dav_module.c` | UPDATED | 2 |
 | 23 | `src/http/modules/ngx_http_stub_status_module.c` | UPDATED | 2 |
 | 24 | `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | 2 |
-| 25 | `src/http/v3/ngx_http_v3_filter_module.c` | UPDATED | 2 |
-| 26 | `docs/refactor/traceability_matrix.md` | CREATED | 3 |
-| 27 | `docs/refactor/decision_log.md` | CREATED | 3 |
-| 28 | `docs/observability/observability.md` | CREATED | 3 |
-| 29 | `docs/observability/status_metrics_dashboard.json` | CREATED | 3 |
-| 30 | `docs/api/status_codes.md` | CREATED | 4 |
-| 31 | `docs/migration/status_code_api.md` | CREATED | 4 |
-| 32 | `docs/presentation/executive_summary.html` | CREATED | 4 |
-| 33 | `CHANGES` | CREATED | 4 |
-| 34 | `mkdocs.yml` | UPDATED | 4 |
-| 35 | `README.md` | UPDATED | 4 |
-| 36 | `CODE_REVIEW.md` | CREATED | 4 |
+| 25 | `docs/refactor/traceability_matrix.md` | CREATED | 3 |
+| 26 | `docs/refactor/decision_log.md` | CREATED | 3 |
+| 27 | `docs/observability/observability.md` | CREATED | 3 |
+| 28 | `docs/observability/status_metrics_dashboard.json` | CREATED | 3 |
+| 29 | `docs/api/status_codes.md` | CREATED | 4 |
+| 30 | `docs/migration/status_code_api.md` | CREATED | 4 |
+| 31 | `docs/presentation/executive_summary.html` | CREATED | 4 |
+| 32 | `CHANGES` | CREATED | 4 |
+| 33 | `mkdocs.yml` | UPDATED | 4 |
+| 34 | `README.md` | UPDATED | 4 |
+| 35 | `CODE_REVIEW.md` | CREATED | 4 |
 
-**Per-phase totals:** Phase 1 = 3 · Phase 2 = 22 · Phase 3 = 4 · Phase 4 = 7 → **36 total**
-(11 created + 25 updated). Partition is complete and disjoint.
+**Per-phase totals:** Phase 1 = 3 · Phase 2 = 21 · Phase 3 = 4 · Phase 4 = 7 → **35 total**
+(11 created + 24 updated). Partition is complete and disjoint.

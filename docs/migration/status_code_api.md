@@ -31,8 +31,10 @@ ngx_uint_t   ngx_http_status_is_cacheable(ngx_uint_t status);
 - `ngx_http_status_validate()` — RFC 9110 range/class check; a no-op returning
   `NGX_OK` unless the validation feature is compiled in.
 - `ngx_http_status_reason()` — the single reason-phrase lookup (for example,
-  `200` yields `200 OK`); returns an empty `ngx_str_t` for codes with no
-  registry phrase (the caller then renders the numeric code).
+  `200` yields `OK` — the bare phrase, with no numeric prefix); returns an
+  empty `ngx_str_t` for codes with no registry phrase (the caller then renders
+  the numeric code). The HTTP/1.x header filter prepends the numeric code and a
+  space to form the wire status line `200 OK`.
 - `ngx_http_status_register()` — config-phase seeding/finalization of the
   registry (runs once before workers fork; no runtime mutation).
 - `ngx_http_status_is_cacheable()` — returns non-zero if the code is flagged
@@ -56,7 +58,7 @@ New (mediated through the API):
 
 ```c
 if (ngx_http_status_set(r, 404) != NGX_OK) {
-    /* log */
+    /* log error */
     return NGX_HTTP_INTERNAL_SERVER_ERROR;
 }
 ```
@@ -218,19 +220,25 @@ graph TD
     SET --> FIELD
     ERR --> REASON
     HF --> REASON
-    V2 --> REASON
-    V3 --> REASON
     REASON --> TABLE
     FIELD --> HF
+    FIELD --> V2
+    FIELD --> V3
     HF --> WIRE
     ERR --> WIRE
+    V2 -->|"numeric :status"| WIRE
+    V3 -->|"numeric :status"| WIRE
 ```
 
 Legend:
 
 - All writes converge on `ngx_http_status_set()`.
-- All reason lookups converge on `ngx_http_status_reason()`.
-- Both resolve against the static registry table.
+- Textual reason lookups (HTTP/1.x header filter and the error-page funnel)
+  converge on `ngx_http_status_reason()`, which resolves against the static
+  registry table.
+- The HTTP/2 and HTTP/3 serializers read the numeric `r->headers_out.status`
+  field directly and emit a numeric-only `:status` pseudo-header; HPACK/QPACK
+  carry no reason phrase, so these paths never call `ngx_http_status_reason()`.
 - Validation is compiled in only when `--with-http_status_validation` is set.
 - The upstream path is a guarded pass-through, so backend codes pass through
   unvalidated.
