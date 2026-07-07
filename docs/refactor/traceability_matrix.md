@@ -79,9 +79,9 @@ This direction confirms that no target implementation is orphaned: every symbol 
 
 ### Changed-file inventory cross-check
 
-The full refactor touches **35 files = 11 created + 24 updated**. The forward and reverse mappings above reference the code-affecting subset of this inventory; the remaining entries are documentation and rule-mandated deliverables. Note that `src/http/v3/ngx_http_v3_filter_module.c` is **not** among the changed files — the HTTP/3 serializer already emitted a numeric-only `:status` and required no edit; it is listed in the forward mapping only to record that its behavior is deliberately unchanged.
+The full refactor touches **39 files = 14 created + 25 updated**. The forward and reverse mappings above reference the code-affecting subset of this inventory; the remaining entries are documentation, test, and rule-mandated deliverables. Note that `src/http/v3/ngx_http_v3_filter_module.c` is **not** among the changed files — the HTTP/3 serializer already emitted a numeric-only `:status` and required no edit; it is listed in the forward mapping only to record that its behavior is deliberately unchanged.
 
-**Created (11):**
+**Created (14):**
 
 - `src/http/ngx_http_status.c`
 - `src/http/ngx_http_status.h`
@@ -94,8 +94,11 @@ The full refactor touches **35 files = 11 created + 24 updated**. The forward an
 - `docs/presentation/executive_summary.html`
 - `docs/observability/observability.md`
 - `docs/observability/status_metrics_dashboard.json`
+- `t/unit/ngx_http_status_test.c`
+- `t/unit/Makefile`
+- `t/unit/.gitignore`
 
-**Updated (24):**
+**Updated (25):**
 
 - `src/http/ngx_http.h`
 - `src/http/ngx_http_request.h`
@@ -119,10 +122,13 @@ The full refactor touches **35 files = 11 created + 24 updated**. The forward an
 - `auto/options`
 - `auto/sources`
 - `auto/modules`
+- `auto/install`
 - `mkdocs.yml`
 - `README.md`
 
 The build wiring spans two files: `auto/sources` defines the `HTTP_STATUS_SRCS` / `HTTP_STATUS_DEPS` grouping variables, and `auto/modules` consumes them — appending `$HTTP_STATUS_SRCS` to the HTTP-core `ngx_module_srcs` and `$HTTP_STATUS_DEPS` to `ngx_module_deps` — and emits the `NGX_HTTP_STATUS_VALIDATION` define. This is **deviation (c)**: the AAP literally named `auto/sources` for the effective wiring, but in this tree the HTTP-core srcs/deps are wired in `auto/modules`, as recorded in `decision_log.md`.
+
+The test deliverable comprises `t/unit/ngx_http_status_test.c`, `t/unit/Makefile`, and `t/unit/.gitignore`, which map to the unit-testing requirement in **AAP §0.7.2** (100% unit coverage of `validate`, `set`, `reason`, `register`, and worker-safety); the compiled test binary is gitignored and never committed. Its `make check` entry point is wired through `auto/install`, which generates the repository-root `Makefile` with a `check:` target that delegates to `t/unit` — which is why `auto/install` appears in the Updated inventory.
 
 ## Overview Diagram
 

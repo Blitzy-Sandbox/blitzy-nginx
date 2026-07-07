@@ -262,10 +262,17 @@ build edits are correct, minimal, and non-breaking.
   centralized target (`ngx_http_status_set()` / `ngx_http_status_reason()` / the registry). No source
   status construct is left unmapped.
 - [x] **Decision log captures non-trivial decisions.** Each entry records alternatives considered,
-  rationale, and residual risk. The two required deviations from a literal reading of the request are
-  present and justified: (a) `CHANGES` is **created** (the file is absent from the fork) rather than
-  updated; (b) validation is enforced at **central choke-points** (`ngx_http_status_set()`, the
-  `special_response` funnel, the header filter) instead of editing each `return NGX_HTTP_*` statement.
+  rationale, and residual risk. The seven required deviations from a literal reading of the request
+  are present and justified: (a) `CHANGES` is **created** (the file is absent from the fork) rather
+  than updated; (b) validation is enforced at **central choke-points** (`ngx_http_status_set()`, the
+  `special_response` funnel, the header filter) instead of editing each `return NGX_HTTP_*` statement;
+  (c) the build wiring is added to `auto/modules` rather than `auto/sources` to match this tree's real
+  HTTP-core layout; (d) `--with-http_status_validation` defaults **OFF** so the default binary stays
+  byte-identical; (e) the upstream status copy becomes a **guarded pass-through** that never validates
+  backend codes; (f) the registry initializer is declared in `ngx_http.h` and invoked from
+  `preconfiguration` (before the first worker fork); and (g) the per-worker status-class counters and
+  their `stub_status` metric lines are compiled in only under the validation flag, keeping the default
+  `stub_status` output byte-identical. All seven are recorded as rows `(a)`–`(g)` in `decision_log.md`.
 - [x] **Observability reused-vs-added mapping present.** The document distinguishes **reused**
   primitives (`error_log`/`access_log`, the built-in `$request_id` correlation variable, and the
   `stub_status` atomic-counter pattern) from **added** signals (status-class counters for
@@ -324,7 +331,7 @@ build edits are correct, minimal, and non-breaking.
   `techdocs-core` and `mermaid2` plugins remain intact so diagrams still render.
 - [x] **`README.md` note is additive.** The README gains a short, additive note about the new
   status-registry module without removing or altering existing content.
-- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 35 changed files across
+- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 39 changed files across
   the four domain phases with a final re-verification verdict, satisfying the Segmented PR Review rule.
 
 **Verdict: APPROVED**

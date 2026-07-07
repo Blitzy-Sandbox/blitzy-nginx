@@ -58,7 +58,7 @@ The diagram below shows how a status assignment flows through the added observab
 ```mermaid
 flowchart LR
     SET["ngx_http_status_set()"]
-    CNT["Status-class counters<br/>2xx / 3xx / 4xx / 5xx + rejections"]
+    CNT["Status-class counters<br/>1xx / 2xx / 3xx / 4xx / 5xx + rejections"]
     LOG["Structured log events<br/>carry request_id context"]
     EP["stub_status-style<br/>text/plain endpoint"]
     DASH["status_metrics_dashboard.json<br/>dashboard"]
