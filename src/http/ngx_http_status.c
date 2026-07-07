@@ -459,7 +459,7 @@ ngx_http_status_check(ngx_http_request_t *r, ngx_uint_t status)
 
             def = ngx_http_status_lookup(prev);
 
-            ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
+            ngx_log_error(NGX_HTTP_STATUS_LOG_LEVEL, r->connection->log, 0,
                           "http informational status %ui sent after final "
                           "status %ui (RFC 9110 15.%ui.%ui)", status, prev,
                           def ? (ngx_uint_t) (def->rfc_section >> 8)
@@ -467,7 +467,7 @@ ngx_http_status_check(ngx_http_request_t *r, ngx_uint_t status)
                           def ? (ngx_uint_t) (def->rfc_section & 0xff)
                               : (ngx_uint_t) 0);
 
-            ngx_http_status_log(r, NGX_LOG_WARN,
+            ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
                 "informational status after final status", status);
         }
 
@@ -501,7 +501,7 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 
 #if (NGX_HTTP_STATUS_VALIDATION)
         if (status < 100 || status > 599) {
-            ngx_http_status_log(r, NGX_LOG_WARN,
+            ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
                                 "upstream sent non-standard status", status);
         }
 #endif
@@ -524,8 +524,8 @@ ngx_http_status_set(ngx_http_request_t *r, ngx_uint_t status)
 #endif
 
     if (ngx_http_status_validate(status) != NGX_OK) {
-        ngx_http_status_log(r, NGX_LOG_ERR, "invalid HTTP status rejected",
-                            status);
+        ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
+                            "invalid HTTP status rejected", status);
         (void) ngx_atomic_fetch_add(
                    &ngx_http_status_counters[NGX_HTTP_STATUS_REJECTED], 1);
         return NGX_ERROR;

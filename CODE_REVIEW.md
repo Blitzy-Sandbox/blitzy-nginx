@@ -432,6 +432,49 @@ verdicts re-confirmed `APPROVED` against the amended code.
 Both fixes preserve every binding invariant listed above; each modified file remains within its
 originally assigned domain phase, so the phase partition is unchanged and the overall verdict stands.
 
+### QA-fix re-verification for F-OBS-1 and F-OBS-2 (Report 5 — Observability)
+
+A subsequent QA testing pass (Report 5) raised one MINOR observability finding (F-OBS-1) and one INFO
+documentation finding (F-OBS-2). Both were remediated within file sets already owned by
+**Phase 2 — Backend Architecture** (the C sources) and **Phase 3 — QA / Test Integrity**
+(`observability.md`); those phases were re-reviewed and their verdicts re-confirmed `APPROVED` against
+the amended files. The changed-file partition and the 35-file coverage table are unchanged — every
+edit lands in a file already assigned to exactly one phase.
+
+- **F-OBS-1 (MINOR, Observability) — RESOLVED.** `observability.md` (lines 14, 48) and **AAP §0.6.4**
+  specify that status-API validation-failure and RFC 9110-violation events are logged at
+  `NGX_LOG_WARN` in production builds and escalated to `NGX_LOG_ERR` in debug builds, but the code
+  emitted them at fixed, inconsistent levels (rejection at `NGX_LOG_ERR` always; the RFC-interaction
+  and upstream-non-standard diagnostics at `NGX_LOG_WARN` always; the send-path failure logs split
+  ERR/WARN) with no build-conditional selection. Remediation: introduce `NGX_HTTP_STATUS_LOG_LEVEL`
+  in `ngx_http_status.h` (`#if (NGX_DEBUG)` → `NGX_LOG_ERR`, `#else` → `NGX_LOG_WARN`) and route **all
+  eight** validation-failure / violation log events through it — the invalid-status rejection,
+  upstream-non-standard, and informational-after-final diagnostics in `ngx_http_status.c`, plus the
+  `ngx_http_status_set()` failure logs in `ngx_http_request.c` (terminate/finalize) and
+  `ngx_http_core_module.c` (response/error-status). The macro resolves at compile time with zero
+  runtime cost. Re-verified: clean `-Werror` build of all three variants (default, validation-prod,
+  validation-debug); the **default shipped binary is unaffected** because every one of the eight sites
+  is either inside `#if (NGX_HTTP_STATUS_VALIDATION)` or fires only when `ngx_http_status_set()`
+  returns `NGX_ERROR` — which never happens in the default build (`ngx_http_status_validate()` is a
+  no-op returning `NGX_OK`), so the default build stays size-identical and wire-output byte-identical;
+  the production validation build logs `return 999`/`return 99` rejections at `[warn]` and the debug
+  validation build logs the same events at `[error]`, exactly matching `observability.md` and
+  AAP §0.6.4, with request-id correlation preserved between the two log lines of a rejected request.
+  Files: `ngx_http_status.h`, `ngx_http_status.c`, `ngx_http_request.c`, `ngx_http_core_module.c`
+  (all Phase 2).
+- **F-OBS-2 (INFO, Documentation) — RESOLVED.** The `status_metrics_dashboard.json` template charts a
+  1xx series (the "Responses by Status Class" timeseries and a "Total 1xx Responses" stat) and the
+  validation-build `stub_status` endpoint emits `nginx_status_1xx_total`, but the `observability.md`
+  prose enumerated only the 2xx–5xx and validation-rejection series, understating what is emitted and
+  charted. Remediation: update `observability.md` so the enumeration includes `nginx_status_1xx_total`
+  and the prose states the dashboard charts every emitted status class (1xx–5xx). Re-verified: the
+  validation-build endpoint emits `nginx_status_1xx_total` and the dashboard JSON references it, so
+  documentation, dashboard template, and endpoint are mutually consistent. File:
+  `observability.md` (Phase 3).
+
+Both fixes preserve every binding invariant listed above; each modified file remains within its
+originally assigned domain phase, so the phase partition is unchanged and the overall verdict stands.
+
 **Final Verdict: APPROVED**
 
 ## Coverage Checklist

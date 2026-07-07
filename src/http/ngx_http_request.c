@@ -2848,7 +2848,7 @@ ngx_http_terminate_request(ngx_http_request_t *r, ngx_int_t rc)
     if (rc > 0 && (mr->headers_out.status == 0 || mr->connection->sent == 0)) {
         if (ngx_http_status_set(mr, rc) != NGX_OK) {
             /* teardown must continue regardless; log-only */
-            ngx_http_status_log(mr, NGX_LOG_WARN,
+            ngx_http_status_log(mr, NGX_HTTP_STATUS_LOG_LEVEL,
                                 "terminate status set failed", (ngx_uint_t) rc);
         }
     }
@@ -3929,7 +3929,7 @@ ngx_http_free_request(ngx_http_request_t *r, ngx_int_t rc)
     if (rc > 0 && (r->headers_out.status == 0 || r->connection->sent == 0)) {
         if (ngx_http_status_set(r, rc) != NGX_OK) {
             /* request teardown/logging must proceed; log-only */
-            ngx_http_status_log(r, NGX_LOG_WARN,
+            ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
                                 "finalize status set failed", (ngx_uint_t) rc);
         }
     }

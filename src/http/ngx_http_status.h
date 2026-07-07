@@ -65,6 +65,25 @@ ngx_int_t    ngx_http_status_register(void);
 ngx_uint_t   ngx_http_status_is_cacheable(ngx_uint_t status);
 
 /*
+ * Severity at which the status API emits its validation-failure and RFC 9110
+ * violation log events.  Per AAP section 0.6.4 these are logged at NGX_LOG_WARN
+ * in production builds and escalated to NGX_LOG_ERR in debug builds
+ * (--with-debug), so an operator running a debug build sees them at the same
+ * visibility as errors while a production build keeps them at warning level.
+ * NGX_DEBUG is 0/undefined in a production build and 1 under --with-debug, so
+ * this resolves at compile time with no runtime cost.  Every status-API log
+ * event for a validation failure or violation uses this level so the observed
+ * severity is uniform and matches docs/observability/observability.md.
+ */
+
+#if (NGX_DEBUG)
+#define NGX_HTTP_STATUS_LOG_LEVEL   NGX_LOG_ERR
+#else
+#define NGX_HTTP_STATUS_LOG_LEVEL   NGX_LOG_WARN
+#endif
+
+
+/*
  * ngx_http_status_log() emits a status-API log event correlated with the
  * request's $request_id.  action names the event and status is the code in
  * play; a NULL or connectionless request is ignored.

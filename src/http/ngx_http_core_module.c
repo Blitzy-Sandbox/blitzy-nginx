@@ -1779,8 +1779,8 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
     }
 
     if (ngx_http_status_set(r, status) != NGX_OK) {
-        ngx_http_status_log(r, NGX_LOG_ERR, "response status set failed",
-                            status);
+        ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
+                            "response status set failed", status);
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
@@ -1861,8 +1861,8 @@ ngx_http_send_header(ngx_http_request_t *r)
 
     if (r->err_status) {
         if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
-            ngx_http_status_log(r, NGX_LOG_WARN, "error status set failed",
-                                r->err_status);
+            ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
+                                "error status set failed", r->err_status);
             /*
              * A rejected err_status (possible only under strict validation)
              * must not reach the wire as a degenerate status line: fall back
