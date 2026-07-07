@@ -10,6 +10,20 @@ nav:
       - Traceability Matrix: refactor/traceability_matrix.md
   - Observability:
       - Overview: observability/observability.md
+exclude_docs: |
+  html/
+  xml/
+  dtd/
+  xslt/
+  xsls/
+  man/
+  GNUmakefile
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
 plugins:
   - techdocs-core
   - mermaid2
