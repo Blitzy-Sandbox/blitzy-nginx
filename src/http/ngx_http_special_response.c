@@ -415,6 +415,7 @@ static ngx_str_t ngx_http_error_pages[] = {
 ngx_int_t
 ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
 {
+    ngx_str_t                  reason;
     ngx_uint_t                 i, err;
     ngx_http_err_page_t       *err_page;
     ngx_http_core_loc_conf_t  *clcf;
@@ -424,6 +425,17 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
                    error, &r->uri, &r->args);
 
     r->err_status = error;
+
+    /*
+     * Resolve the default reason phrase for this status through the central
+     * status registry.  The lookup is diagnostic only: the wire status line
+     * is emitted by the header filter and the built-in error pages retain
+     * their own HTML, so response bytes are unchanged.
+     */
+    reason = ngx_http_status_reason((ngx_uint_t) error);
+
+    ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,
+                  "http special response reason: %i \"%V\"", error, &reason);
 
     if (r->keepalive) {
         switch (error) {
@@ -726,9 +738,9 @@ ngx_http_send_special_response(ngx_http_request_t *r,
 
     /*
      * ngx_http_send_header() runs the HTTP header filter, which sources the
-     * status-line reason phrase from the centralized status registry
-     * (ngx_http_status_reason).  The reason phrase is therefore resolved on the
-     * header-filter path, not in this handler.
+     * wire status-line reason phrase from the centralized status registry
+     * (ngx_http_status_reason).  This handler resolves the same registry reason
+     * only for diagnostics; the header filter remains the sole wire seam.
      */
     rc = ngx_http_send_header(r);
 

@@ -173,7 +173,8 @@ ngx_http_header_filter(ngx_http_request_t *r)
         status_reason = ngx_http_status_reason(status);
 
         if (status_reason.len) {
-            len += NGX_INT_T_LEN + 1 /* SP */ + status_reason.len;
+            /* registry codes are 100-599: 3-digit code (%03ui) + SP + reason */
+            len += sizeof("000 ") - 1 + status_reason.len;
             status_line = &status_reason;
 
         } else {

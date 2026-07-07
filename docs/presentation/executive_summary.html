@@ -630,7 +630,7 @@ graph TD
     SET["ngx_http_status_set()"]
     VAL["ngx_http_status_validate()<br/>compile-time gate"]
     REASON["ngx_http_status_reason()"]
-    TABLE["static ngx_http_status_def_t[]<br/>code, reason, flags, rfc_section<br/>O(1) index, under 1 KB, read-only"]
+    TABLE["static ngx_http_status_def_t[]<br/>code, reason, flags<br/>O(1) index, 864 B &lt; 1 KB, read-only"]
   end
 
   FIELD["r-&gt;headers_out.status"]
@@ -649,20 +649,22 @@ graph TD
   SET --> FIELD
   ERR --> REASON
   HF --> REASON
-  V2 --> REASON
-  V3 --> REASON
   REASON --> TABLE
   FIELD --> HF
+  FIELD --> V2
+  FIELD --> V3
+  V2 -->|"numeric :status"| WIRE
+  V3 -->|"numeric :status"| WIRE
   HF --> WIRE
   ERR --> WIRE
           </pre>
         </div>
         <div class="legend" aria-label="Diagram 0.3.3-B legend">
-          <span class="legend-item"><span class="legend-line legend-line--solid"></span>Solid arrow &mdash; a status write or reason lookup converging on the registry</span>
+          <span class="legend-item"><span class="legend-line legend-line--solid"></span>Solid arrow &mdash; a status write, reason lookup, or numeric status read on the wire path</span>
           <span class="legend-item"><span class="legend-swatch legend-swatch--registry"></span>Registry box &mdash; ngx_http_status.c/.h, the single authority</span>
           <span class="legend-item"><span class="legend-swatch"></span>Box &mdash; a converted writer or reason consumer</span>
         </div>
-        <p class="caption">Target: every write flows through ngx_http_status_set(); every reason lookup through ngx_http_status_reason(); both resolve against one static registry. Validation is compiled in only when --with-http_status_validation is set; upstream codes pass through unvalidated.</p>
+        <p class="caption">Target: every write flows through ngx_http_status_set(); the HTTP/1.x header filter resolves its reason phrase through ngx_http_status_reason(), both against one static registry. HTTP/2 (HPACK) and HTTP/3 (QPACK) carry no reason phrase, so they emit the numeric :status directly. Validation is compiled in only when --with-http_status_validation is set; upstream codes pass through unvalidated.</p>
       </section>
 
       <!-- ============ SLIDE 10 — DIVIDER: BENEFITS & COMPLIANCE ============ -->

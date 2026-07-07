@@ -1779,8 +1779,8 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
     }
 
     if (ngx_http_status_set(r, status) != NGX_OK) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "http status set failed: %ui", status);
+        ngx_http_status_log(r, NGX_LOG_ERR, "response status set failed",
+                            status);
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
@@ -1861,9 +1861,8 @@ ngx_http_send_header(ngx_http_request_t *r)
 
     if (r->err_status) {
         if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
-            ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-                          "http status set failed for err_status: %ui",
-                          r->err_status);
+            ngx_http_status_log(r, NGX_LOG_WARN, "error status set failed",
+                                r->err_status);
             /* err_status is internally determined; proceed */
         }
         r->headers_out.status_line.len = 0;
@@ -3426,6 +3425,10 @@ ngx_http_core_type(ngx_conf_t *cf, ngx_command_t *dummy, void *conf)
 static ngx_int_t
 ngx_http_core_preconfiguration(ngx_conf_t *cf)
 {
+    if (ngx_http_status_init(cf) != NGX_OK) {
+        return NGX_ERROR;
+    }
+
     return ngx_http_variables_add_core_vars(cf);
 }
 

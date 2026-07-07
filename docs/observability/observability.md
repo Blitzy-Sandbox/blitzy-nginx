@@ -28,15 +28,18 @@ server accepts handled requests
 Reading: <rd> Writing: <wr> Waiting: <wa>
 ```
 
-The new status-class counters mirror this pattern: atomic counters (`ngx_atomic_int_t`, printed with `%uA`) surfaced through an analogous `stub_status`-style `text/plain` endpoint. The dashboard consumes the following conceptual exported counter series:
+The new status-class counters mirror this pattern: process-wide atomic counters (`ngx_atomic_t`, incremented with `ngx_atomic_fetch_add`, read into `ngx_atomic_int_t` and printed with `%uA`) are surfaced by the `stub_status` handler itself, which **appends** the following labeled lines **after** its historical four-line payload. The original four lines remain byte-identical; the appended labels double as the exported metric series:
 
+- `nginx_status_1xx_total`
 - `nginx_status_2xx_total`
 - `nginx_status_3xx_total`
 - `nginx_status_4xx_total`
 - `nginx_status_5xx_total`
 - `nginx_status_validation_rejections_total`
 
-These counters are documented conceptually. The atomic-counter storage that backs `stub_status` (`ngx_stat_*`) is declared `extern` in `src/event/ngx_event.h` and defined in `src/event/ngx_event.c`, both of which are out of scope for this refactor. The status registry therefore adopts the same idiom without modifying the event-loop counter storage — no core event-loop edits were made. The numeric `$status` access-log field is likewise unchanged; the mediation API (`ngx_http_status_set()`) preserves the exact observable output of every response.
+The counters live in `src/http/ngx_http_status.c` (`ngx_http_status_counters[]`) and are incremented inside `ngx_http_status_set()` — the single status write seam — so every status assignment is counted. Two properties follow. First, the counters are **per worker**: each worker maintains its own copy (no shared-memory aggregation, no locks, no thread-local storage), so a multi-worker deployment sums the per-worker series at scrape time. Second, they count **status-set operations, not unique responses**: because nginx assigns a `return CODE URL` redirect twice during request processing (once in `ngx_http_send_response`, once in the `err_status` funnel of `ngx_http_send_header`), a single such redirect increments its class counter by two — this is faithful to the underlying status-assignment pattern. A validation rejection (strict mode only) increments `nginx_status_validation_rejections_total`; in the default build, where validation is compiled out, that counter stays at zero. The dashboard visualizes the `2xx`/`3xx`/`4xx`/`5xx` and validation-rejection series (a subset of what the endpoint emits).
+
+The atomic-counter storage that backs the historical `stub_status` fields (`ngx_stat_*`) is declared `extern` in `src/event/ngx_event.h` and defined in `src/event/ngx_event.c`, both of which are out of scope for this refactor; the status-class counters deliberately live in `ngx_http_status.c` instead and reuse only the same lock-free idiom, so no core event-loop edits were made. The numeric `$status` access-log field is likewise unchanged; the mediation API (`ngx_http_status_set()`) preserves the exact observable output of every response.
 
 ## Structured logging and correlation
 

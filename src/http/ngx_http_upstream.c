@@ -3162,12 +3162,14 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
         r->headers_out.date->hash = 0;
     }
 
-    if (ngx_http_status_set(r, u->headers_in.status_n) != NGX_OK) {
-        ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-                      "upstream sent non-standard status: %ui",
-                      u->headers_in.status_n);
-        /* upstream pass-through: never reject/transform the backend code */
-    }
+    /*
+     * Upstream pass-through: the backend status is written unvalidated and its
+     * status line copied verbatim.  ngx_http_status_set() never rejects an
+     * upstream code and emits any non-standard-code diagnostic (request-id
+     * correlated) internally, so no call-site diagnostic is needed.
+     */
+    (void) ngx_http_status_set(r, u->headers_in.status_n);
+
     r->headers_out.status_line = u->headers_in.status_line;
 
     r->headers_out.content_length_n = u->headers_in.content_length_n;
