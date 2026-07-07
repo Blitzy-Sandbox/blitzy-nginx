@@ -46,7 +46,7 @@ Each domain phase resolves to **exactly one** verdict token. A phase is only mar
 every file assigned to it passes its checklist; any unmet requirement yields `BLOCKED` with a
 concrete remediation note.
 
-## Changed-File Inventory (35 files: 11 created + 24 updated)
+## Changed-File Inventory (36 files: 11 created + 25 updated)
 
 Every file below is assigned to **exactly one** domain phase — no omissions, no duplicates. The
 per-phase file tables in Sections 1–4 are the authoritative partition; the
@@ -57,7 +57,8 @@ per-phase file tables in Sections 1–4 are the authoritative partition; the
   `docs/refactor/decision_log.md`, `docs/refactor/traceability_matrix.md`,
   `docs/presentation/executive_summary.html`, `docs/observability/observability.md`,
   `docs/observability/status_metrics_dashboard.json`.
-- **Updated (24):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `src/http/ngx_http.h`,
+- **Updated (25):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `auto/modules`,
+  `src/http/ngx_http.h`,
   `src/http/ngx_http_request.h`, `src/http/ngx_http_request.c`, `src/http/ngx_http_core_module.c`,
   `src/http/ngx_http_header_filter_module.c`, `src/http/ngx_http_special_response.c`,
   `src/http/ngx_http_upstream.c`, `src/http/modules/ngx_http_static_module.c`,
@@ -78,12 +79,13 @@ per-phase file tables in Sections 1–4 are the authoritative partition; the
 - **Reviewer role:** Build / Release Engineer
 - **Domain:** Build system and configure-time feature gating (`auto/` POSIX-shell tooling).
 
-### Files in this phase (2)
+### Files in this phase (3)
 
 | File | Op | Role in the change |
 |------|----|--------------------|
 | `auto/options` | UPDATED | Adds `HTTP_STATUS_VALIDATION=NO` default, the `--with-http_status_validation` case arm (sets it `YES`), and matching `--help` text. |
-| `auto/sources` | UPDATED | Wires the new source pair `src/http/ngx_http_status.c` / `src/http/ngx_http_status.h` into the HTTP build lists so `objs/Makefile` compiles and links them. |
+| `auto/sources` | UPDATED | Defines the grouping variables `HTTP_STATUS_SRCS=src/http/ngx_http_status.c` and `HTTP_STATUS_DEPS=src/http/ngx_http_status.h` (following the existing `HTTP_FILE_CACHE_SRCS` / `HTTP_HUFF_SRCS` idiom). These variables only *name* the source pair; they do not themselves wire it into a build list. |
+| `auto/modules` | UPDATED | Build-effective wiring: appends `$HTTP_STATUS_SRCS` to the HTTP-core `ngx_module_srcs` and `$HTTP_STATUS_DEPS` to `ngx_module_deps` so `objs/Makefile` compiles and links `ngx_http_status.o` (with the header tracked for incremental rebuilds), and emits the `NGX_HTTP_STATUS_VALIDATION` define into `objs/ngx_auto_config.h` only when `HTTP_STATUS_VALIDATION=YES`. |
 
 ### Review checklist
 
@@ -99,9 +101,11 @@ per-phase file tables in Sections 1–4 are the authoritative partition; the
   NGINX-Plus-only, source-absent `ngx_http_status_module`. The new feature uses a **distinct**
   variable name (`HTTP_STATUS_VALIDATION`), a distinct switch (`--with-http_status_validation`), and
   distinct files (`ngx_http_status.c` / `.h`) — verified no overloading of the legacy name.
-- [x] **Build wiring is complete.** The `ngx_http_status.c` source and `ngx_http_status.h` dependency
-  are added to the HTTP build lists so the object is compiled and linked into `objs/nginx`; the
-  dependency header is tracked for incremental rebuilds.
+- [x] **Build wiring is complete.** `auto/sources` defines the `HTTP_STATUS_SRCS` / `HTTP_STATUS_DEPS`
+  grouping variables, and `auto/modules` consumes them — `$HTTP_STATUS_SRCS` is appended to the
+  HTTP-core `ngx_module_srcs` and `$HTTP_STATUS_DEPS` to `ngx_module_deps` — so the object is compiled
+  and linked into `objs/nginx` and the dependency header is tracked for incremental rebuilds. The
+  `NGX_HTTP_STATUS_VALIDATION` define is emitted from `auto/modules` only when the switch is enabled.
 - [x] **Default build reproducibility.** With no new flag passed, the configure output and resulting
   binary reproduce baseline behavior — consistent with the byte-identical-default invariant
   re-checked in [Final Re-Verification](#final-re-verification).
@@ -134,7 +138,7 @@ build edits are correct, minimal, and non-breaking.
 | File | Op | Role in the change |
 |------|----|--------------------|
 | `src/http/ngx_http.h` | UPDATED | Includes/declares the status API so every HTTP unit sees it (no per-module `#include` churn). |
-| `src/http/ngx_http_request.h` | UPDATED | Adds the status-def type / flag macros; retains `status`, `status_line`, `err_status`, and all 45 `NGX_HTTP_*` constants (no field reorder). |
+| `src/http/ngx_http_request.h` | UPDATED | Additive-only for ABI/source compatibility: retains `status`, `status_line`, `err_status`, and all 45 `NGX_HTTP_*` constants (no field reorder), and adds a terse comment noting that RFC 9110 status metadata is maintained by the registry. The `ngx_http_status_def_t` type, the `NGX_HTTP_STATUS_*` flags, and the API prototypes live in `src/http/ngx_http_status.h` (see the Registry / API core table above), not here. |
 | `src/http/ngx_http_request.c` | UPDATED | Registry initialization (config phase, pre-fork) + write-site conversion. |
 | `src/http/ngx_http_core_module.c` | UPDATED | Write-site conversion to `ngx_http_status_set()`. |
 | `src/http/ngx_http_header_filter_module.c` | UPDATED | Replaces the private `ngx_http_status_lines[]` offset lookup with `ngx_http_status_reason()`; retains the `status_line.len` fast-path. |
@@ -298,7 +302,7 @@ build edits are correct, minimal, and non-breaking.
   `techdocs-core` and `mermaid2` plugins remain intact so diagrams still render.
 - [x] **`README.md` note is additive.** The README gains a short, additive note about the new
   status-registry module without removing or altering existing content.
-- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 35 changed files across
+- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 36 changed files across
   the four domain phases with a final re-verification verdict, satisfying the Segmented PR Review rule.
 
 **Verdict: APPROVED**
@@ -312,7 +316,7 @@ All four domain phases resolved to `APPROVED`:
 
 | Phase | Domain | Reviewer role | Files | Verdict |
 |-------|--------|---------------|:-----:|:-------:|
-| 1 | Infrastructure / DevOps | Build / Release Engineer | 2 | `APPROVED` |
+| 1 | Infrastructure / DevOps | Build / Release Engineer | 3 | `APPROVED` |
 | 2 | Backend Architecture | Core C / nginx Maintainer | 22 | `APPROVED` |
 | 3 | QA / Test Integrity | QA / SRE | 4 | `APPROVED` |
 | 4 | Documentation & Release (Other SME) | Docs / DevRel | 7 | `APPROVED` |
@@ -343,46 +347,47 @@ validation off-by-default.
 
 ## Coverage Checklist
 
-All **35** changed files (11 created + 24 updated) are each assigned to **exactly one** phase — no
+All **36** changed files (11 created + 25 updated) are each assigned to **exactly one** phase — no
 omissions, no duplicates.
 
 | # | File | Op | Phase |
 |---|------|----|:-----:|
 | 1 | `auto/options` | UPDATED | 1 |
 | 2 | `auto/sources` | UPDATED | 1 |
-| 3 | `src/http/ngx_http_status.h` | CREATED | 2 |
-| 4 | `src/http/ngx_http_status.c` | CREATED | 2 |
-| 5 | `src/http/ngx_http.h` | UPDATED | 2 |
-| 6 | `src/http/ngx_http_request.h` | UPDATED | 2 |
-| 7 | `src/http/ngx_http_request.c` | UPDATED | 2 |
-| 8 | `src/http/ngx_http_core_module.c` | UPDATED | 2 |
-| 9 | `src/http/ngx_http_header_filter_module.c` | UPDATED | 2 |
-| 10 | `src/http/ngx_http_special_response.c` | UPDATED | 2 |
-| 11 | `src/http/ngx_http_upstream.c` | UPDATED | 2 |
-| 12 | `src/http/modules/ngx_http_static_module.c` | UPDATED | 2 |
-| 13 | `src/http/modules/ngx_http_autoindex_module.c` | UPDATED | 2 |
-| 14 | `src/http/modules/ngx_http_not_modified_filter_module.c` | UPDATED | 2 |
-| 15 | `src/http/modules/ngx_http_range_filter_module.c` | UPDATED | 2 |
-| 16 | `src/http/modules/ngx_http_slice_filter_module.c` | UPDATED | 2 |
-| 17 | `src/http/modules/ngx_http_gzip_static_module.c` | UPDATED | 2 |
-| 18 | `src/http/modules/ngx_http_image_filter_module.c` | UPDATED | 2 |
-| 19 | `src/http/modules/ngx_http_mp4_module.c` | UPDATED | 2 |
-| 20 | `src/http/modules/ngx_http_flv_module.c` | UPDATED | 2 |
-| 21 | `src/http/modules/ngx_http_dav_module.c` | UPDATED | 2 |
-| 22 | `src/http/modules/ngx_http_stub_status_module.c` | UPDATED | 2 |
-| 23 | `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | 2 |
-| 24 | `src/http/v3/ngx_http_v3_filter_module.c` | UPDATED | 2 |
-| 25 | `docs/refactor/traceability_matrix.md` | CREATED | 3 |
-| 26 | `docs/refactor/decision_log.md` | CREATED | 3 |
-| 27 | `docs/observability/observability.md` | CREATED | 3 |
-| 28 | `docs/observability/status_metrics_dashboard.json` | CREATED | 3 |
-| 29 | `docs/api/status_codes.md` | CREATED | 4 |
-| 30 | `docs/migration/status_code_api.md` | CREATED | 4 |
-| 31 | `docs/presentation/executive_summary.html` | CREATED | 4 |
-| 32 | `CHANGES` | CREATED | 4 |
-| 33 | `mkdocs.yml` | UPDATED | 4 |
-| 34 | `README.md` | UPDATED | 4 |
-| 35 | `CODE_REVIEW.md` | CREATED | 4 |
+| 3 | `auto/modules` | UPDATED | 1 |
+| 4 | `src/http/ngx_http_status.h` | CREATED | 2 |
+| 5 | `src/http/ngx_http_status.c` | CREATED | 2 |
+| 6 | `src/http/ngx_http.h` | UPDATED | 2 |
+| 7 | `src/http/ngx_http_request.h` | UPDATED | 2 |
+| 8 | `src/http/ngx_http_request.c` | UPDATED | 2 |
+| 9 | `src/http/ngx_http_core_module.c` | UPDATED | 2 |
+| 10 | `src/http/ngx_http_header_filter_module.c` | UPDATED | 2 |
+| 11 | `src/http/ngx_http_special_response.c` | UPDATED | 2 |
+| 12 | `src/http/ngx_http_upstream.c` | UPDATED | 2 |
+| 13 | `src/http/modules/ngx_http_static_module.c` | UPDATED | 2 |
+| 14 | `src/http/modules/ngx_http_autoindex_module.c` | UPDATED | 2 |
+| 15 | `src/http/modules/ngx_http_not_modified_filter_module.c` | UPDATED | 2 |
+| 16 | `src/http/modules/ngx_http_range_filter_module.c` | UPDATED | 2 |
+| 17 | `src/http/modules/ngx_http_slice_filter_module.c` | UPDATED | 2 |
+| 18 | `src/http/modules/ngx_http_gzip_static_module.c` | UPDATED | 2 |
+| 19 | `src/http/modules/ngx_http_image_filter_module.c` | UPDATED | 2 |
+| 20 | `src/http/modules/ngx_http_mp4_module.c` | UPDATED | 2 |
+| 21 | `src/http/modules/ngx_http_flv_module.c` | UPDATED | 2 |
+| 22 | `src/http/modules/ngx_http_dav_module.c` | UPDATED | 2 |
+| 23 | `src/http/modules/ngx_http_stub_status_module.c` | UPDATED | 2 |
+| 24 | `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | 2 |
+| 25 | `src/http/v3/ngx_http_v3_filter_module.c` | UPDATED | 2 |
+| 26 | `docs/refactor/traceability_matrix.md` | CREATED | 3 |
+| 27 | `docs/refactor/decision_log.md` | CREATED | 3 |
+| 28 | `docs/observability/observability.md` | CREATED | 3 |
+| 29 | `docs/observability/status_metrics_dashboard.json` | CREATED | 3 |
+| 30 | `docs/api/status_codes.md` | CREATED | 4 |
+| 31 | `docs/migration/status_code_api.md` | CREATED | 4 |
+| 32 | `docs/presentation/executive_summary.html` | CREATED | 4 |
+| 33 | `CHANGES` | CREATED | 4 |
+| 34 | `mkdocs.yml` | UPDATED | 4 |
+| 35 | `README.md` | UPDATED | 4 |
+| 36 | `CODE_REVIEW.md` | CREATED | 4 |
 
-**Per-phase totals:** Phase 1 = 2 · Phase 2 = 22 · Phase 3 = 4 · Phase 4 = 7 → **35 total**
-(11 created + 24 updated). Partition is complete and disjoint.
+**Per-phase totals:** Phase 1 = 3 · Phase 2 = 22 · Phase 3 = 4 · Phase 4 = 7 → **36 total**
+(11 created + 25 updated). Partition is complete and disjoint.

@@ -364,6 +364,54 @@
       margin-right: auto;
     }
 
+    /* ---------- Architecture-diagram identifier + legend ----------
+       The Visual Architecture rule requires each diagram to carry a
+       descriptive identifier/title and an explicit legend describing the
+       graph notation and edge semantics. Both use Blitzy brand tokens. */
+    .diagram-id {
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--brand-primary);
+      font-size: 0.42em;
+      margin: 0 0 0.4em 0;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.3em 1.4em;
+      margin-top: 0.5em;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45em;
+      color: var(--text-muted);
+      font-size: 0.42em;
+      line-height: 1.3;
+    }
+    .legend-line {
+      display: inline-block;
+      width: 2.1em;
+      flex: 0 0 auto;
+    }
+    .legend-line--solid { border-top: 2px solid var(--brand-primary); }
+    .legend-line--dashed { border-top: 2px dashed var(--text-muted); }
+    .legend-swatch {
+      display: inline-block;
+      width: 0.95em;
+      height: 0.7em;
+      border-radius: 3px;
+      flex: 0 0 auto;
+      background: var(--bg-elevated-2);
+      border: 1px solid var(--border-hairline);
+    }
+    .legend-swatch--registry {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-accent);
+    }
+
     /* small helper spacing */
     .mt-s { margin-top: 0.5em; }
     .muted { color: var(--text-muted); }
@@ -434,6 +482,7 @@
           <h2>Current architecture</h2>
         </div>
         <div class="rule"></div>
+        <p class="diagram-id">Diagram 0.3.2-A &mdash; nginx HTTP status handling: current (decentralized) state</p>
         <div class="mermaid-wrap">
           <pre class="mermaid">
 graph TD
@@ -459,6 +508,11 @@ graph TD
   LINES --> WIRE
   ERR -.->|"own reason knowledge"| WIRE
           </pre>
+        </div>
+        <div class="legend" aria-label="Diagram 0.3.2-A legend">
+          <span class="legend-item"><span class="legend-line legend-line--solid"></span>Solid arrow &mdash; status data flow (a writer sets the status field)</span>
+          <span class="legend-item"><span class="legend-line legend-line--dashed"></span>Dashed arrow &mdash; independent reason-phrase knowledge (no shared seam)</span>
+          <span class="legend-item"><span class="legend-swatch"></span>Box &mdash; a component that independently owns status/reason logic</span>
         </div>
         <p class="caption">Today: three independent owners of status/reason logic, and no validation seam.</p>
       </section>
@@ -561,6 +615,7 @@ graph TD
           <h2>Target architecture</h2>
         </div>
         <div class="rule"></div>
+        <p class="diagram-id">Diagram 0.3.3-B &mdash; nginx HTTP status handling: target (centralized registry) state</p>
         <div class="mermaid-wrap">
           <pre class="mermaid">
 graph TD
@@ -601,6 +656,11 @@ graph TD
   HF --> WIRE
   ERR --> WIRE
           </pre>
+        </div>
+        <div class="legend" aria-label="Diagram 0.3.3-B legend">
+          <span class="legend-item"><span class="legend-line legend-line--solid"></span>Solid arrow &mdash; a status write or reason lookup converging on the registry</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch--registry"></span>Registry box &mdash; ngx_http_status.c/.h, the single authority</span>
+          <span class="legend-item"><span class="legend-swatch"></span>Box &mdash; a converted writer or reason consumer</span>
         </div>
         <p class="caption">Target: every write flows through ngx_http_status_set(); every reason lookup through ngx_http_status_reason(); both resolve against one static registry. Validation is compiled in only when --with-http_status_validation is set; upstream codes pass through unvalidated.</p>
       </section>

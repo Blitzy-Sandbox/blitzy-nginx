@@ -49,10 +49,11 @@ The custom error-page HTML tables are preserved verbatim and the header filter's
 | `src/http/ngx_http_status.h` | CREATE | modeled on `src/http/ngx_http_request.h` | defines `ngx_http_status_def_t { code, reason, flags, rfc_section }`, the `NGX_HTTP_STATUS_*` flag macros (`CACHEABLE`, `CLIENT_ERROR`, `SERVER_ERROR`, `INFORMATIONAL`), and the API prototypes |
 | `src/http/ngx_http_status.c` | CREATE | generalizes the `ngx_http_status_lines[]` idiom from `src/http/ngx_http_header_filter_module.c` | static registry array (O(1) index, <1 KB, read-only after init) + `ngx_http_status_set` / `ngx_http_status_validate` / `ngx_http_status_reason` / `ngx_http_status_register` / `ngx_http_status_is_cacheable` (each ≤ 50 lines) |
 | `src/http/ngx_http.h` | UPDATE | itself | add the include/declaration so every HTTP translation unit sees the API (no per-module `#include` needed) |
-| `src/http/ngx_http_request.h` | UPDATE | itself | add the status-definition type + flag macros; **retain** `status` (L263), `status_line` (L264), `err_status` (L454), and all 45 `NGX_HTTP_*` constants |
+| `src/http/ngx_http_request.h` | UPDATE | itself | additive-only ABI/source-compatibility retention: **retain** `status` (L263), `status_line` (L264), `err_status` (L454), and all 45 `NGX_HTTP_*` constants (no field reorder), and add a terse comment noting the registry maintains the status metadata; the `ngx_http_status_def_t` type and the `NGX_HTTP_STATUS_*` flag macros are defined in `src/http/ngx_http_status.h` (the CREATE row above), not here |
 | `src/http/ngx_http_request.c` | UPDATE | itself | registry initialization (configuration phase, pre-fork) + write-site conversions at L2838 and L3915 |
 | `auto/options` | UPDATE | itself | add the `HTTP_STATUS_VALIDATION=NO` default, the `--with-http_status_validation` case arm (sets `YES`), and help text — distinct from the pre-existing `HTTP_STATUS` variable |
-| `auto/modules` | UPDATE | itself | `HTTP_SRCS += src/http/ngx_http_status.c`; `HTTP_DEPS += src/http/ngx_http_status.h` in the core HTTP module block — **deviation (c)**: the AAP literally named `auto/sources`, but this tree wires the HTTP core srcs/deps in `auto/modules` (see `decision_log.md`) |
+| `auto/sources` | UPDATE | itself | define the grouping variables `HTTP_STATUS_SRCS=src/http/ngx_http_status.c` and `HTTP_STATUS_DEPS=src/http/ngx_http_status.h`, following the existing `HTTP_FILE_CACHE_SRCS` / `HTTP_HUFF_SRCS` idiom; these variables only *name* the source pair and are consumed by `auto/modules` (they do not themselves wire it into a build list) |
+| `auto/modules` | UPDATE | itself | consume the grouping variables — append `$HTTP_STATUS_SRCS` to the HTTP-core `ngx_module_srcs` and `$HTTP_STATUS_DEPS` to `ngx_module_deps`, and emit the `NGX_HTTP_STATUS_VALIDATION` define into `objs/ngx_auto_config.h` when `HTTP_STATUS_VALIDATION=YES` — **deviation (c)**: the AAP literally named `auto/sources` for the effective wiring, but in this tree the HTTP-core srcs/deps are wired in `auto/modules` (see `decision_log.md`) |
 
 ## Reverse Mapping
 
@@ -67,7 +68,7 @@ This direction confirms that no target implementation is orphaned: every symbol 
 | `ngx_http_status_register()` | **NEW** — no prior construct | seeds the registry during the configuration phase only (no runtime mutation) |
 | static `ngx_http_status_def_t[]` registry | generalizes the `ngx_http_status_lines[]` offset-index idiom | O(1) direct index, <1 KB/worker, read-only after init, lock-free |
 | `src/http/ngx_http_status.h` / `src/http/ngx_http_status.c` | new files modeled on `ngx_http_request.h` and `ngx_http_header_filter_module.c` | the registry/API core |
-| `NGX_HTTP_STATUS_VALIDATION` compile define | `auto/options` (switch) + `auto/modules` (source wiring) | emitted into `objs/ngx_auto_config.h`; default OFF |
+| `NGX_HTTP_STATUS_VALIDATION` compile define | `auto/options` (switch) + `auto/sources` (grouping variables) + `auto/modules` (consumes the variables, emits the define) | emitted into `objs/ngx_auto_config.h`; default OFF |
 
 ## Coverage Summary
 
@@ -75,7 +76,7 @@ This direction confirms that no target implementation is orphaned: every symbol 
 
 ### Changed-file inventory cross-check
 
-The full refactor touches **35 files = 11 created + 24 updated**. The forward and reverse mappings above reference the code-affecting subset of this inventory; the remaining entries are documentation and rule-mandated deliverables.
+The full refactor touches **36 files = 11 created + 25 updated**. The forward and reverse mappings above reference the code-affecting subset of this inventory; the remaining entries are documentation and rule-mandated deliverables.
 
 **Created (11):**
 
@@ -91,7 +92,7 @@ The full refactor touches **35 files = 11 created + 24 updated**. The forward an
 - `docs/observability/observability.md`
 - `docs/observability/status_metrics_dashboard.json`
 
-**Updated (24):**
+**Updated (25):**
 
 - `src/http/ngx_http.h`
 - `src/http/ngx_http_request.h`
@@ -114,11 +115,12 @@ The full refactor touches **35 files = 11 created + 24 updated**. The forward an
 - `src/http/v2/ngx_http_v2_filter_module.c`
 - `src/http/v3/ngx_http_v3_filter_module.c`
 - `auto/options`
+- `auto/sources`
 - `auto/modules`
 - `mkdocs.yml`
 - `README.md`
 
-The build-wiring file is `auto/modules` (**deviation (c)**); the AAP literally named `auto/sources`, but this tree wires the HTTP core srcs/deps in `auto/modules`, as recorded in `decision_log.md`.
+The build wiring spans two files: `auto/sources` defines the `HTTP_STATUS_SRCS` / `HTTP_STATUS_DEPS` grouping variables, and `auto/modules` consumes them — appending `$HTTP_STATUS_SRCS` to the HTTP-core `ngx_module_srcs` and `$HTTP_STATUS_DEPS` to `ngx_module_deps` — and emits the `NGX_HTTP_STATUS_VALIDATION` define. This is **deviation (c)**: the AAP literally named `auto/sources` for the effective wiring, but in this tree the HTTP-core srcs/deps are wired in `auto/modules`, as recorded in `decision_log.md`.
 
 ## Overview Diagram
 
