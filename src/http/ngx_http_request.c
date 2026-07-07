@@ -197,6 +197,23 @@ ngx_http_header_t  ngx_http_headers_in[] = {
 };
 
 
+ngx_int_t
+ngx_http_status_init(ngx_conf_t *cf)
+{
+    /*
+     * Finalize the centralized HTTP status registry during the HTTP
+     * configuration phase, before any worker process is forked.  The registry
+     * is a statically initialized, read-only table defined in
+     * ngx_http_status.c; ngx_http_status_register() validates and finalizes it
+     * once at configuration time, after which every worker shares it without
+     * locking.  This entry point runs on the HTTP configuration path only and
+     * touches no per-request state.
+     */
+
+    return ngx_http_status_register();
+}
+
+
 void
 ngx_http_init_connection(ngx_connection_t *c)
 {
@@ -2835,7 +2852,11 @@ ngx_http_terminate_request(ngx_http_request_t *r, ngx_int_t rc)
     mr->terminated = 1;
 
     if (rc > 0 && (mr->headers_out.status == 0 || mr->connection->sent == 0)) {
-        mr->headers_out.status = rc;
+        if (ngx_http_status_set(mr, rc) != NGX_OK) {
+            ngx_log_error(NGX_LOG_WARN, mr->connection->log, 0,
+                          "http status set failed during terminate: %i", rc);
+            /* teardown must continue regardless; log-only */
+        }
     }
 
     cln = mr->cleanup;
@@ -3912,7 +3933,11 @@ ngx_http_free_request(ngx_http_request_t *r, ngx_int_t rc)
 #endif
 
     if (rc > 0 && (r->headers_out.status == 0 || r->connection->sent == 0)) {
-        r->headers_out.status = rc;
+        if (ngx_http_status_set(r, rc) != NGX_OK) {
+            ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
+                          "http status set failed during free: %i", rc);
+            /* request teardown/logging must proceed; log-only */
+        }
     }
 
     if (!r->logged) {

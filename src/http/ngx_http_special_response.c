@@ -724,6 +724,12 @@ ngx_http_send_special_response(ngx_http_request_t *r,
     ngx_http_clear_last_modified(r);
     ngx_http_clear_etag(r);
 
+    /*
+     * ngx_http_send_header() runs the HTTP header filter, which sources the
+     * status-line reason phrase from the centralized status registry
+     * (ngx_http_status_reason).  The reason phrase is therefore resolved on the
+     * header-filter path, not in this handler.
+     */
     rc = ngx_http_send_header(r);
 
     if (rc == NGX_ERROR || r->header_only) {

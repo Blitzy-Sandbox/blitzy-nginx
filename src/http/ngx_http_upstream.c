@@ -3162,7 +3162,12 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
         r->headers_out.date->hash = 0;
     }
 
-    r->headers_out.status = u->headers_in.status_n;
+    if (ngx_http_status_set(r, u->headers_in.status_n) != NGX_OK) {
+        ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
+                      "upstream sent non-standard status: %ui",
+                      u->headers_in.status_n);
+        /* upstream pass-through: never reject/transform the backend code */
+    }
     r->headers_out.status_line = u->headers_in.status_line;
 
     r->headers_out.content_length_n = u->headers_in.content_length_n;
