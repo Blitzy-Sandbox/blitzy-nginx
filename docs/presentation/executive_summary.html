@@ -353,6 +353,17 @@
     }
     /* force responsive sizing, overriding Mermaid's inline max-width/height */
     .reveal .mermaid svg { max-width: 100% !important; height: auto !important; max-height: 60vh; }
+    /* Cluster (subgraph) titles: pin to the primary text token so they match the
+       node text and stay high-contrast on the dark navy background. Mermaid's
+       'base' theme otherwise computes these to the dimmer body tone; this makes
+       the intended #F5F7FA explicit and version-independent (w006 Issue 1). */
+    .reveal .mermaid .cluster-label,
+    .reveal .mermaid .cluster-label span,
+    .reveal .mermaid .cluster-label p,
+    .reveal .mermaid g.cluster text {
+      color: var(--text-primary) !important;
+      fill: var(--text-primary) !important;
+    }
     .caption {
       color: var(--text-muted);
       font-size: 0.46em;
@@ -421,6 +432,22 @@
       letter-spacing: 0.14em;
       color: var(--brand-primary);
       font-size: 0.44em;
+    }
+
+    /* ---------- Responsive: narrow viewports (phones, <= 480px) ----------
+       reveal.js scales the fixed 960x700 stage to the viewport, so on a
+       375px phone the multi-column grids and stat rows become cramped. These
+       rules collapse them to a single column, wrap stat/pill rows, and lift
+       the smallest body/caption sizes so text stays legible at 375px. */
+    @media screen and (max-width: 480px) {
+      .grid-2, .grid-3, .grid-2b { grid-template-columns: 1fr; gap: 0.7em; }
+      .stat-row { flex-direction: column; gap: 0.6em; }
+      .icon-row { flex-wrap: wrap; }
+      .reveal p, .reveal li { font-size: 0.8em; line-height: 1.5; }
+      .caption { font-size: 0.6em; max-width: 90vw; }
+      .diagram-id, .kicker { font-size: 0.56em; }
+      .reveal .mermaid svg { max-height: 52vh; }
+      .lead { font-size: 0.85em; max-width: 90vw; }
     }
   </style>
 </head>
@@ -630,7 +657,7 @@ graph TD
     SET["ngx_http_status_set()"]
     VAL["ngx_http_status_validate()<br/>compile-time gate"]
     REASON["ngx_http_status_reason()"]
-    TABLE["static ngx_http_status_def_t[]<br/>code, reason, flags, rfc_section<br/>O(1) index, 864 B &lt; 1 KB, read-only"]
+    TABLE["static ngx_http_status_def_t[]<br/>line, line_len, code, flags, rfc_section<br/>O(1) index, 928 B &lt; 1 KB, read-only"]
   end
 
   FIELD["r-&gt;headers_out.status"]
@@ -792,7 +819,7 @@ graph TD
           </div>
           <div class="card">
             <h3><span class="ico ico--violet"><i data-lucide="list-checks"></i></span>Testing</h3>
-            <p>Unit and integration harness, latency benchmarking, and zero-leak verification.</p>
+            <p>Unit and integration harness, latency benchmarking, and stock-equivalent valgrind checks (no status-path leak regression).</p>
           </div>
           <div class="card">
             <h3><span class="ico ico--2xx"><i data-lucide="gauge"></i></span>Observability</h3>
@@ -819,7 +846,7 @@ graph TD
 
   <!-- Pinned CDN scripts (classic UMD builds so file:// works without module/CORS issues) -->
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 
   <script>

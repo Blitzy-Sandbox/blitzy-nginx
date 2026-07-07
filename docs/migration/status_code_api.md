@@ -208,7 +208,7 @@ graph TD
         SET["ngx_http_status_set()"]
         VAL["ngx_http_status_validate()<br/>#ifdef NGX_HTTP_STATUS_VALIDATION"]
         REASON["ngx_http_status_reason()"]
-        TABLE["static ngx_http_status_def_t[]<br/>code, reason, flags, rfc_section<br/>O(1) index, <1KB, read-only"]
+        TABLE["static ngx_http_status_def_t[]<br/>line, line_len, code, flags, rfc_section<br/>O(1) index, <1KB, read-only"]
     end
     FIELD["r->headers_out.status"]
     ERR["special_response.c<br/>err_status funnel (HTML preserved)"]

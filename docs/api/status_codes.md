@@ -119,7 +119,7 @@ A boolean flag test for heuristic cacheability.
 
 - Parameters: `status` — the numeric status code to test.
 - Returns: a non-zero value if the code's registry entry has `NGX_HTTP_STATUS_CACHEABLE` set; `0` for non-cacheable or unknown codes.
-- The cacheable set seeded by the registry is {200, 203, 204, 206, 301, 308, 404, 405, 410, 414, 501} — the RFC 9110 §15.1 heuristically cacheable codes present in the shipped table.
+- The cacheable set seeded by the registry is {200, 203, 204, 206, 300, 301, 308, 404, 405, 410, 414, 501} — the RFC 9110 §15.1 heuristically cacheable codes present in the shipped table. `300` (Multiple Choices) is included because RFC 9110 §15.4.1 and RFC 9111 §4.2.2 list it among the responses that are heuristically cacheable.
 
 ## Registry properties
 

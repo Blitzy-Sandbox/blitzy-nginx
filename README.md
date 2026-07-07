@@ -78,7 +78,7 @@ This fork centralizes HTTP response status handling through a status registry mo
 An optional RFC 9110 compliance validation layer can be enabled at build time with the `--with-http_status_validation` configure flag. This flag is **off by default**, so the default build is byte-identical to upstream behavior.
 
 > [!NOTE]
-> Full backward compatibility is preserved: all existing `NGX_HTTP_*` numeric constants remain defined, and direct `r->headers_out.status` assignment continues to work. For details, see the [HTTP status code API reference](docs/api/status_codes.md) and the [status code API migration guide](docs/migration/status_code_api.md).
+> Full backward compatibility is preserved: all existing `NGX_HTTP_*` numeric constants remain defined, and direct `r->headers_out.status` assignment continues to work. For details, see the [HTTP status code API reference](docs/api/status_codes.md) and the [status code API migration guide](docs/migration/status_code_api.md). The refactor's design rationale, source→target traceability, and observability model are documented in the [decision log](docs/refactor/decision_log.md), the [traceability matrix](docs/refactor/traceability_matrix.md), and the [observability guide](docs/observability/observability.md).
 
 ## Configurations
 NGINX is highly flexible and configurable. Provisioning the software is achieved via text-based config file(s) accepting parameters called "[Directives](https://nginx.org/en/docs/dirindex.html)". See [Configuration File's Structure](https://nginx.org/en/docs/beginners_guide.html#conf_structure) for a comprehensive description of how NGINX configuration files work.

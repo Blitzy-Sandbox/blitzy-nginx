@@ -69,19 +69,21 @@ This direction confirms that no target implementation is orphaned: every symbol 
 | `ngx_http_status_validate()` | **NEW** — no prior source construct (validation did not previously exist) | compile-time gated by `#ifdef NGX_HTTP_STATUS_VALIDATION`; strict vs. standard mode |
 | `ngx_http_status_is_cacheable()` | **NEW** — consolidates ad-hoc, per-module cacheability checks | flag test (`NGX_HTTP_STATUS_CACHEABLE`) against the registry |
 | `ngx_http_status_register()` | **NEW** — no prior construct | seeds the registry during the configuration phase only (no runtime mutation) |
-| static `ngx_http_status_def_t[]` registry | generalizes the `ngx_http_status_lines[]` offset-index idiom | O(1) direct index, <1 KB/worker, read-only after init, lock-free |
+| static `ngx_http_status_def_t[]` registry | generalizes the `ngx_http_status_lines[]` offset-index idiom | O(1) direct index, <1 KB/worker, read-only after init, lock-free; 58 rows / 928 bytes after the 1xx addition below |
+| 1xx informational gap rows (100, 101, 102, 103) + `NGX_HTTP_STATUS_INFORMATIONAL` | **NEW** — QA follow-up (report FINAL_ALT Issue 1); the stock `ngx_http_status_lines[]` table had no 1xx entries | numeric-only gap rows (no wire line) recording the informational class; 100/101 carry the RFC 9110 §15.2 back-reference, 102/103 carry `NGX_HTTP_STATUS_RFC_NONE`. Byte-neutral — nginx emits 100/103 via dedicated hardcoded paths (`ngx_http_request_body.c`, header filter), not this table |
+| `300` row `NGX_HTTP_STATUS_CACHEABLE` flag | **NEW** — QA follow-up (report w007 Issue C); RFC 9110 §15.4.1 / RFC 9111 §4.2.2 | marks 300 Multiple Choices heuristically cacheable, expanding the cacheable set to twelve codes; `ngx_http_status_is_cacheable()` has no runtime caller, so the flag is pure metadata (no wire/caching change) |
 | `src/http/ngx_http_status.h` / `src/http/ngx_http_status.c` | new files modeled on `ngx_http_request.h` and `ngx_http_header_filter_module.c` | the registry/API core |
 | `NGX_HTTP_STATUS_VALIDATION` compile define | `auto/options` (switch) + `auto/sources` (grouping variables) + `auto/modules` (consumes the variables, emits the define) | emitted into `objs/ngx_auto_config.h`; default OFF |
 
 ## Coverage Summary
 
-**Coverage is 100% with no gaps.** All 17 direct write-sites, the `ngx_http_status_lines[]` reason-phrase table, and the `err_status` funnel are mapped in the forward direction and are accounted for in the reverse direction. The HTTP/2 and HTTP/3 serializers are also mapped in the forward direction, recorded as numeric-only `:status` emitters that deliberately do **not** consume `ngx_http_status_reason()` (HTTP/2 gains only a clarifying comment; HTTP/3 is unchanged). Every new symbol that has no antecedent — `ngx_http_status_validate()`, `ngx_http_status_is_cacheable()`, and `ngx_http_status_register()` — is explicitly labelled **NEW** rather than left unmapped, so the reverse mapping is complete.
+**Coverage is 100% with no gaps.** All 17 direct write-sites, the `ngx_http_status_lines[]` reason-phrase table, and the `err_status` funnel are mapped in the forward direction and are accounted for in the reverse direction. The HTTP/2 and HTTP/3 serializers are also mapped in the forward direction, recorded as numeric-only `:status` emitters that deliberately do **not** consume `ngx_http_status_reason()` (HTTP/2 gains only a clarifying comment; HTTP/3 is unchanged). Every new symbol that has no antecedent — `ngx_http_status_validate()`, `ngx_http_status_is_cacheable()`, and `ngx_http_status_register()`, together with the QA-follow-up registry refinements (the four 1xx informational gap rows and the `300` cacheable flag) — is explicitly labelled **NEW** rather than left unmapped, so the reverse mapping is complete.
 
 ### Changed-file inventory cross-check
 
-The full refactor touches **39 files = 14 created + 25 updated**. The forward and reverse mappings above reference the code-affecting subset of this inventory; the remaining entries are documentation, test, and rule-mandated deliverables. Note that `src/http/v3/ngx_http_v3_filter_module.c` is **not** among the changed files — the HTTP/3 serializer already emitted a numeric-only `:status` and required no edit; it is listed in the forward mapping only to record that its behavior is deliberately unchanged.
+The full refactor touches **40 files = 15 created + 25 updated**. The forward and reverse mappings above reference the code-affecting subset of this inventory; the remaining entries are documentation, test, and rule-mandated deliverables. One of the created files, `docs/stylesheets/extra.css`, is a documentation-site accessibility asset added by a QA follow-up (report FINAL_ALT Issue 9): it is referenced from `mkdocs.yml` via `extra_css` and scopes a Material mobile-drawer focus fix to the built docs site only, so it maps to no nginx source construct and is therefore recorded here in the inventory rather than in the forward/reverse code mapping (see `decision_log.md`). Note that `src/http/v3/ngx_http_v3_filter_module.c` is **not** among the changed files — the HTTP/3 serializer already emitted a numeric-only `:status` and required no edit; it is listed in the forward mapping only to record that its behavior is deliberately unchanged.
 
-**Created (14):**
+**Created (15):**
 
 - `src/http/ngx_http_status.c`
 - `src/http/ngx_http_status.h`
@@ -97,6 +99,7 @@ The full refactor touches **39 files = 14 created + 25 updated**. The forward an
 - `t/unit/ngx_http_status_test.c`
 - `t/unit/Makefile`
 - `t/unit/.gitignore`
+- `docs/stylesheets/extra.css`
 
 **Updated (25):**
 

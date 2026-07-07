@@ -33,7 +33,7 @@ in `src/http/ngx_http_status.c` / `src/http/ngx_http_status.h`. All status write
 reason phrase by `ngx_http_status_reason()`; a static `ngx_http_status_def_t` registry is the single
 authority. Each row is a compact 16-byte record — `const char *line` with a `uint16_t line_len` (the
 precomputed `"NNN reason"` wire literal, e.g. `"200 OK"`), plus `uint16_t` `code`, `flags`, and a
-packed `rfc_section` (RFC 9110 §15 back-reference) — so the 54-row table is 864 bytes, under the 1 KB
+packed `rfc_section` (RFC 9110 §15 back-reference) — so the 58-row table is 928 bytes, under the 1 KB
 budget.
 Optional RFC 9110 validation is gated behind `--with-http_status_validation` (default OFF → the
 default binary produces byte-identical wire output, confirmed at runtime for both the response status
@@ -52,18 +52,18 @@ Each domain phase resolves to **exactly one** verdict token. A phase is only mar
 every file assigned to it passes its checklist; any unmet requirement yields `BLOCKED` with a
 concrete remediation note.
 
-## Changed-File Inventory (39 files: 14 created + 25 updated)
+## Changed-File Inventory (40 files: 15 created + 25 updated)
 
 Every file below is assigned to **exactly one** domain phase — no omissions, no duplicates. The
 per-phase file tables in Sections 1–4 are the authoritative partition; the
 [coverage checklist](#coverage-checklist) at the end confirms the full accounting.
 
-- **Created (14):** `CHANGES`, `CODE_REVIEW.md`, `src/http/ngx_http_status.h`,
+- **Created (15):** `CHANGES`, `CODE_REVIEW.md`, `src/http/ngx_http_status.h`,
   `src/http/ngx_http_status.c`, `docs/api/status_codes.md`, `docs/migration/status_code_api.md`,
   `docs/refactor/decision_log.md`, `docs/refactor/traceability_matrix.md`,
   `docs/presentation/executive_summary.html`, `docs/observability/observability.md`,
   `docs/observability/status_metrics_dashboard.json`, `t/unit/ngx_http_status_test.c`,
-  `t/unit/Makefile`, `t/unit/.gitignore`.
+  `t/unit/Makefile`, `t/unit/.gitignore`, `docs/stylesheets/extra.css`.
 - **Updated (25):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `auto/modules`,
   `auto/install`, `src/http/ngx_http.h`,
   `src/http/ngx_http_request.h`, `src/http/ngx_http_request.c`, `src/http/ngx_http_core_module.c`,
@@ -250,7 +250,7 @@ build edits are correct, minimal, and non-breaking.
 | `docs/refactor/decision_log.md` | CREATED | Explainability decision log: decision, alternatives, rationale, risk. |
 | `docs/observability/observability.md` | CREATED | Reused-vs-added observability mapping (logging, `$request_id`, `stub_status`, status-class counters). |
 | `docs/observability/status_metrics_dashboard.json` | CREATED | Dashboard template for status-class metrics. |
-| `t/unit/ngx_http_status_test.c` | CREATED | Self-contained unit-test driver for the status API — compiles `ngx_http_status.c` fresh with link-time stubs and asserts `register`/`set`/`validate`/`line`/`reason`/`is_cacheable` and worker-safety across all 36 registry rows, 18 gap codes, and out-of-range boundaries (AAP §0.7.2, 100% API coverage). |
+| `t/unit/ngx_http_status_test.c` | CREATED | Self-contained unit-test driver for the status API — compiles `ngx_http_status.c` fresh with link-time stubs and asserts `register`/`set`/`validate`/`line`/`reason`/`is_cacheable` and worker-safety across all 36 registry rows, 22 gap codes (including the four 1xx informational rows), and out-of-range boundaries (AAP §0.7.2, 100% API coverage). |
 | `t/unit/Makefile` | CREATED | Self-contained build for the unit driver; derives `NGX_HTTP_STATUS_VALIDATION` from `objs/ngx_auto_config.h` so it exercises whichever variant was configured, under the same `-Werror` flags. Provides `check` (default) and `clean`. |
 | `t/unit/.gitignore` | CREATED | Ignores the compiled test binary and `*.o` so only source is committed. |
 
@@ -262,7 +262,7 @@ build edits are correct, minimal, and non-breaking.
   centralized target (`ngx_http_status_set()` / `ngx_http_status_reason()` / the registry). No source
   status construct is left unmapped.
 - [x] **Decision log captures non-trivial decisions.** Each entry records alternatives considered,
-  rationale, and residual risk. The seven required deviations from a literal reading of the request
+  rationale, and residual risk. The eight required deviations from a literal reading of the request
   are present and justified: (a) `CHANGES` is **created** (the file is absent from the fork) rather
   than updated; (b) validation is enforced at **central choke-points** (`ngx_http_status_set()`, the
   `special_response` funnel, the header filter) instead of editing each `return NGX_HTTP_*` statement;
@@ -272,7 +272,10 @@ build edits are correct, minimal, and non-breaking.
   backend codes; (f) the registry initializer is declared in `ngx_http.h` and invoked from
   `preconfiguration` (before the first worker fork); and (g) the per-worker status-class counters and
   their `stub_status` metric lines are compiled in only under the validation flag, keeping the default
-  `stub_status` output byte-identical. All seven are recorded as rows `(a)`–`(g)` in `decision_log.md`.
+  `stub_status` output byte-identical; and (h) the dependency-currency findings (the nginx 1.29.5
+  baseline and the OpenSSL pin) are recorded as **accepted residual risk** rather than remediated,
+  because Constraint C-001 freezes the baseline and this work is explicitly not a tech-stack migration.
+  All eight are recorded as rows `(a)`–`(h)` in `decision_log.md`.
 - [x] **Observability reused-vs-added mapping present.** The document distinguishes **reused**
   primitives (`error_log`/`access_log`, the built-in `$request_id` correlation variable, and the
   `stub_status` atomic-counter pattern) from **added** signals (status-class counters for
@@ -331,7 +334,7 @@ build edits are correct, minimal, and non-breaking.
   `techdocs-core` and `mermaid2` plugins remain intact so diagrams still render.
 - [x] **`README.md` note is additive.** The README gains a short, additive note about the new
   status-registry module without removing or altering existing content.
-- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 39 changed files across
+- [x] **This review artifact is complete.** `CODE_REVIEW.md` partitions all 40 changed files across
   the four domain phases with a final re-verification verdict, satisfying the Segmented PR Review rule.
 
 **Verdict: APPROVED**
@@ -426,7 +429,7 @@ verdicts re-confirmed `APPROVED` against the amended code.
   Remediation: intern the full `"NNN reason"` wire literal in the registry (`line`/`line_len`), expose
   it via `ngx_http_status_line()`, and emit it from the header filter with a **single `ngx_copy`** —
   exactly the stock mechanism; `ngx_http_status_reason()` still derives the bare phrase by skipping the
-  `"NNN "` prefix, so the registry remains the single source and the row stays 16 bytes (table 864 B).
+  `"NNN "` prefix, so the registry remains the single source and the row stays 16 bytes (table 928 B).
   Re-verified: clean `-Werror` build of both variants; **byte-identical** to stock across 69 codes and
   the default error bodies; fixed CPU-time/req **+0.76%** (within budget); isolated microbench
   20.98 → 3.88 ns/op (81.5% render reduction). Files: `ngx_http_status.h`, `ngx_http_status.c`,
@@ -500,7 +503,7 @@ self-contained, committed unit suite and wired it into the build:
   `ngx_hash_key`, and the three `$request_id` variable-lookup helpers), so no other part of the
   runtime is pulled in. It asserts registry registration idempotency (worker-safety / read-only after
   init), `ngx_http_status_line()` / `ngx_http_status_reason()` for all 36 registry rows plus the
-  `reason == line + 4` invariant, empty results for all 18 gap codes and out-of-range inputs,
+  `reason == line + 4` invariant, empty results for all 22 gap codes and out-of-range inputs,
   `ngx_http_status_is_cacheable()` exhaustively over `0..700` plus `UINT_MAX`, and
   `ngx_http_status_set()` (NULL guard, local write, upstream guarded pass-through of non-standard
   codes, and — under validation — strict rejection with status-class-counter accounting). The
@@ -517,21 +520,49 @@ This deliverable **expands the changed-file inventory** from 35 to **39 files (1
 updated)**: the three new `t/unit/` files join **Phase 3 — QA / Test Integrity** and `auto/install`
 joins **Phase 1 — Infrastructure / DevOps**; both phases were re-reviewed and re-confirmed `APPROVED`
 against the added files, and the [coverage checklist](#coverage-checklist) below reflects the new
-partition. **F-1 — RESOLVED.** Re-verified at runtime: `make check` reports **908** assertions passing
-in the default build and **912** in the `--with-http_status_validation` build (0 failures in both),
+partition. **F-1 — RESOLVED.** Re-verified at runtime: `make check` reports **912** assertions passing
+in the default build and **916** in the `--with-http_status_validation` build (0 failures in both),
 each compiling warning-free under `-Werror`; the four extra validation-build assertions exercise the
 strict-mode reject path. Because only the root-`Makefile` generator is touched, both the default and
 validation nginx binaries remain size- and wire-identical.
 
-All four QA-fix re-verifications (F-PERF-1, Info-1, F-OBS-1/F-OBS-2, F-1) preserve every binding
-invariant listed above, and each modified or added file remains within exactly one domain phase, so
-the (now 39-file) partition is complete and disjoint and the overall verdict stands.
+### QA-fix re-verification for FINAL_ALT Issue 9 (mobile keyboard focus)
+
+A subsequent QA testing pass (report FINAL_ALT) raised one MINOR accessibility finding (Issue 9): on
+the built MkDocs site at a 375×812 mobile viewport, pressing Tab twice moved focus onto the Material
+off-canvas navigation drawer's logo link, which is rendered offscreen (`position: fixed`, x = -234)
+while remaining `visibility: visible`, so its descendants stayed in the keyboard tab order and focus
+landed outside the viewport with no visible focus ring. Remediation adds a scoped, theme-safe
+stylesheet:
+
+- **`docs/stylesheets/extra.css`** (new) — while the drawer is closed, marks
+  `.md-sidebar--primary` `visibility: hidden` so its off-canvas contents leave the tab order; the
+  `[data-md-toggle="drawer"]:checked ~ .md-container .md-sidebar--primary` selector restores
+  `visibility: visible` when the drawer is opened, and a `visibility 0s linear 0.25s` transition delay
+  keeps Material's slide-out animation intact. The rule is scoped to Material's own mobile drawer
+  breakpoint (`max-width: 76.1875em`) so the persistent desktop left-hand navigation is untouched.
+- **`mkdocs.yml`** (already updated) — gains an `extra_css: [stylesheets/extra.css]` reference so the
+  stylesheet is emitted and linked; no theme internals are overridden.
+
+This is the only QA-fix that **adds a file** to the changed-file inventory, expanding it from 39 to
+**40 files (15 created + 25 updated)**: `docs/stylesheets/extra.css` joins **Phase 4** alongside
+`mkdocs.yml` (its build-configuration owner), which was re-reviewed and re-confirmed `APPROVED` against
+the added file. **Issue 9 — RESOLVED.** Re-verified at runtime (375×812): after Tab twice, focus lands
+on an in-viewport headerlink (x = 202, `inViewport: true`, outline `auto 1px rgb(82,108,254)`) rather
+than the offscreen logo; opening the drawer restores `visibility: visible` and refocusability of the
+nav links; desktop (1280px) navigation is unaffected; the `mkdocs build --strict` run stays exit 0 and
+every rendered page's console remains clean. No nginx source, build rule, or wire output is touched, so
+both binaries remain byte-identical.
+
+All five QA-fix re-verifications (F-PERF-1, Info-1, F-OBS-1/F-OBS-2, F-1, FINAL_ALT Issue 9) preserve
+every binding invariant listed above, and each modified or added file remains within exactly one domain
+phase, so the (now 40-file) partition is complete and disjoint and the overall verdict stands.
 
 **Final Verdict: APPROVED**
 
 ## Coverage Checklist
 
-All **39** changed files (14 created + 25 updated) are each assigned to **exactly one** phase — no
+All **40** changed files (15 created + 25 updated) are each assigned to **exactly one** phase — no
 omissions, no duplicates.
 
 | # | File | Op | Phase |
@@ -575,6 +606,7 @@ omissions, no duplicates.
 | 37 | `mkdocs.yml` | UPDATED | 4 |
 | 38 | `README.md` | UPDATED | 4 |
 | 39 | `CODE_REVIEW.md` | CREATED | 4 |
+| 40 | `docs/stylesheets/extra.css` | CREATED | 4 |
 
-**Per-phase totals:** Phase 1 = 4 · Phase 2 = 21 · Phase 3 = 7 · Phase 4 = 7 → **39 total**
-(14 created + 25 updated). Partition is complete and disjoint.
+**Per-phase totals:** Phase 1 = 4 · Phase 2 = 21 · Phase 3 = 7 · Phase 4 = 8 → **40 total**
+(15 created + 25 updated). Partition is complete and disjoint.

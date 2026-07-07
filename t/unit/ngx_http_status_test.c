@@ -184,6 +184,7 @@ static const ngx_uint_t  ngx_test_nrows =
 /* Seeded-but-numeric-only ("GAP") codes: registered class members with no line. */
 
 static ngx_uint_t  ngx_test_gaps[] = {
+    100, 101, 102, 103,
     203, 205, 300, 305, 306, 407, 417, 418, 419, 420,
     422, 423, 424, 425, 426, 427, 428, 506
 };
@@ -195,7 +196,7 @@ static const ngx_uint_t  ngx_test_ngaps =
 /* The complete set of heuristically cacheable codes (RFC 9110 15.1). */
 
 static ngx_uint_t  ngx_test_cacheable[] = {
-    200, 203, 204, 206, 301, 308, 404, 405, 410, 414, 501
+    200, 203, 204, 206, 300, 301, 308, 404, 405, 410, 414, 501
 };
 
 static const ngx_uint_t  ngx_test_ncacheable =
@@ -290,10 +291,14 @@ ngx_test_unknown(void)
     ngx_uint_t  i, n;
     ngx_str_t   line, reason;
 
-    /* Class-edge, out-of-class, and out-of-range codes: no line, no reason. */
+    /*
+     * Class-edge, out-of-class, and out-of-range codes: no line, no reason.
+     * 99 and 199 are unseeded 1xx-range codes (only 100-103 are seeded), so
+     * they resolve to no registry row and render numeric-only.
+     */
 
     static ngx_uint_t  unknown[] = {
-        0, 1, 99, 100, 101, 199, 207, 208, 250, 299, 309, 310, 399,
+        0, 1, 99, 199, 207, 208, 250, 299, 309, 310, 399,
         430, 499, 508, 509, 599, 600, 999, (ngx_uint_t) UINT_MAX
     };
 
@@ -316,7 +321,7 @@ ngx_test_is_cacheable(void)
 {
     ngx_uint_t  code, got, expect;
 
-    /* Exhaustive sweep: cacheable is true for exactly the eleven codes. */
+    /* Exhaustive sweep: cacheable is true for exactly the twelve codes. */
 
     for (code = 0; code <= 700; code++) {
         got = ngx_http_status_is_cacheable(code);

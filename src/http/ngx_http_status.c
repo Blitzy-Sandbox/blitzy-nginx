@@ -13,12 +13,18 @@
 /*
  * Class boundary and offset constants for the direct-index registry.  Each
  * LAST_* value is the exclusive upper bound of its class; each OFF_* value is
- * the index at which the next class begins.  The 3xx class starts at 300
- * (NGX_HTTP_SPECIAL_RESPONSE) so that code has its own row.
+ * the index at which the next class begins.  The 1xx class starts at 100
+ * (NGX_HTTP_CONTINUE) at index 0, so every OFF_* downstream includes the
+ * leading 1xx rows.  The 3xx class starts at 300 (NGX_HTTP_SPECIAL_RESPONSE)
+ * so that code has its own row.
  */
 
+#define NGX_HTTP_STATUS_LAST_1XX   104
+#define NGX_HTTP_STATUS_OFF_2XX    (NGX_HTTP_STATUS_LAST_1XX - NGX_HTTP_CONTINUE)
+
 #define NGX_HTTP_STATUS_LAST_2XX   207
-#define NGX_HTTP_STATUS_OFF_3XX    (NGX_HTTP_STATUS_LAST_2XX - NGX_HTTP_OK)
+#define NGX_HTTP_STATUS_OFF_3XX    (NGX_HTTP_STATUS_LAST_2XX - NGX_HTTP_OK       \
+                                    + NGX_HTTP_STATUS_OFF_2XX)
 
 #define NGX_HTTP_STATUS_LAST_3XX   309
 #define NGX_HTTP_STATUS_OFF_4XX    (NGX_HTTP_STATUS_LAST_3XX                   \
@@ -71,6 +77,24 @@
 
 static const ngx_http_status_def_t  ngx_http_status_defs[] = {
 
+    /*
+     * 1xx informational (RFC 9110 15.2).  These are gap rows: they carry no
+     * wire status line, so they render numeric-only and add no bytes to the
+     * response.  nginx emits its 1xx responses (100 Continue, 103 Early Hints)
+     * through dedicated hardcoded paths rather than this table, so seeding the
+     * codes here records their class metadata without altering wire output.
+     * 100 and 101 map to RFC 9110 15.2; 102 (RFC 2518) and 103 (RFC 8297) are
+     * outside RFC 9110 section 15, so they carry NGX_HTTP_STATUS_RFC_NONE.
+     */
+    NGX_HTTP_STATUS_GAP(100, NGX_HTTP_STATUS_INFORMATIONAL,
+        NGX_HTTP_STATUS_RFC(2, 1)),
+    NGX_HTTP_STATUS_GAP(101, NGX_HTTP_STATUS_INFORMATIONAL,
+        NGX_HTTP_STATUS_RFC(2, 2)),
+    NGX_HTTP_STATUS_GAP(102, NGX_HTTP_STATUS_INFORMATIONAL,
+        NGX_HTTP_STATUS_RFC_NONE),
+    NGX_HTTP_STATUS_GAP(103, NGX_HTTP_STATUS_INFORMATIONAL,
+        NGX_HTTP_STATUS_RFC_NONE),
+
     /* 2xx successful (RFC 9110 15.3) */
     NGX_HTTP_STATUS_ROW(200, "200 OK", NGX_HTTP_STATUS_CACHEABLE,
         NGX_HTTP_STATUS_RFC(3, 1)),
@@ -85,7 +109,8 @@ static const ngx_http_status_def_t  ngx_http_status_defs[] = {
         NGX_HTTP_STATUS_RFC(3, 7)),
 
     /* 3xx redirection (RFC 9110 15.4) */
-    NGX_HTTP_STATUS_GAP(300, 0, NGX_HTTP_STATUS_RFC(4, 1)),
+    NGX_HTTP_STATUS_GAP(300, NGX_HTTP_STATUS_CACHEABLE,
+        NGX_HTTP_STATUS_RFC(4, 1)),
     NGX_HTTP_STATUS_ROW(301, "301 Moved Permanently",
         NGX_HTTP_STATUS_CACHEABLE, NGX_HTTP_STATUS_RFC(4, 2)),
     NGX_HTTP_STATUS_ROW(302, "302 Moved Temporarily", 0,
@@ -202,8 +227,11 @@ ngx_http_status_lookup(ngx_uint_t status)
 {
     ngx_uint_t  index;
 
-    if (status >= NGX_HTTP_OK && status < NGX_HTTP_STATUS_LAST_2XX) {
-        index = status - NGX_HTTP_OK;
+    if (status >= NGX_HTTP_CONTINUE && status < NGX_HTTP_STATUS_LAST_1XX) {
+        index = status - NGX_HTTP_CONTINUE;
+
+    } else if (status >= NGX_HTTP_OK && status < NGX_HTTP_STATUS_LAST_2XX) {
+        index = status - NGX_HTTP_OK + NGX_HTTP_STATUS_OFF_2XX;
 
     } else if (status >= NGX_HTTP_SPECIAL_RESPONSE
                && status < NGX_HTTP_STATUS_LAST_3XX)
