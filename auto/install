@@ -216,5 +216,8 @@ upgrade:
 
 	kill -QUIT \`cat $NGX_PID_PATH.oldbin\`
 
-.PHONY:	build install modules upgrade
+check:
+	\$(MAKE) -C t/unit check
+
+.PHONY:	build install modules upgrade check
 END

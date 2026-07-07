@@ -52,19 +52,20 @@ Each domain phase resolves to **exactly one** verdict token. A phase is only mar
 every file assigned to it passes its checklist; any unmet requirement yields `BLOCKED` with a
 concrete remediation note.
 
-## Changed-File Inventory (35 files: 11 created + 24 updated)
+## Changed-File Inventory (39 files: 14 created + 25 updated)
 
 Every file below is assigned to **exactly one** domain phase — no omissions, no duplicates. The
 per-phase file tables in Sections 1–4 are the authoritative partition; the
 [coverage checklist](#coverage-checklist) at the end confirms the full accounting.
 
-- **Created (11):** `CHANGES`, `CODE_REVIEW.md`, `src/http/ngx_http_status.h`,
+- **Created (14):** `CHANGES`, `CODE_REVIEW.md`, `src/http/ngx_http_status.h`,
   `src/http/ngx_http_status.c`, `docs/api/status_codes.md`, `docs/migration/status_code_api.md`,
   `docs/refactor/decision_log.md`, `docs/refactor/traceability_matrix.md`,
   `docs/presentation/executive_summary.html`, `docs/observability/observability.md`,
-  `docs/observability/status_metrics_dashboard.json`.
-- **Updated (24):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `auto/modules`,
-  `src/http/ngx_http.h`,
+  `docs/observability/status_metrics_dashboard.json`, `t/unit/ngx_http_status_test.c`,
+  `t/unit/Makefile`, `t/unit/.gitignore`.
+- **Updated (25):** `mkdocs.yml`, `README.md`, `auto/options`, `auto/sources`, `auto/modules`,
+  `auto/install`, `src/http/ngx_http.h`,
   `src/http/ngx_http_request.h`, `src/http/ngx_http_request.c`, `src/http/ngx_http_core_module.c`,
   `src/http/ngx_http_header_filter_module.c`, `src/http/ngx_http_special_response.c`,
   `src/http/ngx_http_upstream.c`, `src/http/modules/ngx_http_static_module.c`,
@@ -86,13 +87,14 @@ per-phase file tables in Sections 1–4 are the authoritative partition; the
 - **Reviewer role:** Build / Release Engineer
 - **Domain:** Build system and configure-time feature gating (`auto/` POSIX-shell tooling).
 
-### Files in this phase (3)
+### Files in this phase (4)
 
 | File | Op | Role in the change |
 |------|----|--------------------|
 | `auto/options` | UPDATED | Adds `HTTP_STATUS_VALIDATION=NO` default, the `--with-http_status_validation` case arm (sets it `YES`), and matching `--help` text. |
 | `auto/sources` | UPDATED | Defines the grouping variables `HTTP_STATUS_SRCS=src/http/ngx_http_status.c` and `HTTP_STATUS_DEPS=src/http/ngx_http_status.h` (following the existing `HTTP_FILE_CACHE_SRCS` / `HTTP_HUFF_SRCS` idiom). These variables only *name* the source pair; they do not themselves wire it into a build list. |
 | `auto/modules` | UPDATED | Build-effective wiring: appends `$HTTP_STATUS_SRCS` to the HTTP-core `ngx_module_srcs` and `$HTTP_STATUS_DEPS` to `ngx_module_deps` so `objs/Makefile` compiles and links `ngx_http_status.o` (with the header tracked for incremental rebuilds), and emits the `NGX_HTTP_STATUS_VALIDATION` define into `objs/ngx_auto_config.h` only when `HTTP_STATUS_VALIDATION=YES`. |
+| `auto/install` | UPDATED | Generates a purely-additive top-level `check` phony target in the root `Makefile` (recipe `$(MAKE) -C t/unit check`) alongside the existing `build`/`install`/`upgrade` targets, so `make check` builds and runs the status-API unit suite. Touches only the root-`Makefile` generator — the nginx binary rules in `objs/Makefile` (from `auto/make`) are untouched, so the shipped binary stays byte-identical. |
 
 ### Review checklist
 
@@ -240,7 +242,7 @@ build edits are correct, minimal, and non-breaking.
 - **Domain:** Traceability, decision provenance, observability, and the documented test strategy that
   proves the refactor is behavior-preserving and verifiable.
 
-### Files in this phase (4)
+### Files in this phase (7)
 
 | File | Op | Role in the change |
 |------|----|--------------------|
@@ -248,6 +250,9 @@ build edits are correct, minimal, and non-breaking.
 | `docs/refactor/decision_log.md` | CREATED | Explainability decision log: decision, alternatives, rationale, risk. |
 | `docs/observability/observability.md` | CREATED | Reused-vs-added observability mapping (logging, `$request_id`, `stub_status`, status-class counters). |
 | `docs/observability/status_metrics_dashboard.json` | CREATED | Dashboard template for status-class metrics. |
+| `t/unit/ngx_http_status_test.c` | CREATED | Self-contained unit-test driver for the status API — compiles `ngx_http_status.c` fresh with link-time stubs and asserts `register`/`set`/`validate`/`line`/`reason`/`is_cacheable` and worker-safety across all 36 registry rows, 18 gap codes, and out-of-range boundaries (AAP §0.7.2, 100% API coverage). |
+| `t/unit/Makefile` | CREATED | Self-contained build for the unit driver; derives `NGX_HTTP_STATUS_VALIDATION` from `objs/ngx_auto_config.h` so it exercises whichever variant was configured, under the same `-Werror` flags. Provides `check` (default) and `clean`. |
+| `t/unit/.gitignore` | CREATED | Ignores the compiled test binary and `*.o` so only source is committed. |
 
 ### Review checklist
 
@@ -438,8 +443,9 @@ A subsequent QA testing pass (Report 5) raised one MINOR observability finding (
 documentation finding (F-OBS-2). Both were remediated within file sets already owned by
 **Phase 2 — Backend Architecture** (the C sources) and **Phase 3 — QA / Test Integrity**
 (`observability.md`); those phases were re-reviewed and their verdicts re-confirmed `APPROVED` against
-the amended files. The changed-file partition and the 35-file coverage table are unchanged — every
-edit lands in a file already assigned to exactly one phase.
+the amended files. Neither F-OBS fix changes the changed-file partition or the coverage table — every
+edit lands in a file already assigned to exactly one phase. (The subsequently added F-1 unit-test
+deliverable, documented below, is what expands the inventory to 39 files.)
 
 - **F-OBS-1 (MINOR, Observability) — RESOLVED.** `observability.md` (lines 14, 48) and **AAP §0.6.4**
   specify that status-API validation-failure and RFC 9110-violation events are logged at
@@ -472,14 +478,53 @@ edit lands in a file already assigned to exactly one phase.
   documentation, dashboard template, and endpoint are mutually consistent. File:
   `observability.md` (Phase 3).
 
-Both fixes preserve every binding invariant listed above; each modified file remains within its
-originally assigned domain phase, so the phase partition is unchanged and the overall verdict stands.
+Both F-OBS fixes preserve every binding invariant listed above; each modified file remains within its
+originally assigned domain phase, so those two fixes leave the phase partition unchanged.
+
+### QA-fix re-verification for F-1 (Report 6 — QA / Test Integrity)
+
+A final QA testing pass (Report 6) raised one MAJOR finding (F-1): although **AAP §0.7.2** requires
+**100% unit coverage** of the status API (`validate`/`set`/`reason`/`register`/`is_cacheable` and
+worker-safety), the repository shipped **zero committed unit tests**. Remediation created a
+self-contained, committed unit suite and wired it into the build:
+
+- **`t/unit/ngx_http_status_test.c`** (new) — a C driver that compiles the shipping
+  `src/http/ngx_http_status.c` **fresh** and links only five stub symbols (`ngx_log_error_core`,
+  `ngx_hash_key`, and the three `$request_id` variable-lookup helpers), so no other part of the
+  runtime is pulled in. It asserts registry registration idempotency (worker-safety / read-only after
+  init), `ngx_http_status_line()` / `ngx_http_status_reason()` for all 36 registry rows plus the
+  `reason == line + 4` invariant, empty results for all 18 gap codes and out-of-range inputs,
+  `ngx_http_status_is_cacheable()` exhaustively over `0..700` plus `UINT_MAX`, and
+  `ngx_http_status_set()` (NULL guard, local write, upstream guarded pass-through of non-standard
+  codes, and — under validation — strict rejection with status-class-counter accounting). The
+  `ngx_http_status_validate()` assertions are variant-selected via `#if NGX_HTTP_STATUS_VALIDATION`.
+- **`t/unit/Makefile`** (new) — self-contained build that derives `NGX_HTTP_STATUS_VALIDATION` from
+  `objs/ngx_auto_config.h`, compiles under the same `-Werror -Wall -W -Wpointer-arith` flags as the
+  server, and exposes `check` (default) and `clean`.
+- **`t/unit/.gitignore`** (new) — keeps the compiled binary and `*.o` out of version control.
+- **`auto/install`** (updated) — generates a purely-additive `check` phony target in the root
+  `Makefile` (`$(MAKE) -C t/unit check`) beside `build`/`install`/`upgrade`; it does **not** touch the
+  nginx binary rules in `objs/Makefile`, so the shipped binary is byte-identical.
+
+This deliverable **expands the changed-file inventory** from 35 to **39 files (14 created + 25
+updated)**: the three new `t/unit/` files join **Phase 3 — QA / Test Integrity** and `auto/install`
+joins **Phase 1 — Infrastructure / DevOps**; both phases were re-reviewed and re-confirmed `APPROVED`
+against the added files, and the [coverage checklist](#coverage-checklist) below reflects the new
+partition. **F-1 — RESOLVED.** Re-verified at runtime: `make check` reports **908** assertions passing
+in the default build and **912** in the `--with-http_status_validation` build (0 failures in both),
+each compiling warning-free under `-Werror`; the four extra validation-build assertions exercise the
+strict-mode reject path. Because only the root-`Makefile` generator is touched, both the default and
+validation nginx binaries remain size- and wire-identical.
+
+All four QA-fix re-verifications (F-PERF-1, Info-1, F-OBS-1/F-OBS-2, F-1) preserve every binding
+invariant listed above, and each modified or added file remains within exactly one domain phase, so
+the (now 39-file) partition is complete and disjoint and the overall verdict stands.
 
 **Final Verdict: APPROVED**
 
 ## Coverage Checklist
 
-All **35** changed files (11 created + 24 updated) are each assigned to **exactly one** phase — no
+All **39** changed files (14 created + 25 updated) are each assigned to **exactly one** phase — no
 omissions, no duplicates.
 
 | # | File | Op | Phase |
@@ -487,38 +532,42 @@ omissions, no duplicates.
 | 1 | `auto/options` | UPDATED | 1 |
 | 2 | `auto/sources` | UPDATED | 1 |
 | 3 | `auto/modules` | UPDATED | 1 |
-| 4 | `src/http/ngx_http_status.h` | CREATED | 2 |
-| 5 | `src/http/ngx_http_status.c` | CREATED | 2 |
-| 6 | `src/http/ngx_http.h` | UPDATED | 2 |
-| 7 | `src/http/ngx_http_request.h` | UPDATED | 2 |
-| 8 | `src/http/ngx_http_request.c` | UPDATED | 2 |
-| 9 | `src/http/ngx_http_core_module.c` | UPDATED | 2 |
-| 10 | `src/http/ngx_http_header_filter_module.c` | UPDATED | 2 |
-| 11 | `src/http/ngx_http_special_response.c` | UPDATED | 2 |
-| 12 | `src/http/ngx_http_upstream.c` | UPDATED | 2 |
-| 13 | `src/http/modules/ngx_http_static_module.c` | UPDATED | 2 |
-| 14 | `src/http/modules/ngx_http_autoindex_module.c` | UPDATED | 2 |
-| 15 | `src/http/modules/ngx_http_not_modified_filter_module.c` | UPDATED | 2 |
-| 16 | `src/http/modules/ngx_http_range_filter_module.c` | UPDATED | 2 |
-| 17 | `src/http/modules/ngx_http_slice_filter_module.c` | UPDATED | 2 |
-| 18 | `src/http/modules/ngx_http_gzip_static_module.c` | UPDATED | 2 |
-| 19 | `src/http/modules/ngx_http_image_filter_module.c` | UPDATED | 2 |
-| 20 | `src/http/modules/ngx_http_mp4_module.c` | UPDATED | 2 |
-| 21 | `src/http/modules/ngx_http_flv_module.c` | UPDATED | 2 |
-| 22 | `src/http/modules/ngx_http_dav_module.c` | UPDATED | 2 |
-| 23 | `src/http/modules/ngx_http_stub_status_module.c` | UPDATED | 2 |
-| 24 | `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | 2 |
-| 25 | `docs/refactor/traceability_matrix.md` | CREATED | 3 |
-| 26 | `docs/refactor/decision_log.md` | CREATED | 3 |
-| 27 | `docs/observability/observability.md` | CREATED | 3 |
-| 28 | `docs/observability/status_metrics_dashboard.json` | CREATED | 3 |
-| 29 | `docs/api/status_codes.md` | CREATED | 4 |
-| 30 | `docs/migration/status_code_api.md` | CREATED | 4 |
-| 31 | `docs/presentation/executive_summary.html` | CREATED | 4 |
-| 32 | `CHANGES` | CREATED | 4 |
-| 33 | `mkdocs.yml` | UPDATED | 4 |
-| 34 | `README.md` | UPDATED | 4 |
-| 35 | `CODE_REVIEW.md` | CREATED | 4 |
+| 4 | `auto/install` | UPDATED | 1 |
+| 5 | `src/http/ngx_http_status.h` | CREATED | 2 |
+| 6 | `src/http/ngx_http_status.c` | CREATED | 2 |
+| 7 | `src/http/ngx_http.h` | UPDATED | 2 |
+| 8 | `src/http/ngx_http_request.h` | UPDATED | 2 |
+| 9 | `src/http/ngx_http_request.c` | UPDATED | 2 |
+| 10 | `src/http/ngx_http_core_module.c` | UPDATED | 2 |
+| 11 | `src/http/ngx_http_header_filter_module.c` | UPDATED | 2 |
+| 12 | `src/http/ngx_http_special_response.c` | UPDATED | 2 |
+| 13 | `src/http/ngx_http_upstream.c` | UPDATED | 2 |
+| 14 | `src/http/modules/ngx_http_static_module.c` | UPDATED | 2 |
+| 15 | `src/http/modules/ngx_http_autoindex_module.c` | UPDATED | 2 |
+| 16 | `src/http/modules/ngx_http_not_modified_filter_module.c` | UPDATED | 2 |
+| 17 | `src/http/modules/ngx_http_range_filter_module.c` | UPDATED | 2 |
+| 18 | `src/http/modules/ngx_http_slice_filter_module.c` | UPDATED | 2 |
+| 19 | `src/http/modules/ngx_http_gzip_static_module.c` | UPDATED | 2 |
+| 20 | `src/http/modules/ngx_http_image_filter_module.c` | UPDATED | 2 |
+| 21 | `src/http/modules/ngx_http_mp4_module.c` | UPDATED | 2 |
+| 22 | `src/http/modules/ngx_http_flv_module.c` | UPDATED | 2 |
+| 23 | `src/http/modules/ngx_http_dav_module.c` | UPDATED | 2 |
+| 24 | `src/http/modules/ngx_http_stub_status_module.c` | UPDATED | 2 |
+| 25 | `src/http/v2/ngx_http_v2_filter_module.c` | UPDATED | 2 |
+| 26 | `docs/refactor/traceability_matrix.md` | CREATED | 3 |
+| 27 | `docs/refactor/decision_log.md` | CREATED | 3 |
+| 28 | `docs/observability/observability.md` | CREATED | 3 |
+| 29 | `docs/observability/status_metrics_dashboard.json` | CREATED | 3 |
+| 30 | `t/unit/ngx_http_status_test.c` | CREATED | 3 |
+| 31 | `t/unit/Makefile` | CREATED | 3 |
+| 32 | `t/unit/.gitignore` | CREATED | 3 |
+| 33 | `docs/api/status_codes.md` | CREATED | 4 |
+| 34 | `docs/migration/status_code_api.md` | CREATED | 4 |
+| 35 | `docs/presentation/executive_summary.html` | CREATED | 4 |
+| 36 | `CHANGES` | CREATED | 4 |
+| 37 | `mkdocs.yml` | UPDATED | 4 |
+| 38 | `README.md` | UPDATED | 4 |
+| 39 | `CODE_REVIEW.md` | CREATED | 4 |
 
-**Per-phase totals:** Phase 1 = 3 · Phase 2 = 21 · Phase 3 = 4 · Phase 4 = 7 → **35 total**
-(11 created + 24 updated). Partition is complete and disjoint.
+**Per-phase totals:** Phase 1 = 4 · Phase 2 = 21 · Phase 3 = 7 · Phase 4 = 7 → **39 total**
+(14 created + 25 updated). Partition is complete and disjoint.
