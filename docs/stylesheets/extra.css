@@ -1,0 +1,44 @@
+/*
+ * Documentation-site accessibility overrides for the blitzy-nginx MkDocs build.
+ *
+ * QA remediation — FINAL_ALT Issue 9 (mobile keyboard focus can land offscreen).
+ * At mobile widths Material for MkDocs renders the primary navigation as an
+ * off-canvas drawer: `.md-sidebar--primary` is `position: fixed` and sits at a
+ * negative x-offset (left: -12.1rem) while remaining `visibility: visible`. Its
+ * descendants — notably the `.md-logo` link in the drawer header — therefore stay
+ * in the keyboard tab order, so pressing Tab can move focus onto an element that
+ * is rendered entirely outside the viewport (measured at x = -234) with no visible
+ * focus ring. The "Skip to content" link (first in the tab order) is unaffected and
+ * remains fully visible.
+ *
+ * Fix: while the drawer is closed, mark the off-canvas sidebar `visibility: hidden`
+ * so its contents leave the tab order (Tab then advances to the in-viewport search /
+ * header controls instead of the offscreen logo). When the drawer is opened via the
+ * hamburger toggle (`#__drawer` / `[data-md-toggle="drawer"]:checked`), visibility is
+ * restored immediately and every nav link is focusable again. A transition delay on
+ * the hide keeps Material's 0.25s slide-out animation intact. The rule is scoped to
+ * Material's own mobile drawer breakpoint (max-width: 76.1875em) so the persistent
+ * desktop left-hand navigation is never affected.
+ */
+@media screen and (max-width: 76.1875em) {
+
+  /* Drawer closed: off-canvas sidebar is removed from the tab order. The visibility
+     change is delayed by the slide duration so the close animation still plays. */
+  .md-sidebar--primary {
+    visibility: hidden;
+    transition:
+      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.25s,
+      visibility 0s linear 0.25s;
+  }
+
+  /* Drawer open: restore visibility immediately so the sidebar and its links are
+     focusable while it slides into view. */
+  [data-md-toggle="drawer"]:checked ~ .md-container .md-sidebar--primary {
+    visibility: visible;
+    transition:
+      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.25s,
+      visibility 0s linear 0s;
+  }
+}

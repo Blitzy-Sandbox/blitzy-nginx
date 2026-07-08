@@ -1,6 +1,43 @@
 site_name: 'blitzy-nginx'
 nav:
   - Home: index.md
+  - API Reference:
+      - Status Code API: api/status_codes.md
+  - Migration Guide:
+      - Status Code API Migration: migration/status_code_api.md
+  - Refactor:
+      - Decision Log: refactor/decision_log.md
+      - Traceability Matrix: refactor/traceability_matrix.md
+  - Observability:
+      - Overview: observability/observability.md
+exclude_docs: |
+  html/
+  xml/
+  dtd/
+  xslt/
+  xsls/
+  man/
+  GNUmakefile
+extra_css:
+  # Scoped accessibility override for the Material mobile navigation drawer.
+  # Removes the closed off-canvas primary sidebar from the keyboard tab order so
+  # Tab does not move focus onto the offscreen drawer logo at mobile widths
+  # (QA FINAL_ALT Issue 9). See docs/stylesheets/extra.css for the full rationale.
+  - stylesheets/extra.css
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
 plugins:
-  - techdocs-core
+  # techdocs-core bundles the Material theme and, by default, wires MkDocs's
+  # *classic* search plugin. That classic plugin appends `search/main.js` to
+  # extra_javascript, and that script dereferences a global `base_url` that the
+  # Material theme never defines (Material uses its own `__config.base` + bundled
+  # search worker), producing `Uncaught ReferenceError: base_url is not defined`
+  # on every rendered page. Enabling use_material_search switches to Material's
+  # native search plugin, which omits the classic script and resolves the error.
+  - techdocs-core:
+      use_material_search: true
   - mermaid2

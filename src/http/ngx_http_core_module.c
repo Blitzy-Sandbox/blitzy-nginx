@@ -1778,7 +1778,11 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
         return rc;
     }
 
-    r->headers_out.status = status;
+    if (ngx_http_status_set(r, status) != NGX_OK) {
+        ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
+                            "response status set failed", status);
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
 
     if (ngx_http_complex_value(r, cv, &val) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -1856,7 +1860,18 @@ ngx_http_send_header(ngx_http_request_t *r)
     }
 
     if (r->err_status) {
-        r->headers_out.status = r->err_status;
+        if (ngx_http_status_set(r, r->err_status) != NGX_OK) {
+            ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
+                                "error status set failed", r->err_status);
+            /*
+             * A rejected err_status (possible only under strict validation)
+             * must not reach the wire as a degenerate status line: fall back
+             * to a uniform 500 through the same sanctioned write path.  This
+             * is unreachable for upstream requests, whose codes always pass
+             * through unvalidated, so backend status is never affected.
+             */
+            (void) ngx_http_status_set(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        }
         r->headers_out.status_line.len = 0;
     }
 
@@ -3417,6 +3432,10 @@ ngx_http_core_type(ngx_conf_t *cf, ngx_command_t *dummy, void *conf)
 static ngx_int_t
 ngx_http_core_preconfiguration(ngx_conf_t *cf)
 {
+    if (ngx_http_status_init(cf) != NGX_OK) {
+        return NGX_ERROR;
+    }
+
     return ngx_http_variables_add_core_vars(cf);
 }
 

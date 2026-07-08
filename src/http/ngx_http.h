@@ -32,6 +32,7 @@ typedef u_char *(*ngx_http_log_handler_pt)(ngx_http_request_t *r,
 #include <ngx_http_variables.h>
 #include <ngx_http_config.h>
 #include <ngx_http_request.h>
+#include <ngx_http_status.h>
 #include <ngx_http_script.h>
 #include <ngx_http_upstream.h>
 #include <ngx_http_upstream_round_robin.h>
@@ -85,6 +86,9 @@ ngx_int_t ngx_http_add_location(ngx_conf_t *cf, ngx_queue_t **locations,
     ngx_http_core_loc_conf_t *clcf);
 ngx_int_t ngx_http_add_listen(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
     ngx_http_listen_opt_t *lsopt);
+
+ngx_int_t ngx_http_status_init(ngx_conf_t *cf);
+void ngx_http_status_log_init(ngx_conf_t *cf);
 
 
 void ngx_http_init_connection(ngx_connection_t *c);

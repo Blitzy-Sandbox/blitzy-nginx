@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>blitzy-nginx — HTTP Status Registry: Executive Summary</title>
+
+  <!-- Google Fonts: Inter (body), Space Grotesk (headings), Fira Code (code) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- reveal.js 5.1.0 core (reset + reveal). Blitzy theme is INLINED below; no stock theme. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <style>
+    /* ============================================================
+       Blitzy brand theme — reconstructed and INLINED.
+       The canonical Blitzy reveal theme is an external reference that does not
+       ship in this repository, so its palette, typography, and slide-type
+       classes are faithfully recreated here in this single self-contained file.
+       Aesthetic: modern, dark, high-tech enterprise-AI (NOT nginx green).
+       ============================================================ */
+    :root {
+      --bg-base: #0A0E1A;          /* near-black navy page background */
+      --bg-elevated: #141A29;      /* cards / panels */
+      --bg-elevated-2: #1B2333;    /* nested surfaces, code chips */
+      --brand-primary: #4F7CFF;    /* Blitzy electric blue (primary accent) */
+      --brand-secondary: #8B5CF6;  /* violet */
+      --brand-cyan: #22D3EE;       /* cyan highlight */
+      --brand-gradient: linear-gradient(120deg, #4F7CFF 0%, #8B5CF6 100%);
+      --text-primary: #F5F7FA;
+      --text-body: #E6EAF2;
+      --text-muted: #94A3B8;
+      --border-hairline: rgba(255,255,255,0.08);
+      --border-accent: rgba(79,124,255,0.35);
+      /* RFC 9110 status-class semantic colors */
+      --c-1xx: #94A3B8;  /* informational */
+      --c-2xx: #22C55E;  /* success */
+      --c-3xx: #38BDF8;  /* redirect */
+      --c-4xx: #F59E0B;  /* client error */
+      --c-5xx: #EF4444;  /* server error */
+      --font-head: 'Space Grotesk', system-ui, sans-serif;
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-code: 'Fira Code', ui-monospace, monospace;
+    }
+
+    /* Page background across the reveal 5.x viewport wrapper */
+    html, body, .reveal-viewport { background: var(--bg-base); }
+
+    /* ---------- Base reveal overrides ---------- */
+    .reveal {
+      font-family: var(--font-body);
+      color: var(--text-body);
+      font-weight: 400;
+    }
+    .reveal .slides { text-align: left; }
+
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+      font-family: var(--font-head);
+      color: var(--text-primary);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      text-transform: none;
+      line-height: 1.12;
+      margin: 0 0 0.35em 0;
+    }
+    .reveal h1 { font-size: 2.1em; }
+    .reveal h2 { font-size: 1.6em; }
+    .reveal h3 { font-size: 0.82em; }
+    .reveal h4 { font-size: 0.66em; }
+    .reveal p  { font-size: 0.68em; line-height: 1.5; color: var(--text-body); margin: 0 0 0.55em 0; }
+    .reveal ul, .reveal ol { margin: 0 0 0.35em 1.1em; }
+    .reveal li { font-size: 0.68em; line-height: 1.45; margin: 0.16em 0; }
+
+    /* code */
+    .reveal code, .reveal pre { font-family: var(--font-code); }
+    .reveal :not(pre) > code {
+      background: var(--bg-elevated-2);
+      color: var(--brand-cyan);
+      padding: 0.07em 0.36em;
+      border-radius: 4px;
+      font-size: 0.9em;
+      border: 1px solid var(--border-hairline);
+    }
+    .reveal a { color: var(--brand-cyan); text-decoration: none; }
+    .reveal strong { color: var(--text-primary); font-weight: 600; }
+    .reveal em { color: var(--text-body); font-style: italic; }
+
+    /* progress bar, controls, and slide number legibility on dark */
+    .reveal .progress { color: var(--brand-primary); height: 4px; }
+    .reveal .controls { color: var(--text-muted); }
+    .reveal .slide-number {
+      background: rgba(10,14,26,0.55);
+      color: var(--text-muted);
+      font-family: var(--font-code);
+    }
+
+    /* ---------- Lucide icon styling (zero emoji; SVG icons only) ---------- */
+    .reveal .ico { display: inline-flex; color: var(--brand-primary); line-height: 0; }
+    .reveal .ico svg { width: 1.55em; height: 1.55em; stroke-width: 1.75; }
+    .reveal .ico--2xx { color: var(--c-2xx); }
+    .reveal .ico--3xx { color: var(--c-3xx); }
+    .reveal .ico--4xx { color: var(--c-4xx); }
+    .reveal .ico--5xx { color: var(--c-5xx); }
+    .reveal .ico--cyan { color: var(--brand-cyan); }
+    .reveal .ico--violet { color: var(--brand-secondary); }
+    .reveal .ico--muted { color: var(--text-muted); }
+
+    /* ============================================================
+       Slide-type classes (applied to the reveal section elements)
+       Global center:false, so title / divider / closing are centered here.
+       ============================================================ */
+    /* Center title / divider / closing content. reveal.js sets inline display on
+       <section> (block when near, none when beyond viewDistance), which would defeat
+       flexbox applied directly to the section. Instead we give the section full canvas
+       height and flex-center an in-flow inner wrapper that also fills that height. This
+       is robust against reveal's inline display management and slide transforms, and the
+       in-flow wrapper keeps the section from collapsing. */
+    section.slide-title,
+    section.slide-divider,
+    section.slide-closing { height: 100%; }
+    section.slide-title .center-wrap,
+    section.slide-divider .center-wrap,
+    section.slide-closing .center-wrap {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      text-align: center;
+      padding: 0 8%;
+      box-sizing: border-box;
+    }
+
+    /* --- Title hero --- */
+    section.slide-title {
+      background: radial-gradient(circle at 30% 20%, rgba(79,124,255,0.18), transparent 60%), var(--bg-base);
+    }
+    section.slide-title .eyebrow {
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--brand-primary);
+      font-size: 0.5em;
+      margin-bottom: 0.6em;
+    }
+    section.slide-title h1 {
+      font-size: 2.35em;
+      background: var(--brand-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin: 0.05em 0 0.25em 0;
+      max-width: 20ch;
+    }
+    section.slide-title .subtitle {
+      color: var(--text-muted);
+      font-size: 0.72em;
+      max-width: 40ch;
+      margin: 0 auto;
+    }
+    section.slide-title .footer-line {
+      margin-top: 1.6em;
+      font-family: var(--font-code);
+      font-size: 0.44em;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+
+    /* --- Section divider --- */
+    section.slide-divider {
+      background: linear-gradient(135deg, #0A0E1A 0%, #141A29 55%, #1B2333 100%);
+    }
+    section.slide-divider .divnum {
+      font-family: var(--font-head);
+      font-size: 2.2em;
+      font-weight: 700;
+      background: var(--brand-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      line-height: 1;
+    }
+    section.slide-divider h2 {
+      font-size: 2.4em;
+      color: var(--text-primary);
+      margin: 0.1em 0 0.3em 0;
+    }
+    section.slide-divider .accent-rule {
+      height: 4px;
+      width: 4em;
+      background: var(--brand-gradient);
+      border-radius: 4px;
+      margin: 0.2em auto 0;
+    }
+
+    /* --- Closing --- */
+    section.slide-closing {
+      background: radial-gradient(circle at 50% 12%, rgba(139,92,246,0.16), transparent 55%), var(--bg-base);
+    }
+    section.slide-closing .eyebrow {
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--brand-primary);
+      font-size: 0.46em;
+      margin-bottom: 0.8em;
+    }
+    section.slide-closing h2 {
+      font-size: 1.7em;
+      max-width: 24ch;
+      margin: 0 auto 0.3em;
+    }
+    section.slide-closing .closing-sub {
+      color: var(--text-muted);
+      font-size: 0.66em;
+      max-width: 40ch;
+      margin: 0 auto;
+    }
+    section.slide-closing .signoff {
+      margin-top: 1.6em;
+      font-family: var(--font-code);
+      font-size: 0.42em;
+      color: var(--text-muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    /* ---------- Content-slide heading with accent underline ---------- */
+    .content-head { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.15em; }
+    .content-head .ico svg { width: 1.1em; height: 1.1em; }
+    .content-head h2 { margin: 0; }
+    .rule {
+      height: 3px;
+      width: 3.4em;
+      background: var(--brand-gradient);
+      border-radius: 3px;
+      margin: 0 0 0.7em 0;
+    }
+    .lead { color: var(--text-muted); font-size: 0.74em; margin: 0 0 0.8em 0; max-width: 62ch; }
+
+    /* ============================================================
+       Reusable content components
+       ============================================================ */
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-hairline);
+      border-radius: 14px;
+      padding: 0.95em 1.05em;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    .card:hover { border-color: var(--border-accent); }
+    .card h3 { display: flex; align-items: center; gap: 0.45em; margin: 0 0 0.3em 0; }
+    .card p  { margin: 0; color: var(--text-muted); }
+    .card .ico svg { width: 1.3em; height: 1.3em; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9em; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.85em; }
+    .grid-2b { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9em; align-items: start; }
+
+    /* stat blocks */
+    .stat-row { display: flex; flex-wrap: wrap; gap: 1.7em; margin-top: 0.5em; }
+    .stat { text-align: left; }
+    .stat .num {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 1.5em;
+      background: var(--brand-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      line-height: 1;
+    }
+    .stat .lbl {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.56em;
+      margin-top: 0.4em;
+      letter-spacing: 0.02em;
+    }
+
+    /* pills / badges */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35em;
+      border: 1px solid;
+      border-radius: 999px;
+      padding: 0.22em 0.8em;
+      font-size: 0.6em;
+      font-family: var(--font-code);
+      font-weight: 500;
+      background: rgba(255,255,255,0.02);
+    }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.4em 0 0.2em; }
+    .pill--1xx { color: var(--c-1xx); border-color: rgba(148,163,184,0.55); }
+    .pill--2xx { color: var(--c-2xx); border-color: rgba(34,197,94,0.55); }
+    .pill--3xx { color: var(--c-3xx); border-color: rgba(56,189,248,0.55); }
+    .pill--4xx { color: var(--c-4xx); border-color: rgba(245,158,11,0.55); }
+    .pill--5xx { color: var(--c-5xx); border-color: rgba(239,68,68,0.55); }
+    .reveal .pill svg { width: 1.1em; height: 1.1em; stroke-width: 2; }
+    /* keep long function names inside cards */
+    .reveal .card h3 code {
+      font-size: 0.8em;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      color: var(--brand-cyan);
+      word-break: break-word;
+    }
+
+    /* icon-row: a Lucide icon beside a label */
+    .icon-row { display: flex; align-items: center; gap: 0.5em; margin: 0.2em 0; }
+    .icon-row .ico svg { width: 1.5em; height: 1.5em; }
+    .icon-row span { font-size: 0.7em; }
+
+    /* callout: left accent bar for the key safety message */
+    .callout {
+      border-left: 4px solid var(--brand-primary);
+      background: var(--bg-elevated);
+      border-radius: 0 12px 12px 0;
+      padding: 0.7em 1em;
+      margin: 0.2em 0 0.7em;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    .callout strong { color: var(--brand-cyan); }
+    .callout p { margin: 0; font-size: 0.76em; }
+
+    /* mermaid wrapper */
+    .mermaid-wrap {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-hairline);
+      border-radius: 16px;
+      padding: 0.6em 0.7em;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    /* neutralize reveal.js default <pre> styling so the injected SVG sits clean and centered */
+    .reveal pre.mermaid {
+      display: block;
+      width: auto;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+      font-size: 1em;
+      line-height: normal;
+      white-space: normal;
+      text-align: center;
+      overflow: visible;
+    }
+    /* force responsive sizing, overriding Mermaid's inline max-width/height */
+    .reveal .mermaid svg { max-width: 100% !important; height: auto !important; max-height: 60vh; }
+    /* Cluster (subgraph) titles: pin to the primary text token so they match the
+       node text and stay high-contrast on the dark navy background. Mermaid's
+       'base' theme otherwise computes these to the dimmer body tone; this makes
+       the intended #F5F7FA explicit and version-independent (w006 Issue 1). */
+    .reveal .mermaid .cluster-label,
+    .reveal .mermaid .cluster-label span,
+    .reveal .mermaid .cluster-label p,
+    .reveal .mermaid g.cluster text {
+      color: var(--text-primary) !important;
+      fill: var(--text-primary) !important;
+    }
+    .caption {
+      color: var(--text-muted);
+      font-size: 0.46em;
+      margin-top: 0.5em;
+      text-align: center;
+      font-style: italic;
+      max-width: 74ch;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ---------- Architecture-diagram identifier + legend ----------
+       The Visual Architecture rule requires each diagram to carry a
+       descriptive identifier/title and an explicit legend describing the
+       graph notation and edge semantics. Both use Blitzy brand tokens. */
+    .diagram-id {
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--brand-primary);
+      font-size: 0.42em;
+      margin: 0 0 0.4em 0;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.3em 1.4em;
+      margin-top: 0.5em;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45em;
+      color: var(--text-muted);
+      font-size: 0.42em;
+      line-height: 1.3;
+    }
+    .legend-line {
+      display: inline-block;
+      width: 2.1em;
+      flex: 0 0 auto;
+    }
+    .legend-line--solid { border-top: 2px solid var(--brand-primary); }
+    .legend-line--dashed { border-top: 2px dashed var(--text-muted); }
+    .legend-swatch {
+      display: inline-block;
+      width: 0.95em;
+      height: 0.7em;
+      border-radius: 3px;
+      flex: 0 0 auto;
+      background: var(--bg-elevated-2);
+      border: 1px solid var(--border-hairline);
+    }
+    .legend-swatch--registry {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-accent);
+    }
+
+    /* small helper spacing */
+    .mt-s { margin-top: 0.5em; }
+    .muted { color: var(--text-muted); }
+    .kicker {
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--brand-primary);
+      font-size: 0.44em;
+    }
+
+    /* ---------- Responsive: narrow viewports (phones, <= 480px) ----------
+       reveal.js scales the fixed 960x700 stage to the viewport, so on a
+       375px phone the multi-column grids and stat rows become cramped. These
+       rules collapse them to a single column, wrap stat/pill rows, and lift
+       the smallest body/caption sizes so text stays legible at 375px. */
+    @media screen and (max-width: 480px) {
+      .grid-2, .grid-3, .grid-2b { grid-template-columns: 1fr; gap: 0.7em; }
+      .stat-row { flex-direction: column; gap: 0.6em; }
+      .icon-row { flex-wrap: wrap; }
+      .reveal p, .reveal li { font-size: 0.8em; line-height: 1.5; }
+      .caption { font-size: 0.6em; max-width: 90vw; }
+      .diagram-id, .kicker { font-size: 0.56em; }
+      .reveal .mermaid svg { max-height: 52vh; }
+      .lead { font-size: 0.85em; max-width: 90vw; }
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <!-- ============================ SLIDE 1 — TITLE ============================ -->
+      <section class="slide-title">
+        <div class="center-wrap">
+          <div class="eyebrow">BLITZY &middot; NGINX REFACTOR</div>
+          <h1>Centralizing HTTP Status Handling</h1>
+          <p class="subtitle">An RFC&nbsp;9110&ndash;compliant, registry-backed status API for nginx&nbsp;1.29.5</p>
+          <div class="footer-line">Executive Summary &middot; Project: blitzy-nginx</div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 2 — DIVIDER: THE PROBLEM ==================== -->
+      <section class="slide-divider">
+        <div class="center-wrap">
+          <div class="divnum">01</div>
+          <h2>The Problem</h2>
+          <div class="accent-rule"></div>
+        </div>
+      </section>
+
+      <!-- ============= SLIDE 3 — STATUS HANDLING IS SCATTERED ============= -->
+      <section>
+        <div class="content-head">
+          <span class="ico"><i data-lucide="layers"></i></span>
+          <h2>Status handling is scattered</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="lead">Today, HTTP status codes are set, propagated, and rendered by <strong>three independent mechanisms</strong> &mdash; with no single owner and no place to enforce correctness.</p>
+        <div class="grid-3">
+          <div class="card">
+            <h3><span class="ico ico--cyan"><i data-lucide="file-code-2"></i></span>Direct assignment</h3>
+            <p>Writers set the status field directly at <strong>17 sites across 14 files</strong>.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--violet"><i data-lucide="git-branch"></i></span>Return-based flow</h3>
+            <p>Handlers return status codes that funnel into the error-page path.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico"><i data-lucide="book-open"></i></span>Private reason table</h3>
+            <p>Wire text like <code>200 OK</code> comes from a hand-maintained lookup table.</p>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><span class="num">17</span><span class="lbl">direct write sites</span></div>
+          <div class="stat"><span class="num">14</span><span class="lbl">files touched</span></div>
+          <div class="stat"><span class="num">3</span><span class="lbl">independent owners</span></div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 4 — CURRENT ARCHITECTURE ==================== -->
+      <section>
+        <div class="content-head">
+          <span class="ico"><i data-lucide="network"></i></span>
+          <h2>Current architecture</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="diagram-id">Diagram 0.3.2-A &mdash; nginx HTTP status handling: current (decentralized) state</p>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">
+graph TD
+  subgraph Writers["Status Writers (direct assignment)"]
+    M1["content handlers: static, autoindex, dav,<br/>flv, mp4, gzip_static, slice, image"]
+    M2["range / not_modified filters"]
+    M3["ngx_http_core_module.c<br/>ngx_http_request.c"]
+  end
+  RET["Return-based handlers<br/>access 403, auth_basic 401,<br/>rewrite return directive"]
+  FIELD["r-&gt;headers_out.status<br/>(ngx_uint_t)"]
+  ERR["ngx_http_special_response.c<br/>err_status funnel + HTML tables"]
+  LINES["ngx_http_status_lines[]<br/>private offset table"]
+  HF["ngx_http_header_filter_module.c<br/>renders status line"]
+  WIRE(["HTTP response status line"])
+
+  M1 -->|"= CODE"| FIELD
+  M2 -->|"= CODE"| FIELD
+  M3 -->|"= CODE"| FIELD
+  RET -->|"finalize"| ERR
+  ERR --> FIELD
+  FIELD --> HF
+  HF -->|"offset index"| LINES
+  LINES --> WIRE
+  ERR -.->|"own reason knowledge"| WIRE
+          </pre>
+        </div>
+        <div class="legend" aria-label="Diagram 0.3.2-A legend">
+          <span class="legend-item"><span class="legend-line legend-line--solid"></span>Solid arrow &mdash; status data flow (a writer sets the status field)</span>
+          <span class="legend-item"><span class="legend-line legend-line--dashed"></span>Dashed arrow &mdash; independent reason-phrase knowledge (no shared seam)</span>
+          <span class="legend-item"><span class="legend-swatch"></span>Box &mdash; a component that independently owns status/reason logic</span>
+        </div>
+        <p class="caption">Today: three independent owners of status/reason logic, and no validation seam.</p>
+      </section>
+
+      <!-- ==================== SLIDE 5 — WHY IT MATTERS ==================== -->
+      <section>
+        <div class="content-head">
+          <span class="ico ico--4xx"><i data-lucide="alert-triangle"></i></span>
+          <h2>Why it matters</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="lead">Scattered ownership creates real business risk as the platform evolves.</p>
+        <div class="grid-2">
+          <div class="card">
+            <h3><span class="ico ico--4xx"><i data-lucide="target"></i></span>No single source of truth</h3>
+            <p>Status knowledge lives in three places, so changes must be made &mdash; and audited &mdash; in every one.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--4xx"><i data-lucide="shield-check"></i></span>Nowhere to enforce RFC 9110</h3>
+            <p>There is no seam at which HTTP correctness can be validated.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--4xx"><i data-lucide="book-open"></i></span>Duplicated logic</h3>
+            <p>Reason phrases and would-be validation rules are repeated rather than shared.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--4xx"><i data-lucide="scale"></i></span>Harder to audit and evolve</h3>
+            <p>Every new behavior multiplies across the scattered call sites.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 6 — DIVIDER: THE SOLUTION ==================== -->
+      <section class="slide-divider">
+        <div class="center-wrap">
+          <div class="divnum">02</div>
+          <h2>The Solution</h2>
+          <div class="accent-rule"></div>
+        </div>
+      </section>
+
+      <!-- ============= SLIDE 7 — ONE AUTHORITATIVE STATUS API ============= -->
+      <section>
+        <div class="content-head">
+          <span class="ico"><i data-lucide="list-checks"></i></span>
+          <h2>One authoritative status API</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="lead">Five small functions become the single, sanctioned way to work with HTTP status.</p>
+        <div class="grid-3">
+          <div class="card">
+            <h3><span class="ico"><i data-lucide="arrow-right-left"></i></span><code>ngx_http_status_set()</code></h3>
+            <p>The single sanctioned way to set a response status.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--cyan"><i data-lucide="book-open"></i></span><code>ngx_http_status_reason()</code></h3>
+            <p>The single source of human-readable status text.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--violet"><i data-lucide="shield-check"></i></span><code>ngx_http_status_validate()</code></h3>
+            <p>Optional RFC 9110 compliance check.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico"><i data-lucide="settings-2"></i></span><code>ngx_http_status_register()</code></h3>
+            <p>Seeds the registry once, at startup.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="refresh-cw"></i></span><code>ngx_http_status_is_cacheable()</code></h3>
+            <p>Quick cacheability answer from metadata.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============= SLIDE 8 — A REGISTRY WITH RFC 9110 METADATA ============= -->
+      <section>
+        <div class="content-head">
+          <span class="ico"><i data-lucide="database"></i></span>
+          <h2>A registry with RFC 9110 metadata</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="lead">One static table holds, per status code, its number, its reason phrase, class <strong>flags</strong>, and an <strong>RFC&nbsp;9110&nbsp;&sect;15</strong> section reference.</p>
+        <div class="pill-row">
+          <span class="pill pill--1xx"><i data-lucide="minus-circle"></i>1xx Informational</span>
+          <span class="pill pill--2xx"><i data-lucide="check-circle"></i>2xx Successful</span>
+          <span class="pill pill--3xx"><i data-lucide="arrow-right-left"></i>3xx Redirection</span>
+          <span class="pill pill--4xx"><i data-lucide="alert-triangle"></i>4xx Client Error</span>
+          <span class="pill pill--5xx"><i data-lucide="server"></i>5xx Server Error</span>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><span class="num">O(1)</span><span class="lbl">array-index lookup</span></div>
+          <div class="stat"><span class="num">&lt; 1 KB</span><span class="lbl">per worker</span></div>
+          <div class="stat"><span class="num">read-only</span><span class="lbl">after startup</span></div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 9 — TARGET ARCHITECTURE ==================== -->
+      <section>
+        <div class="content-head">
+          <span class="ico"><i data-lucide="network"></i></span>
+          <h2>Target architecture</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="diagram-id">Diagram 0.3.3-B &mdash; nginx HTTP status handling: target (centralized registry) state</p>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">
+graph TD
+  subgraph Writers["Status Writers (converted)"]
+    W1["content handlers + filters"]
+    W3["core_module / request.c"]
+  end
+  RET["Return-based handlers<br/>(unchanged returns)"]
+  UP["ngx_http_upstream.c<br/>backend status"]
+
+  subgraph Registry["ngx_http_status.c / .h — single authority"]
+    SET["ngx_http_status_set()"]
+    VAL["ngx_http_status_validate()<br/>compile-time gate"]
+    REASON["ngx_http_status_reason()"]
+    TABLE["static ngx_http_status_def_t[]<br/>line, line_len, code, flags, rfc_section<br/>O(1) index, 928 B &lt; 1 KB, read-only"]
+  end
+
+  FIELD["r-&gt;headers_out.status"]
+  ERR["special_response.c<br/>err_status funnel (HTML preserved)"]
+  HF["header_filter_module.c"]
+  V2["v2_filter_module.c"]
+  V3["v3_filter_module.c"]
+  WIRE(["HTTP response status line"])
+
+  W1 --> SET
+  W3 --> SET
+  RET -->|"finalize"| ERR
+  UP -->|"guarded pass-through"| SET
+  SET --> VAL
+  VAL --> TABLE
+  SET --> FIELD
+  ERR --> REASON
+  HF --> REASON
+  REASON --> TABLE
+  FIELD --> HF
+  FIELD --> V2
+  FIELD --> V3
+  V2 -->|"numeric :status"| WIRE
+  V3 -->|"numeric :status"| WIRE
+  HF --> WIRE
+  ERR --> WIRE
+          </pre>
+        </div>
+        <div class="legend" aria-label="Diagram 0.3.3-B legend">
+          <span class="legend-item"><span class="legend-line legend-line--solid"></span>Solid arrow &mdash; a status write, reason lookup, or numeric status read on the wire path</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch--registry"></span>Registry box &mdash; ngx_http_status.c/.h, the single authority</span>
+          <span class="legend-item"><span class="legend-swatch"></span>Box &mdash; a converted writer or reason consumer</span>
+        </div>
+        <p class="caption">Target: every write flows through ngx_http_status_set(); the HTTP/1.x header filter resolves its reason phrase through ngx_http_status_reason(), both against one static registry. HTTP/2 (HPACK) and HTTP/3 (QPACK) carry no reason phrase, so they emit the numeric :status directly. Validation is compiled in only when --with-http_status_validation is set; upstream codes pass through unvalidated.</p>
+      </section>
+
+      <!-- ============ SLIDE 10 — DIVIDER: BENEFITS & COMPLIANCE ============ -->
+      <section class="slide-divider">
+        <div class="center-wrap">
+          <div class="divnum">03</div>
+          <h2>Benefits &amp; Compliance</h2>
+          <div class="accent-rule"></div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 11 — WHAT WE GAIN ==================== -->
+      <section>
+        <div class="content-head">
+          <span class="ico"><i data-lucide="sparkles"></i></span>
+          <h2>What we gain</h2>
+        </div>
+        <div class="rule"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="shield-check"></i></span>RFC 9110 compliance</h3>
+            <p>Grounded in the current HTTP semantics standard, with class metadata and section references built in.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico"><i data-lucide="target"></i></span>Single source of truth</h3>
+            <p>One write seam and one reason seam replace three independent owners.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--cyan"><i data-lucide="gauge"></i></span>Predictable performance</h3>
+            <p>Direct array index, no locks, under 1&nbsp;KB &mdash; a hot-path with a tiny, fixed cost.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--violet"><i data-lucide="settings-2"></i></span>Opt-in validation</h3>
+            <p>Turn on strict RFC checking only where and when it is wanted.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 12 — NOTHING BREAKS ==================== -->
+      <section>
+        <div class="content-head">
+          <span class="ico ico--2xx"><i data-lucide="lock"></i></span>
+          <h2>Nothing breaks</h2>
+        </div>
+        <div class="rule"></div>
+        <p class="lead">The change is additive. Existing code, builds, and deployments continue to work unchanged.</p>
+        <div class="grid-2">
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="check-circle"></i></span>All 45 constants retained</h3>
+            <p>Every <code>NGX_HTTP_*</code> numeric constant stays defined.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="file-code-2"></i></span>Direct assignment still works</h3>
+            <p>The legacy write path remains functional and is never removed.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="lock"></i></span>ABI stable</h3>
+            <p>No struct reordering and no module-layout changes.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="check-circle"></i></span>No module rewrites</h3>
+            <p>Existing and third-party modules need no changes to keep compiling.</p>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><span class="num">45</span><span class="lbl">constants kept</span></div>
+          <div class="stat"><span class="num">0</span><span class="lbl">breaking changes</span></div>
+        </div>
+      </section>
+
+      <!-- ============ SLIDE 13 — DIVIDER: ROLLOUT & SAFETY ============ -->
+      <section class="slide-divider">
+        <div class="center-wrap">
+          <div class="divnum">04</div>
+          <h2>Rollout &amp; Safety</h2>
+          <div class="accent-rule"></div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 14 — SAFE BY DEFAULT ==================== -->
+      <section>
+        <div class="content-head">
+          <span class="ico ico--2xx"><i data-lucide="shield-check"></i></span>
+          <h2>Safe by default</h2>
+        </div>
+        <div class="rule"></div>
+        <div class="callout">
+          <p><strong>Validation defaults OFF</strong> &mdash; the shipped binary is byte-identical to today's build.</p>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3><span class="ico ico--violet"><i data-lucide="settings-2"></i></span>Opt-in strict checks</h3>
+            <p>Enabled only via the <code>--with-http_status_validation</code> build switch.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--cyan"><i data-lucide="refresh-cw"></i></span>Graceful upgrade preserved</h3>
+            <p>Live binary upgrade (<code>kill -USR2</code>) continues to work.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="check-circle"></i></span><code>error_page</code> unchanged</h3>
+            <p>Error-page selection and behavior are untouched.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico"><i data-lucide="server"></i></span>Upstream pass-through</h3>
+            <p>Proxied backend status codes pass through untouched.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============= SLIDE 15 — DELIVERED WITH ASSURANCE ============= -->
+      <section>
+        <div class="content-head">
+          <span class="ico ico--2xx"><i data-lucide="check-circle"></i></span>
+          <h2>Delivered with assurance</h2>
+        </div>
+        <div class="rule"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3><span class="ico ico--cyan"><i data-lucide="book-open"></i></span>Documentation</h3>
+            <p>API reference and a before/after migration guide for third parties.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico"><i data-lucide="route"></i></span>Full traceability</h3>
+            <p>A bidirectional source&#8594;target matrix with 100% coverage.</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--violet"><i data-lucide="list-checks"></i></span>Testing</h3>
+            <p>Unit and integration harness, latency benchmarking, and stock-equivalent valgrind checks (no status-path leak regression).</p>
+          </div>
+          <div class="card">
+            <h3><span class="ico ico--2xx"><i data-lucide="gauge"></i></span>Observability</h3>
+            <p>2xx/3xx/4xx/5xx status-class metrics with request-id correlation.</p>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><span class="num">100%</span><span class="lbl">bidirectional traceability</span></div>
+          <div class="stat"><span class="num">5</span><span class="lbl">API functions</span></div>
+        </div>
+      </section>
+
+      <!-- ==================== SLIDE 16 — CLOSING ==================== -->
+      <section class="slide-closing">
+        <div class="center-wrap">
+          <div class="eyebrow">BLITZY &middot; AUTONOMOUS SOFTWARE DEVELOPMENT</div>
+          <h2>One authoritative status API. Zero behavioral change by default.</h2>
+          <p class="closing-sub">Centralized, RFC&nbsp;9110-aligned, and fully backward compatible.</p>
+          <div class="signoff">blitzy-nginx &middot; HTTP Status Registry</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Pinned CDN scripts (classic UMD builds so file:// works without module/CORS issues) -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+
+  <script>
+    // Configure Mermaid manually (startOnLoad:false) so diagrams render reliably
+    // inside reveal.js slides after the deck is ready. Dark, Blitzy-aligned theme.
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'antiscript',
+      themeVariables: {
+        background: '#0A0E1A',
+        primaryColor: '#141A29',
+        primaryTextColor: '#F5F7FA',
+        primaryBorderColor: '#4F7CFF',
+        lineColor: '#94A3B8',
+        secondaryColor: '#1B2333',
+        tertiaryColor: '#1B2333',
+        tertiaryTextColor: '#F5F7FA',
+        titleColor: '#F5F7FA',
+        fontFamily: 'Inter, sans-serif'
+      }
+    });
+
+    // Initialize reveal.js 5.1.0 (UMD global `Reveal`).
+    const deck = new Reveal({
+      hash: true,
+      slideNumber: 'c/t',
+      controls: true,
+      progress: true,
+      transition: 'slide',
+      width: 1280,
+      height: 720,
+      margin: 0.06,
+      center: false            // content slides top-aligned; title/divider/closing centered via CSS
+    });
+
+    // Render every Mermaid diagram via the sandbox render() API rather than the
+    // in-place run(). run() measures edge geometry inside the target element, which
+    // fails ("Could not find a suitable point for the given distance") when a diagram
+    // lives on a reveal.js slide that is hidden (display:none, zero-size) at init time.
+    // render() measures in a body-attached sandbox, so it works regardless of which
+    // slide is currently visible — every diagram is produced correctly up-front.
+    function decodeSource(el) {
+      // Mirror Mermaid's own extraction: read innerHTML then decode entities.
+      // A textarea is RCDATA, so <br> stays literal text (a label line-break) and
+      // &gt; decodes back to '>' — exactly the graph definition Mermaid expects.
+      var ta = document.createElement('textarea');
+      ta.innerHTML = el.innerHTML;
+      return ta.value.trim();
+    }
+
+    async function renderMermaidDiagrams() {
+      var nodes = document.querySelectorAll('.mermaid:not([data-processed])');
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        var src = decodeSource(el);
+        try {
+          var rendered = await mermaid.render('blitzy-mermaid-' + i, src);
+          el.innerHTML = rendered.svg;
+          el.setAttribute('data-processed', 'true');
+        } catch (err) {
+          // Leave the original definition text in place if rendering ever fails.
+          console.error('Mermaid render failed for diagram ' + i, err);
+        }
+      }
+    }
+
+    // Render diagrams and Lucide icons exactly once after the deck is ready.
+    deck.initialize().then(function () {
+      renderMermaidDiagrams();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

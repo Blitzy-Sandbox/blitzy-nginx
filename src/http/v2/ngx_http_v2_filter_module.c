@@ -163,6 +163,13 @@ ngx_http_v2_header_filter(ngx_http_request_t *r)
         r->header_only = 1;
     }
 
+    /*
+     * HTTP/2 encodes the numeric ":status" pseudo-header only (no reason
+     * phrase): common codes use the HPACK static-table index, others fall
+     * back to a "%03ui" literal.  Status values are set upstream via the
+     * centralized ngx_http_status_set() write seam; ngx_http_status_reason()
+     * is not applied here because HTTP/2 carries no textual reason phrase.
+     */
     switch (r->headers_out.status) {
 
     case NGX_HTTP_OK:

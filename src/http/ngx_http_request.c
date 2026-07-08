@@ -197,6 +197,17 @@ ngx_http_header_t  ngx_http_headers_in[] = {
 };
 
 
+ngx_int_t
+ngx_http_status_init(ngx_conf_t *cf)
+{
+    /* Finalize the status registry at configuration time, before worker fork. */
+
+    ngx_http_status_log_init(cf);
+
+    return ngx_http_status_register();
+}
+
+
 void
 ngx_http_init_connection(ngx_connection_t *c)
 {
@@ -2835,7 +2846,11 @@ ngx_http_terminate_request(ngx_http_request_t *r, ngx_int_t rc)
     mr->terminated = 1;
 
     if (rc > 0 && (mr->headers_out.status == 0 || mr->connection->sent == 0)) {
-        mr->headers_out.status = rc;
+        if (ngx_http_status_set(mr, rc) != NGX_OK) {
+            /* teardown must continue regardless; log-only */
+            ngx_http_status_log(mr, NGX_HTTP_STATUS_LOG_LEVEL,
+                                "terminate status set failed", (ngx_uint_t) rc);
+        }
     }
 
     cln = mr->cleanup;
@@ -3912,7 +3927,11 @@ ngx_http_free_request(ngx_http_request_t *r, ngx_int_t rc)
 #endif
 
     if (rc > 0 && (r->headers_out.status == 0 || r->connection->sent == 0)) {
-        r->headers_out.status = rc;
+        if (ngx_http_status_set(r, rc) != NGX_OK) {
+            /* request teardown/logging must proceed; log-only */
+            ngx_http_status_log(r, NGX_HTTP_STATUS_LOG_LEVEL,
+                                "finalize status set failed", (ngx_uint_t) rc);
+        }
     }
 
     if (!r->logged) {
