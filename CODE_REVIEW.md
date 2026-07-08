@@ -300,7 +300,7 @@ build edits are correct, minimal, and non-breaking.
 - **Domain:** Developer-facing API/migration docs, the executive presentation, the changelog, the
   docs navigation, the README note, and this review artifact.
 
-### Files in this phase (7)
+### Files in this phase (8)
 
 | File | Op | Role in the change |
 |------|----|--------------------|
@@ -309,6 +309,7 @@ build edits are correct, minimal, and non-breaking.
 | `docs/presentation/executive_summary.html` | CREATED | Self-contained reveal.js executive deck. |
 | `CHANGES` | CREATED | nginx-format changelog entry (file absent in fork → created). |
 | `mkdocs.yml` | UPDATED | Registers the new documentation pages in the navigation. |
+| `docs/stylesheets/extra.css` | CREATED | MkDocs custom stylesheet referenced by `mkdocs.yml` (`extra_css`); hides the collapsed mobile nav drawer from the keyboard tab order (FINAL_ALT Issue 9 focus fix). |
 | `README.md` | UPDATED | Additive note documenting the new status-registry module. |
 | `CODE_REVIEW.md` | CREATED | This Segmented PR Review artifact (repo root). |
 
@@ -348,10 +349,10 @@ All four domain phases resolved to `APPROVED`:
 
 | Phase | Domain | Reviewer role | Files | Verdict |
 |-------|--------|---------------|:-----:|:-------:|
-| 1 | Infrastructure / DevOps | Build / Release Engineer | 3 | `APPROVED` |
+| 1 | Infrastructure / DevOps | Build / Release Engineer | 4 | `APPROVED` |
 | 2 | Backend Architecture | Core C / nginx Maintainer | 21 | `APPROVED` |
-| 3 | QA / Test Integrity | QA / SRE | 4 | `APPROVED` |
-| 4 | Documentation & Release (Other SME) | Docs / DevRel | 7 | `APPROVED` |
+| 3 | QA / Test Integrity | QA / SRE | 7 | `APPROVED` |
+| 4 | Documentation & Release (Other SME) | Docs / DevRel | 8 | `APPROVED` |
 
 Before recording the overall verdict, the four **binding preserve-behavior invariants** were
 re-checked against the full change set:
